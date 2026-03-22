@@ -3,20 +3,29 @@ use std::fmt;
 /// How a tool gets updated
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpdateMethod {
-    Brew,
+    /// Homebrew formula: `brew upgrade <package>`
     BrewPkg,
+    /// npm global: `npm install -g <package>@latest`
     NpmSys,
+    /// npm package variant
     NpmPkg,
+    /// macOS app via cask: `brew upgrade --cask <package>`
     MacApp,
+    /// Claude CLI via npm
     Claude,
+    /// Android emulator
     Droid,
+    /// Batrachian installer: `curl -fsSL batrachian.ai/install | sh`
     Toad,
+    /// Opencode tool
     Opencode,
+    /// Oh My Zsh: `$ZSH/tools/upgrade.sh`
     Omz,
+    /// Manual update (no automation)
     Manual,
 }
 
-/// Tool category grouping
+/// Tool category grouping for the dashboard grid
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Category {
     Code,
@@ -76,17 +85,22 @@ impl fmt::Display for Category {
     }
 }
 
-/// Current status of a tool
+/// Current status of a tool in the update lifecycle
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolStatus {
+    /// Version check in progress
     Checking,
+    /// Tool installed and up to date
     Installed,
+    /// Newer version available
     Outdated,
+    /// Tool not found on the system
     Missing,
-    Unmanaged,
-    ManualCheck,
+    /// Update in progress
     Updating,
+    /// Successfully updated
     Updated,
+    /// Update failed
     Failed,
 }
 
@@ -99,10 +113,9 @@ pub struct Tool {
     pub package: String,
     pub category: Category,
     pub method: UpdateMethod,
-    pub description: String,
 }
 
-/// Runtime state for a tool
+/// Runtime state for a tool (version info + status)
 #[derive(Debug, Clone)]
 pub struct ToolState {
     pub tool: Tool,

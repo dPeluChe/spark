@@ -89,7 +89,7 @@ pub enum AppMessage {
     },
 }
 
-/// Updater mode model
+/// Updater mode model: tracks tool states, selection, search, and update queue
 pub struct UpdaterModel {
     pub state: UpdaterState,
     pub items: Vec<ToolState>,
@@ -210,7 +210,7 @@ impl UpdaterModel {
     /// Get the command log text for the current update
     pub fn get_update_log_text(tool: &Tool) -> String {
         match tool.method {
-            UpdateMethod::Brew | UpdateMethod::BrewPkg => {
+            UpdateMethod::BrewPkg => {
                 format!("> brew upgrade {}", tool.package)
             }
             UpdateMethod::NpmPkg | UpdateMethod::NpmSys | UpdateMethod::Claude => {
@@ -224,7 +224,7 @@ impl UpdaterModel {
     }
 }
 
-/// Scanner mode model
+/// Scanner mode model: tracks repos, scan progress, sorting, and clean results
 pub struct ScannerModel {
     pub state: ScannerState,
     pub repos: Vec<RepoInfo>,
@@ -277,7 +277,7 @@ impl ScannerModel {
     }
 }
 
-/// Top-level application state
+/// Top-level application state: holds both mode models, config, and display info
 pub struct App {
     pub mode: AppMode,
     pub updater: UpdaterModel,

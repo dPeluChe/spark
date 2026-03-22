@@ -1,3 +1,5 @@
+//! TUI layer: state management, event handling, and Ratatui rendering.
+
 pub mod styles;
 pub mod model;
 pub mod update;

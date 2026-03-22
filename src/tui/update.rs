@@ -3,15 +3,21 @@ use crate::core::types::*;
 use crate::tui::model::*;
 use crate::tui::scanner_keys;
 
-/// Action to perform after an event
+/// Side-effect actions dispatched from key/message handlers to the event loop
 pub enum Action {
+    /// Exit the application
     Quit,
+    /// Trigger remote version checks after cache warmup
     StartVersionChecks,
-    WarmUpCache,
+    /// Begin updating a specific tool by index
     StartUpdate(usize),
+    /// Start scanning the given directories for repos
     StartScan(Vec<std::path::PathBuf>),
+    /// Discover project directories in home folder
     DiscoverDirs,
+    /// Delete artifact directories (node_modules, target/, etc.)
     CleanArtifacts(Vec<std::path::PathBuf>),
+    /// Move a repository to trash
     TrashRepo(std::path::PathBuf),
 }
 

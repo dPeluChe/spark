@@ -7,7 +7,7 @@ use crate::core::types::*;
 use crate::updater::version::{clean_version_string, parse_tool_version};
 use crate::utils::shell::{run_command, run_command_lossy};
 
-/// Detector handles version checking with caching
+/// Version detector with async brew/npm cache for local and remote version lookups
 pub struct Detector {
     outdated_cache: Arc<RwLock<HashMap<String, String>>>,
     has_warmed_up: Arc<std::sync::atomic::AtomicBool>,
@@ -245,7 +245,7 @@ async fn get_cli_tool_version(tool: &Tool) -> String {
     }
 
     // Fallback: brew list
-    if matches!(tool.method, UpdateMethod::Brew | UpdateMethod::BrewPkg) {
+    if matches!(tool.method, UpdateMethod::BrewPkg) {
         let output = run_command_lossy(
             "brew",
             &["list", "--versions", &tool.package],

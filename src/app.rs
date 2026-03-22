@@ -57,9 +57,6 @@ pub async fn run(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> 
                             // Remote version checks after warmup
                             spawn_remote_checks(&app.updater, detector.clone(), tx.clone());
                         }
-                        Action::WarmUpCache => {
-                            spawn_warmup(detector.clone(), tx.clone());
-                        }
                         Action::DiscoverDirs => {
                             let tx2 = tx.clone();
                             tokio::spawn(async move {

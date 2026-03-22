@@ -8,7 +8,7 @@ pub async fn update_tool(tool: &Tool) -> Result<(), String> {
     let timeout = Duration::from_secs(600); // 10 minutes
 
     match tool.method {
-        UpdateMethod::Brew | UpdateMethod::BrewPkg => update_brew(tool, timeout).await,
+        UpdateMethod::BrewPkg => update_brew(tool, timeout).await,
         UpdateMethod::MacApp => update_mac_app(tool, timeout).await,
         UpdateMethod::NpmSys | UpdateMethod::NpmPkg | UpdateMethod::Claude => {
             update_npm(tool, timeout).await
