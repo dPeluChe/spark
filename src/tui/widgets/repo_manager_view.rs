@@ -176,8 +176,71 @@ fn render_repo_table(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
 
 fn render_help(frame: &mut Frame, area: Rect, _model: &RepoManagerModel) {
     let help = Paragraph::new(Span::styled(
-        "[SPACE] Select • [u] Pull Selected • [U] Pull All Behind • [r] Refresh • [ESC] Back • [Q] Quit",
+        "[c] Clone URL • [SPACE] Select • [u] Pull Selected • [U] Pull All Behind • [r] Refresh • [ESC] Back",
         Style::default().fg(GRAY),
     ));
     frame.render_widget(help, area);
+}
+
+/// Render clone URL input overlay
+pub fn render_clone_input(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
+    let modal_area = center_modal(frame, area, 70, 10);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Thick)
+        .border_style(Style::default().fg(GREEN))
+        .style(Style::default().bg(MODAL_BG));
+
+    let inner = block.inner(modal_area);
+    frame.render_widget(block, modal_area);
+
+    let mut lines = vec![
+        Line::from(Span::styled(
+            "CLONE REPOSITORY",
+            Style::default().fg(GREEN).bold(),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Enter git URL (SSH or HTTPS):",
+            Style::default().fg(GRAY),
+        )),
+        Line::from(""),
+    ];
+
+    // Input field
+    let input_display = if model.cloning {
+        format!("⟳ Cloning {}...", model.clone_input)
+    } else {
+        format!("{}█", model.clone_input)
+    };
+
+    lines.push(Line::from(Span::styled(
+        input_display,
+        Style::default().fg(WHITE).bg(DARK),
+    )));
+
+    // Error message
+    if let Some(err) = &model.clone_error {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            err.clone(),
+            Style::default().fg(RED),
+        )));
+    } else {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "e.g. git@github.com:user/repo.git",
+            Style::default().fg(GRAY),
+        )));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "[ENTER] Clone • [ESC] Cancel",
+        Style::default().fg(GRAY),
+    )));
+
+    let paragraph = Paragraph::new(lines).alignment(Alignment::Center);
+    frame.render_widget(paragraph, inner);
 }

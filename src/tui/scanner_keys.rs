@@ -312,6 +312,12 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 KeyCode::Char('r') | KeyCode::Char('R') => {
                     Some(Action::ListManagedRepos)
                 }
+                KeyCode::Char('c') | KeyCode::Char('C') => {
+                    app.repo_manager.clone_input.clear();
+                    app.repo_manager.clone_error = None;
+                    app.scanner.state = ScannerState::RepoCloneInput;
+                    None
+                }
                 KeyCode::Char('u') => {
                     // Pull selected repos
                     if rm.checked.is_empty() {
@@ -343,6 +349,49 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                     } else {
                         None
                     }
+                }
+                _ => None,
+            }
+        }
+
+        // Clone URL text input
+        ScannerState::RepoCloneInput => {
+            let rm = &mut app.repo_manager;
+            match key.code {
+                KeyCode::Esc => {
+                    rm.clone_input.clear();
+                    rm.clone_error = None;
+                    app.scanner.state = ScannerState::RepoManager;
+                    None
+                }
+                KeyCode::Enter => {
+                    let url = rm.clone_input.trim().to_string();
+                    if url.is_empty() {
+                        rm.clone_error = Some("URL cannot be empty".into());
+                        None
+                    } else if !url.contains("github.com")
+                        && !url.contains("gitlab.com")
+                        && !url.contains("bitbucket.org")
+                        && !url.starts_with("git@")
+                        && !url.starts_with("https://")
+                    {
+                        rm.clone_error = Some("Invalid git URL".into());
+                        None
+                    } else {
+                        rm.cloning = true;
+                        rm.clone_error = None;
+                        Some(Action::CloneRepo(url))
+                    }
+                }
+                KeyCode::Backspace => {
+                    rm.clone_input.pop();
+                    rm.clone_error = None;
+                    None
+                }
+                KeyCode::Char(c) => {
+                    rm.clone_input.push(c);
+                    rm.clone_error = None;
+                    None
                 }
                 _ => None,
             }

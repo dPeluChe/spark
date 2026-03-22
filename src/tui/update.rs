@@ -29,6 +29,8 @@ pub enum Action {
     CheckRepoStatuses,
     /// Pull specific repos by index
     PullRepos(Vec<usize>),
+    /// Clone a repo from URL into managed root
+    CloneRepo(String),
 }
 
 /// Handle a key event and return optional action
@@ -180,6 +182,18 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
                 }
             }
             app.repo_manager.checked.remove(&index);
+        }
+        AppMessage::CloneResult { success, message } => {
+            app.repo_manager.cloning = false;
+            if success {
+                app.repo_manager.clone_input.clear();
+                app.repo_manager.clone_error = None;
+                app.scanner.state = ScannerState::RepoManager;
+                // Refresh the repo list
+                return Some(Action::ListManagedRepos);
+            } else {
+                app.repo_manager.clone_error = Some(message);
+            }
         }
         AppMessage::DiscoveredDirs { dirs } => {
             app.scanner.discovered_dirs = dirs;

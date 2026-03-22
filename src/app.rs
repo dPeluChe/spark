@@ -205,6 +205,26 @@ pub async fn run(
                                 }
                             }
                         }
+                        Action::CloneRepo(url) => {
+                            let tx2 = tx.clone();
+                            let root = app.repo_manager.root.clone()
+                                .map(std::path::PathBuf::from)
+                                .unwrap_or_else(|| {
+                                    dirs::home_dir().unwrap_or_default().join("repos")
+                                });
+                            tokio::spawn(async move {
+                                let result = tokio::task::spawn_blocking(move || {
+                                    crate::scanner::repo_manager::clone_repo(&url, &root)
+                                })
+                                .await;
+                                let (success, message) = match result {
+                                    Ok(Ok(path)) => (true, format!("Cloned to {}", path.display())),
+                                    Ok(Err(e)) => (false, e),
+                                    Err(e) => (false, e.to_string()),
+                                };
+                                let _ = tx2.send(AppMessage::CloneResult { success, message });
+                            });
+                        }
                         Action::KillProcesses(pids) => {
                             let tx2 = tx.clone();
                             tokio::spawn(async move {

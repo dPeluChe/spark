@@ -40,6 +40,7 @@ pub enum ScannerState {
     PortScan,
     PortKillConfirm,
     RepoManager,
+    RepoCloneInput,
 }
 
 /// Sort field for scanner results
@@ -108,6 +109,10 @@ pub enum AppMessage {
     },
     RepoPullResult {
         index: usize,
+        success: bool,
+        message: String,
+    },
+    CloneResult {
         success: bool,
         message: String,
     },
@@ -323,12 +328,15 @@ impl PortScannerModel {
     }
 }
 
-/// Repo manager model: tracks managed repos and pull operations
+/// Repo manager model: tracks managed repos, clone input, and pull operations
 pub struct RepoManagerModel {
     pub repos: Vec<ManagedRepo>,
     pub cursor: usize,
     pub checked: HashSet<usize>,
     pub root: Option<String>,
+    pub clone_input: String,
+    pub clone_error: Option<String>,
+    pub cloning: bool,
 }
 
 impl RepoManagerModel {
@@ -339,6 +347,9 @@ impl RepoManagerModel {
             cursor: 0,
             checked: HashSet::new(),
             root,
+            clone_input: String::new(),
+            clone_error: None,
+            cloning: false,
         }
     }
 }
