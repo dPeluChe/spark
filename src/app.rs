@@ -51,27 +51,7 @@ pub async fn run(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> 
                         Action::Quit => break,
                         Action::StartUpdate(index) => {
                             let tool = app.updater.items[index].tool.clone();
-                            let tx2 = tx.clone();
-                            let detector2 = detector.clone();
-                            tokio::spawn(async move {
-                                let result =
-                                    crate::updater::executor::update_tool(&tool).await;
-                                let (success, message) = match result {
-                                    Ok(_) => (true, format!("Updated {}", tool.name)),
-                                    Err(e) => (false, e),
-                                };
-                                let new_version = if success {
-                                    detector2.get_local_version(&tool).await
-                                } else {
-                                    String::new()
-                                };
-                                let _ = tx2.send(AppMessage::UpdateResult {
-                                    index,
-                                    success,
-                                    message,
-                                    new_version,
-                                });
-                            });
+                            spawn_update_task(index, tool, detector.clone(), tx.clone());
                         }
                         Action::StartVersionChecks => {
                             // Remote version checks after warmup
@@ -168,27 +148,7 @@ pub async fn run(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> 
                     }
                     Action::StartUpdate(index) => {
                         let tool = app.updater.items[index].tool.clone();
-                        let tx2 = tx.clone();
-                        let detector2 = detector.clone();
-                        tokio::spawn(async move {
-                            let result =
-                                crate::updater::executor::update_tool(&tool).await;
-                            let (success, message) = match result {
-                                Ok(_) => (true, format!("Updated {}", tool.name)),
-                                Err(e) => (false, e),
-                            };
-                            let new_version = if success {
-                                detector2.get_local_version(&tool).await
-                            } else {
-                                String::new()
-                            };
-                            let _ = tx2.send(AppMessage::UpdateResult {
-                                index,
-                                success,
-                                message,
-                                new_version,
-                            });
-                        });
+                        spawn_update_task(index, tool, detector.clone(), tx.clone());
                     }
                     Action::Quit => break,
                     _ => {}
@@ -297,5 +257,31 @@ fn spawn_warmup(detector: Arc<Detector>, tx: mpsc::UnboundedSender<AppMessage>) 
     tokio::spawn(async move {
         detector.warm_up_cache().await;
         let _ = tx.send(AppMessage::WarmUpFinished);
+    });
+}
+
+fn spawn_update_task(
+    index: usize,
+    tool: crate::core::types::Tool,
+    detector: Arc<Detector>,
+    tx: mpsc::UnboundedSender<AppMessage>,
+) {
+    tokio::spawn(async move {
+        let result = crate::updater::executor::update_tool(&tool).await;
+        let (success, message) = match result {
+            Ok(_) => (true, format!("Updated {}", tool.name)),
+            Err(e) => (false, e),
+        };
+        let new_version = if success {
+            detector.get_local_version(&tool).await
+        } else {
+            String::new()
+        };
+        let _ = tx.send(AppMessage::UpdateResult {
+            index,
+            success,
+            message,
+            new_version,
+        });
     });
 }

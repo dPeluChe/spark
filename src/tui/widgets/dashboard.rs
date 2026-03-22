@@ -259,11 +259,7 @@ fn render_tool_line<'a>(index: usize, item: &'a ToolState, model: &UpdaterModel)
     };
 
     // Checkbox
-    let checkbox = if model.checked.contains(&index) {
-        Span::styled("[✔] ", Style::default().fg(GREEN))
-    } else {
-        Span::styled("[ ] ", Style::default().fg(CHECKBOX_DIM))
-    };
+    let checkbox = render_checkbox(model.checked.contains(&index));
 
     // Tool name (truncated to 18 chars)
     let name = if item.tool.name.len() > 18 {

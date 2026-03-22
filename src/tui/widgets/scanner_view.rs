@@ -2,7 +2,7 @@ use ratatui::prelude::*;
 use ratatui::widgets::*;
 use crate::tui::model::*;
 use crate::tui::styles::*;
-use crate::scanner::repo_scanner::HealthGrade;
+use crate::utils::fs::format_size;
 
 /// Render the scanner mode
 pub fn render_scanner(frame: &mut Frame, area: Rect, model: &ScannerModel, tick: usize) {
@@ -66,11 +66,7 @@ fn render_scan_config(frame: &mut Frame, area: Rect, model: &ScannerModel) {
             Span::raw("  ")
         };
 
-        let checkbox = if is_checked {
-            Span::styled("[✔] ", Style::default().fg(GREEN))
-        } else {
-            Span::styled("[ ] ", Style::default().fg(CHECKBOX_DIM))
-        };
+        let checkbox = render_checkbox(is_checked);
 
         let dir_style = if is_selected {
             Style::default().fg(WHITE).bold()
@@ -196,13 +192,7 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
             let checkbox = if is_checked { "✔" } else { " " };
             let name = format!("{} [{}] {}", cursor, checkbox, repo.name);
 
-            let grade_style = match repo.health_grade {
-                HealthGrade::A => Style::default().fg(GREEN),
-                HealthGrade::B => Style::default().fg(BLUE),
-                HealthGrade::C => Style::default().fg(YELLOW),
-                HealthGrade::D => Style::default().fg(Color::Rgb(255, 165, 0)),
-                HealthGrade::F => Style::default().fg(RED),
-            };
+            let grade_style = health_grade_style(&repo.health_grade);
 
             let last_commit = repo
                 .last_commit_date
@@ -338,14 +328,3 @@ fn render_clean_summary(frame: &mut Frame, area: Rect, model: &ScannerModel) {
     frame.render_widget(paragraph, area);
 }
 
-pub fn format_size(bytes: u64) -> String {
-    if bytes >= 1_073_741_824 {
-        format!("{:.1} GB", bytes as f64 / 1_073_741_824.0)
-    } else if bytes >= 1_048_576 {
-        format!("{:.1} MB", bytes as f64 / 1_048_576.0)
-    } else if bytes >= 1024 {
-        format!("{:.0} KB", bytes as f64 / 1024.0)
-    } else {
-        format!("{} B", bytes)
-    }
-}

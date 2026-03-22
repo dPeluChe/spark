@@ -51,27 +51,7 @@ pub fn render_updating_overlay(
         0.0
     };
 
-    let modal_width = 60u16.min(area.width - 4);
-    let modal_height = 12u16.min(area.height - 4);
-
-    let h_center = Layout::horizontal([
-        Constraint::Fill(1),
-        Constraint::Length(modal_width),
-        Constraint::Fill(1),
-    ])
-    .split(area);
-
-    let v_center = Layout::vertical([
-        Constraint::Fill(1),
-        Constraint::Length(modal_height),
-        Constraint::Fill(1),
-    ])
-    .split(h_center[1]);
-
-    let modal_area = v_center[1];
-
-    // Clear the area behind the modal
-    frame.render_widget(Clear, modal_area);
+    let modal_area = center_modal(frame, area, 60, 12);
 
     let block = Block::default()
         .borders(Borders::ALL)
@@ -161,26 +141,8 @@ pub fn render_summary_overlay(
         }
     }
 
-    let modal_width = 60u16.min(area.width - 4);
-    let modal_height = (8 + failure_details.len() as u16).min(area.height - 4);
-
-    let h_center = Layout::horizontal([
-        Constraint::Fill(1),
-        Constraint::Length(modal_width),
-        Constraint::Fill(1),
-    ])
-    .split(area);
-
-    let v_center = Layout::vertical([
-        Constraint::Fill(1),
-        Constraint::Length(modal_height),
-        Constraint::Fill(1),
-    ])
-    .split(h_center[1]);
-
-    let modal_area = v_center[1];
-
-    frame.render_widget(Clear, modal_area);
+    let modal_height = (8 + failure_details.len() as u16).min(area.height.saturating_sub(4));
+    let modal_area = center_modal(frame, area, 60, modal_height);
 
     let block = Block::default()
         .borders(Borders::ALL)

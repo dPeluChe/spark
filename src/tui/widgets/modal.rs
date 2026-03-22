@@ -4,26 +4,7 @@ use crate::tui::styles::*;
 
 /// Render the danger zone confirmation modal
 pub fn render_danger_modal(frame: &mut Frame, area: Rect) {
-    let modal_width = 50u16.min(area.width - 4);
-    let modal_height = 10u16.min(area.height - 4);
-
-    let h_center = Layout::horizontal([
-        Constraint::Fill(1),
-        Constraint::Length(modal_width),
-        Constraint::Fill(1),
-    ])
-    .split(area);
-
-    let v_center = Layout::vertical([
-        Constraint::Fill(1),
-        Constraint::Length(modal_height),
-        Constraint::Fill(1),
-    ])
-    .split(h_center[1]);
-
-    let modal_area = v_center[1];
-
-    frame.render_widget(Clear, modal_area);
+    let modal_area = center_modal(frame, area, 50, 10);
 
     let block = Block::default()
         .borders(Borders::ALL)
@@ -60,26 +41,7 @@ pub fn render_clean_confirm_modal(
     item_count: usize,
     total_size: &str,
 ) {
-    let modal_width = 55u16.min(area.width - 4);
-    let modal_height = 10u16.min(area.height - 4);
-
-    let h_center = Layout::horizontal([
-        Constraint::Fill(1),
-        Constraint::Length(modal_width),
-        Constraint::Fill(1),
-    ])
-    .split(area);
-
-    let v_center = Layout::vertical([
-        Constraint::Fill(1),
-        Constraint::Length(modal_height),
-        Constraint::Fill(1),
-    ])
-    .split(h_center[1]);
-
-    let modal_area = v_center[1];
-
-    frame.render_widget(Clear, modal_area);
+    let modal_area = center_modal(frame, area, 55, 10);
 
     let block = Block::default()
         .borders(Borders::ALL)

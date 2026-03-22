@@ -264,28 +264,16 @@ impl ScannerModel {
 
     pub fn sort_repos(&mut self) {
         let ascending = self.sort_ascending;
-        match self.sort_by {
-            SortField::Name => self.repos.sort_by(|a, b| {
-                let cmp = a.name.cmp(&b.name);
-                if ascending { cmp } else { cmp.reverse() }
-            }),
-            SortField::LastCommit => self.repos.sort_by(|a, b| {
-                let cmp = a.last_commit_date.cmp(&b.last_commit_date);
-                if ascending { cmp } else { cmp.reverse() }
-            }),
-            SortField::Size => self.repos.sort_by(|a, b| {
-                let cmp = a.total_size.cmp(&b.total_size);
-                if ascending { cmp } else { cmp.reverse() }
-            }),
-            SortField::Health => self.repos.sort_by(|a, b| {
-                let cmp = a.health_score.cmp(&b.health_score);
-                if ascending { cmp } else { cmp.reverse() }
-            }),
-            SortField::ArtifactSize => self.repos.sort_by(|a, b| {
-                let cmp = a.artifact_size.cmp(&b.artifact_size);
-                if ascending { cmp } else { cmp.reverse() }
-            }),
-        }
+        self.repos.sort_by(|a, b| {
+            let cmp = match self.sort_by {
+                SortField::Name => a.name.cmp(&b.name),
+                SortField::LastCommit => a.last_commit_date.cmp(&b.last_commit_date),
+                SortField::Size => a.total_size.cmp(&b.total_size),
+                SortField::Health => a.health_score.cmp(&b.health_score),
+                SortField::ArtifactSize => a.artifact_size.cmp(&b.artifact_size),
+            };
+            if ascending { cmp } else { cmp.reverse() }
+        });
     }
 }
 

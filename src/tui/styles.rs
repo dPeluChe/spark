@@ -1,4 +1,5 @@
-use ratatui::style::Color;
+use ratatui::prelude::*;
+use ratatui::widgets::Clear;
 
 // Color Palette (matching Go version exactly)
 pub const GREEN: Color = Color::Rgb(4, 181, 117);     // #04B575
@@ -41,3 +42,48 @@ pub const SPARK_ART: &str = r#"
 "#;
 
 pub const VERSION: &str = "v0.7.0";
+
+/// Center a modal of given width/height within an area, clear background, return inner Rect
+pub fn center_modal(frame: &mut Frame, area: Rect, width: u16, height: u16) -> Rect {
+    let modal_width = width.min(area.width.saturating_sub(4));
+    let modal_height = height.min(area.height.saturating_sub(4));
+
+    let h_center = Layout::horizontal([
+        Constraint::Fill(1),
+        Constraint::Length(modal_width),
+        Constraint::Fill(1),
+    ])
+    .split(area);
+
+    let v_center = Layout::vertical([
+        Constraint::Fill(1),
+        Constraint::Length(modal_height),
+        Constraint::Fill(1),
+    ])
+    .split(h_center[1]);
+
+    let modal_area = v_center[1];
+    frame.render_widget(Clear, modal_area);
+    modal_area
+}
+
+/// Render a checkbox span: [✔] or [ ]
+pub fn render_checkbox(checked: bool) -> Span<'static> {
+    if checked {
+        Span::styled("[✔] ", Style::default().fg(GREEN))
+    } else {
+        Span::styled("[ ] ", Style::default().fg(CHECKBOX_DIM))
+    }
+}
+
+/// Style for a health grade letter
+pub fn health_grade_style(grade: &crate::scanner::repo_scanner::HealthGrade) -> Style {
+    use crate::scanner::repo_scanner::HealthGrade;
+    match grade {
+        HealthGrade::A => Style::default().fg(GREEN),
+        HealthGrade::B => Style::default().fg(BLUE),
+        HealthGrade::C => Style::default().fg(YELLOW),
+        HealthGrade::D => Style::default().fg(Color::Rgb(255, 165, 0)),
+        HealthGrade::F => Style::default().fg(RED),
+    }
+}

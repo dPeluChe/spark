@@ -2,7 +2,7 @@ use ratatui::prelude::*;
 use ratatui::widgets::*;
 use crate::tui::model::*;
 use crate::tui::styles::*;
-use crate::scanner::repo_scanner::HealthGrade;
+use crate::utils::fs::format_size;
 
 /// Render detailed view of a single repository
 pub fn render_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) {
@@ -20,13 +20,7 @@ pub fn render_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) {
     .split(area);
 
     // Header
-    let grade_style = match repo.health_grade {
-        HealthGrade::A => Style::default().fg(GREEN),
-        HealthGrade::B => Style::default().fg(BLUE),
-        HealthGrade::C => Style::default().fg(YELLOW),
-        HealthGrade::D => Style::default().fg(Color::Rgb(255, 165, 0)),
-        HealthGrade::F => Style::default().fg(RED),
-    };
+    let grade_style = health_grade_style(&repo.health_grade);
 
     let header = Paragraph::new(vec![
         Line::from(vec![
@@ -98,7 +92,7 @@ pub fn render_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) {
         Line::from(vec![
             Span::styled("  Total Size: ", Style::default().fg(PURPLE)),
             Span::styled(
-                format!(" {}", super::scanner_view::format_size(repo.total_size)),
+                format!(" {}", format_size(repo.total_size)),
                 Style::default().fg(WHITE),
             ),
         ]),
@@ -132,7 +126,7 @@ pub fn render_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) {
                     Style::default().fg(YELLOW),
                 ),
                 Span::styled(
-                    super::scanner_view::format_size(artifact.size),
+                    format_size(artifact.size),
                     Style::default().fg(if artifact.size > 100_000_000 { RED } else { WHITE }),
                 ),
                 Span::styled(
@@ -149,7 +143,7 @@ pub fn render_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) {
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(YELLOW))
             .title(Span::styled(
-                format!(" Artifacts ({}) ", super::scanner_view::format_size(repo.artifact_size)),
+                format!(" Artifacts ({}) ", format_size(repo.artifact_size)),
                 Style::default().fg(YELLOW).bold(),
             )),
     );
