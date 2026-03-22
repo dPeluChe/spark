@@ -37,6 +37,9 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
             super::repo_manager_view::render_repo_manager(frame, area, &app.repo_manager);
             super::repo_manager_view::render_clone_input(frame, area, &app.repo_manager);
         }
+        ScannerState::RepoCloneSummary => {
+            super::repo_manager_view::render_clone_summary(frame, area, &app.repo_manager);
+        }
         ScannerState::PortScan => {
             super::port_view::render_ports(frame, area, &app.port_scanner);
         }

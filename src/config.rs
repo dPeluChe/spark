@@ -13,6 +13,13 @@ pub struct SparkConfig {
     pub use_trash: bool,
     /// Max directory depth for scanner
     pub max_scan_depth: usize,
+    /// Root directory for managed repos (ghq-style: root/host/owner/name)
+    #[serde(default = "default_repos_root")]
+    pub repos_root: PathBuf,
+}
+
+fn default_repos_root() -> PathBuf {
+    dirs::home_dir().unwrap_or_else(|| PathBuf::from("~")).join("repos")
 }
 
 impl Default for SparkConfig {
@@ -31,6 +38,7 @@ impl Default for SparkConfig {
             large_artifact_threshold: 100 * 1024 * 1024, // 100MB
             use_trash: true,
             max_scan_depth: 4,
+            repos_root: home.join("repos"),
         }
     }
 }

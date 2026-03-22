@@ -183,14 +183,42 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
             }
             app.repo_manager.checked.remove(&index);
         }
-        AppMessage::CloneResult { success, message } => {
+        AppMessage::CloneResult { success, message, clone_path } => {
             app.repo_manager.cloning = false;
             if success {
+                let url = app.repo_manager.clone_input.clone();
+                let path = clone_path.unwrap_or_else(|| message.clone());
+
+                // Build summary with alias and agent tips
+                let home = std::env::var("HOME").unwrap_or_default();
+                let short_path = if path.starts_with(&home) {
+                    format!("~{}", &path[home.len()..])
+                } else {
+                    path.clone()
+                };
+
+                let repo_name = std::path::Path::new(&path)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default();
+
+                let alias_cmd = format!(
+                    "alias {}='cd {}'",
+                    repo_name.replace('-', "_"),
+                    short_path
+                );
+
+                app.repo_manager.last_clone = Some(CloneSummary {
+                    repo_path: path,
+                    repo_name,
+                    remote_url: url,
+                    alias_cmd,
+                    short_path,
+                });
+
                 app.repo_manager.clone_input.clear();
                 app.repo_manager.clone_error = None;
-                app.scanner.state = ScannerState::RepoManager;
-                // Refresh the repo list
-                return Some(Action::ListManagedRepos);
+                app.scanner.state = ScannerState::RepoCloneSummary;
             } else {
                 app.repo_manager.clone_error = Some(message);
             }

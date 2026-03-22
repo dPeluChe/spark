@@ -354,6 +354,15 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
             }
         }
 
+        // Clone summary (post-clone info)
+        ScannerState::RepoCloneSummary => match key.code {
+            KeyCode::Enter | KeyCode::Esc => {
+                app.scanner.state = ScannerState::RepoManager;
+                Some(Action::ListManagedRepos)
+            }
+            _ => None,
+        },
+
         // Clone URL text input
         ScannerState::RepoCloneInput => {
             let rm = &mut app.repo_manager;

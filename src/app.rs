@@ -151,11 +151,7 @@ pub async fn run(
                         }
                         Action::ListManagedRepos => {
                             let tx2 = tx.clone();
-                            let root = app.repo_manager.root.clone()
-                                .map(std::path::PathBuf::from)
-                                .unwrap_or_else(|| {
-                                    dirs::home_dir().unwrap_or_default().join("repos")
-                                });
+                            let root = app.repo_manager.root.clone();
                             tokio::spawn(async move {
                                 let repos = tokio::task::spawn_blocking(move || {
                                     crate::scanner::repo_manager::list_managed_repos(&root)
@@ -207,22 +203,25 @@ pub async fn run(
                         }
                         Action::CloneRepo(url) => {
                             let tx2 = tx.clone();
-                            let root = app.repo_manager.root.clone()
-                                .map(std::path::PathBuf::from)
-                                .unwrap_or_else(|| {
-                                    dirs::home_dir().unwrap_or_default().join("repos")
-                                });
+                            let root = app.repo_manager.root.clone();
                             tokio::spawn(async move {
                                 let result = tokio::task::spawn_blocking(move || {
                                     crate::scanner::repo_manager::clone_repo(&url, &root)
                                 })
                                 .await;
-                                let (success, message) = match result {
-                                    Ok(Ok(path)) => (true, format!("Cloned to {}", path.display())),
-                                    Ok(Err(e)) => (false, e),
-                                    Err(e) => (false, e.to_string()),
+                                let (success, message, clone_path) = match result {
+                                    Ok(Ok(path)) => {
+                                        let p = path.display().to_string();
+                                        (true, format!("Cloned to {}", p), Some(p))
+                                    }
+                                    Ok(Err(e)) => (false, e, None),
+                                    Err(e) => (false, e.to_string(), None),
                                 };
-                                let _ = tx2.send(AppMessage::CloneResult { success, message });
+                                let _ = tx2.send(AppMessage::CloneResult {
+                                    success,
+                                    message,
+                                    clone_path,
+                                });
                             });
                         }
                         Action::KillProcesses(pids) => {

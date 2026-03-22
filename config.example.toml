@@ -25,3 +25,8 @@ use_trash = true
 
 # Max directory recursion depth when scanning
 max_scan_depth = 4
+
+# Root directory for managed repos (ghq-style: root/host/owner/name)
+# Repos cloned via Repo Manager [G] → [c] will be stored here
+# Layout: repos_root/github.com/user/repo-name/
+repos_root = "~/repos"

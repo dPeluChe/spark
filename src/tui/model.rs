@@ -41,6 +41,7 @@ pub enum ScannerState {
     PortKillConfirm,
     RepoManager,
     RepoCloneInput,
+    RepoCloneSummary,
 }
 
 /// Sort field for scanner results
@@ -115,6 +116,8 @@ pub enum AppMessage {
     CloneResult {
         success: bool,
         message: String,
+        /// On success, the cloned repo path for summary
+        clone_path: Option<String>,
     },
 
     // Discovery
@@ -333,23 +336,34 @@ pub struct RepoManagerModel {
     pub repos: Vec<ManagedRepo>,
     pub cursor: usize,
     pub checked: HashSet<usize>,
-    pub root: Option<String>,
+    pub root: PathBuf,
     pub clone_input: String,
     pub clone_error: Option<String>,
     pub cloning: bool,
+    /// Last clone result for summary display
+    pub last_clone: Option<CloneSummary>,
+}
+
+/// Summary info shown after a successful clone
+pub struct CloneSummary {
+    pub repo_path: String,
+    pub repo_name: String,
+    pub remote_url: String,
+    pub alias_cmd: String,
+    pub short_path: String,
 }
 
 impl RepoManagerModel {
-    pub fn new() -> Self {
-        let root = dirs::home_dir().map(|h| h.join("repos").display().to_string());
+    pub fn new(repos_root: &std::path::Path) -> Self {
         Self {
             repos: Vec::new(),
             cursor: 0,
             checked: HashSet::new(),
-            root,
+            root: repos_root.to_path_buf(),
             clone_input: String::new(),
             clone_error: None,
             cloning: false,
+            last_clone: None,
         }
     }
 }
@@ -376,7 +390,7 @@ impl App {
             updater: UpdaterModel::new(),
             scanner: ScannerModel::new(),
             port_scanner: PortScannerModel::new(),
-            repo_manager: RepoManagerModel::new(),
+            repo_manager: RepoManagerModel::new(&config.repos_root),
             config,
             should_quit: false,
             dry_run: false,
