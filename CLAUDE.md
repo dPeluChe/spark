@@ -4,60 +4,90 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**SPARK** has evolved from a bash script into a **Go-based TUI application**.
-It manages system updates for developers, focusing on AI tools, IDEs, and Infrastructure.
+**SPARK** is a **Rust-based TUI application** (migrated from Go/Bubble Tea in v0.7.0).
+It has two main modes:
+1. **Updater**: Manages system updates for 44+ developer tools (AI tools, IDEs, Infrastructure)
+2. **Scanner**: Discovers, analyzes, and cleans stale git repositories and build artifacts
 
-## Architecture (Go + Bubble Tea)
+## Architecture (Rust + Ratatui)
 
-The project follows the standard Go project layout:
+```
+src/
+├── main.rs                    # Entry point, terminal setup, tokio runtime
+├── app.rs                     # Event loop, background task dispatch via mpsc channels
+├── config.rs                  # SparkConfig loaded from ~/.config/spark/config.toml
+├── core/
+│   ├── types.rs               # Tool, ToolState, Category, UpdateMethod, ToolStatus enums
+│   ├── inventory.rs           # 44+ tools catalog with auto-assigned IDs
+│   └── changelogs.rs          # Changelog URL mappings with heuristic fallbacks
+├── updater/
+│   ├── detector.rs            # Version detection (brew, npm, CLI, macOS apps) with async cache
+│   ├── version.rs             # Regex-based version parsing + tool-specific parsers
+│   └── executor.rs            # Update execution (brew upgrade, npm install -g, curl|sh)
+├── scanner/
+│   ├── repo_scanner.rs        # Git repo discovery via walkdir + analysis via git2
+│   ├── space_analyzer.rs      # Artifact detection (node_modules, venvs, target/, etc.)
+│   ├── health.rs              # Health scoring (0-100, grades A-F)
+│   └── cleaner.rs             # Cleanup: trash, archive, delete artifacts
+├── tui/
+│   ├── model.rs               # App, UpdaterModel, ScannerModel state structs
+│   ├── update.rs              # Key/message handling, state transitions, Action dispatch
+│   ├── view.rs                # Top-level render dispatcher + tab bar
+│   ├── styles.rs              # Color palette, ASCII art, spinner frames
+│   └── widgets/
+│       ├── splash.rs          # Animated splash screen with color cycling
+│       ├── dashboard.rs       # Tool update grid (2 columns, 8 categories) + preview
+│       ├── scanner_view.rs    # Repo scan results table + config + cleaning views
+│       ├── detail_panel.rs    # Single repo detail view with artifact breakdown
+│       ├── progress.rs        # Progress bars (determinate + indeterminate) + overlays
+│       ├── modal.rs           # Danger zone + clean confirm modals
+│       └── search.rs          # Search bar (rendered inline in dashboard)
+└── utils/
+    ├── shell.rs               # Async shell command execution with timeouts
+    └── fs.rs                  # Directory size calculation, git root discovery
+```
 
-- **`cmd/spark/main.go`**: Entry point. initializes the Tea program.
-- **`internal/core/`**:
-    - `types.go`: Struct definitions (`Tool`, `ToolState`).
-    - `inventory.go`: The static list of all supported tools.
-- **`internal/updater/`**:
-    - `detector.go`: Logic to run shell commands (`brew`, `npm`, etc.) to find local/remote versions.
-- **`internal/tui/`**:
-    - `model.go`: The heart of the application. Contains the Bubble Tea `Model`, `Update`, and `View` functions. Handles all UI logic, rendering, and keybindings.
+## Key Concepts
 
-## Key Features & Logic
+### Async Architecture
+- **tokio** runtime for concurrent operations (version checks, filesystem scanning, updates)
+- Background tasks communicate with TUI via `tokio::sync::mpsc` unbounded channels
+- `AppMessage` enum carries results back to the event loop
+- `Action` enum dispatches side effects from key handlers
 
-### State Machine (`sessionState`)
-1. **`stateSplash`**: Intro animation.
-2. **`stateMain`**: The main dashboard grid.
-3. **`stateConfirm`**: "Danger Zone" modal for critical runtimes.
-4. **`stateUpdating`**: Execution phase (currently simulated).
-5. **`stateSummary`**: Final report.
+### State Machines
+**Updater**: Splash → Main → Search/Preview/Confirm → Updating → Summary
+**Scanner**: ScanConfig → Scanning → ScanResults → RepoDetail/CleanConfirm → Cleaning → CleanSummary
 
-### Concurrency
-- Uses **Goroutines** via `tea.Cmd` to check tool versions in parallel at startup (`Init`).
-- Uses `tea.Batch` to manage multiple simultaneous checks.
-
-### UX Patterns
-- **Mnemonic Navigation**: Jump to categories via first letter (`C`, `T`, `R`...).
-- **Safety Lock**: Prevents accidental updates of Runtimes (Node/Python) via a modal.
-- **Visual Focus**: Dims non-active items during the update phase.
+### Tab Switching
+- `TAB` key switches between Updater and Scanner modes
+- Tab bar always visible at top (except during splash)
 
 ## Development Commands
 
 ### Running Locally
 ```bash
-go run cmd/spark/main.go
+cargo run
 ```
 
 ### Building for Release
 ```bash
-go build -ldflags="-s -w" -o spark-tui cmd/spark/main.go
+cargo build --release
 ```
 
 ### Adding a New Tool
-1. Open `internal/core/inventory.go`.
-2. Add a new `Tool` struct to the list.
-3. If it requires custom version detection, update `internal/updater/detector.go` (`GetLocalVersion`).
+1. Open `src/core/inventory.rs`
+2. Add a new `Tool` struct to the vector
+3. If it requires custom version detection, update `src/updater/detector.rs`
+4. If it has a known changelog URL, add it to `src/core/changelogs.rs`
 
 ## Version History
 
-- **v0.5.3**: UX Polish - Visual focus during updates, Smart Enter, Ctrl+C fix.
-- **v0.5.2**: Safety System - Danger Zone Modal, Group Selection (G), Parallel Checks.
-- **v0.5.0**: **The Great Rewrite**. Migrated to Go/Bubble Tea. Grid Layout, Splash Screen.
+- **v0.7.0**: **The Rust Migration**. Complete rewrite in Rust + Ratatui. Added Repository Scanner with health scoring, artifact cleanup, and trash-based deletion. Cross-platform support.
+- **v0.6.0**: Go/Bubble Tea with 44 tools, 8 categories, full update execution.
+- **v0.5.x**: Go/Bubble Tea era. Grid layout, splash screen, danger zone, search.
 - **v0.4.x**: Legacy Bash Script era (Archived).
+
+## Legacy Go Code
+
+The original Go implementation is preserved in `cmd/`, `internal/`, `go.mod`, `go.sum` for reference. The active codebase is in `src/` (Rust).
