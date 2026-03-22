@@ -1,0 +1,27 @@
+# SPARK Configuration
+# Copy to ~/.config/spark/config.toml and customize
+#
+# All values shown are defaults — only override what you need.
+
+# Directories to scan for git repositories
+# Paths are expanded from your home directory
+scan_directories = [
+    "~/Projects",
+    "~/Developer",
+    "~/Code",
+    "~/repos",
+    "~/src",
+    "~/workspace",
+]
+
+# Days since last commit to consider a repository "stale"
+stale_threshold_days = 90
+
+# Minimum artifact size (bytes) to flag as large (default: 100 MB)
+large_artifact_threshold = 104857600
+
+# Use OS trash for deletions (true = recoverable, false = permanent)
+use_trash = true
+
+# Max directory recursion depth when scanning
+max_scan_depth = 4

@@ -2,8 +2,15 @@
 name = "spark"
 version = "0.7.0"
 edition = "2021"
-description = "Surgical Precision Update Utility & Repository Scanner"
+rust-version = "1.75"
+description = "Surgical Precision Update Utility & Repository Scanner — a Rust TUI for managing 44+ developer tools and cleaning stale git repos"
 authors = ["dPeluChe"]
+license = "MIT"
+repository = "https://github.com/dPeluChe/labs-spark"
+readme = "README.md"
+keywords = ["tui", "updater", "scanner", "developer-tools", "cleanup"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = ["cmd/", "internal/", "go.mod", "go.sum", "*.go"]
 
 [dependencies]
 ratatui = "0.29"

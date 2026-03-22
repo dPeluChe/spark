@@ -12,9 +12,20 @@ use crate::tui::view;
 use crate::updater::detector::Detector;
 
 /// Run the application event loop
-pub async fn run(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> color_eyre::Result<()> {
-    let config = SparkConfig::load();
+pub async fn run(
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    config: SparkConfig,
+    scan_only: bool,
+    _update_only: bool,
+    dry_run: bool,
+) -> color_eyre::Result<()> {
     let mut app = App::new(config.clone());
+    app.dry_run = dry_run;
+
+    // Start in scanner mode if --scan-only
+    if scan_only {
+        app.mode = AppMode::Scanner;
+    }
 
     let (tx, mut rx) = mpsc::unbounded_channel::<AppMessage>();
     let detector = Arc::new(Detector::new());
