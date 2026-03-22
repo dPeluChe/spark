@@ -5,6 +5,7 @@ use crate::config::SparkConfig;
 use crate::core::types::*;
 use crate::core::inventory::get_inventory;
 use crate::scanner::repo_scanner::RepoInfo;
+use crate::scanner::port_scanner::PortInfo;
 
 /// Top-level application mode
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,6 +36,8 @@ pub enum ScannerState {
     CleanConfirm,
     Cleaning,
     CleanSummary,
+    PortScan,
+    PortKillConfirm,
 }
 
 /// Sort field for scanner results
@@ -82,6 +85,16 @@ pub enum AppMessage {
         error: Option<String>,
     },
     CleanAllComplete,
+
+    // Port scanner
+    PortScanResult {
+        ports: Vec<PortInfo>,
+    },
+    KillResult {
+        pid: u32,
+        success: bool,
+        error: Option<String>,
+    },
 
     // Discovery
     DiscoveredDirs {
@@ -277,11 +290,29 @@ impl ScannerModel {
     }
 }
 
+/// Port scanner model: tracks discovered ports and kill selections
+pub struct PortScannerModel {
+    pub ports: Vec<PortInfo>,
+    pub cursor: usize,
+    pub checked: HashSet<usize>,
+}
+
+impl PortScannerModel {
+    pub fn new() -> Self {
+        Self {
+            ports: Vec::new(),
+            cursor: 0,
+            checked: HashSet::new(),
+        }
+    }
+}
+
 /// Top-level application state: holds both mode models, config, and display info
 pub struct App {
     pub mode: AppMode,
     pub updater: UpdaterModel,
     pub scanner: ScannerModel,
+    pub port_scanner: PortScannerModel,
     pub config: SparkConfig,
     pub should_quit: bool,
     pub dry_run: bool,
@@ -296,6 +327,7 @@ impl App {
             mode: AppMode::Updater,
             updater: UpdaterModel::new(),
             scanner: ScannerModel::new(),
+            port_scanner: PortScannerModel::new(),
             config,
             should_quit: false,
             dry_run: false,

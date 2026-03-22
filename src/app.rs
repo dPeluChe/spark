@@ -139,6 +139,33 @@ pub async fn run(
                                 let _ = tx2.send(AppMessage::CleanAllComplete);
                             });
                         }
+                        Action::ScanPorts => {
+                            let tx2 = tx.clone();
+                            tokio::spawn(async move {
+                                let ports =
+                                    tokio::task::spawn_blocking(crate::scanner::port_scanner::scan_ports)
+                                        .await
+                                        .unwrap_or_default();
+                                let _ = tx2.send(AppMessage::PortScanResult { ports });
+                            });
+                        }
+                        Action::KillProcesses(pids) => {
+                            let tx2 = tx.clone();
+                            tokio::spawn(async move {
+                                for pid in pids {
+                                    let result = crate::scanner::port_scanner::kill_process(pid);
+                                    let (success, error) = match result {
+                                        Ok(_) => (true, None),
+                                        Err(e) => (false, Some(e)),
+                                    };
+                                    let _ = tx2.send(AppMessage::KillResult {
+                                        pid,
+                                        success,
+                                        error,
+                                    });
+                                }
+                            });
+                        }
                     }
                 }
             } else if let Ok(Event::Resize(w, h)) = event::read() {

@@ -19,6 +19,10 @@ pub enum Action {
     CleanArtifacts(Vec<std::path::PathBuf>),
     /// Move a repository to trash
     TrashRepo(std::path::PathBuf),
+    /// Scan for listening ports
+    ScanPorts,
+    /// Kill processes by PID list
+    KillProcesses(Vec<u32>),
 }
 
 /// Handle a key event and return optional action
@@ -121,6 +125,31 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
         }
         AppMessage::CleanAllComplete => {
             app.scanner.state = ScannerState::CleanSummary;
+        }
+        AppMessage::PortScanResult { ports } => {
+            app.port_scanner.ports = ports;
+            app.port_scanner.cursor = 0;
+            app.port_scanner.checked.clear();
+        }
+        AppMessage::KillResult { pid, success, error } => {
+            if success {
+                // Remove killed port from the list
+                app.port_scanner.ports.retain(|p| p.pid != pid);
+                if app.port_scanner.cursor >= app.port_scanner.ports.len()
+                    && app.port_scanner.cursor > 0
+                {
+                    app.port_scanner.cursor -= 1;
+                }
+            }
+            if let Some(err) = error {
+                // Could show in a status bar, for now just log
+                let _ = err;
+            }
+            // If all kills done and we were in confirm, go back to port scan
+            if app.scanner.state == ScannerState::PortKillConfirm {
+                app.scanner.state = ScannerState::PortScan;
+                app.port_scanner.checked.clear();
+            }
         }
         AppMessage::DiscoveredDirs { dirs } => {
             app.scanner.discovered_dirs = dirs;

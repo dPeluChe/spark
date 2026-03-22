@@ -16,6 +16,10 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 app.mode = AppMode::Updater;
                 None
             }
+            KeyCode::Char('p') | KeyCode::Char('P') => {
+                s.state = ScannerState::PortScan;
+                Some(Action::ScanPorts)
+            }
             KeyCode::Up | KeyCode::Char('k') => {
                 if s.cursor > 0 {
                     s.cursor -= 1;
@@ -51,7 +55,7 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
             _ => None,
         },
 
-        ScannerState::Scanning => None, // Block input during scan
+        ScannerState::Scanning => None,
 
         ScannerState::ScanResults => match key.code {
             KeyCode::Char('q') | KeyCode::Char('Q') => {
@@ -65,6 +69,10 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
             KeyCode::Esc => {
                 s.state = ScannerState::ScanConfig;
                 None
+            }
+            KeyCode::Char('p') | KeyCode::Char('P') => {
+                s.state = ScannerState::PortScan;
+                Some(Action::ScanPorts)
             }
             KeyCode::Up | KeyCode::Char('k') => {
                 if s.cursor > 0 {
@@ -93,7 +101,6 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 None
             }
             KeyCode::Char('d') => {
-                // Clean artifacts of selected repos
                 if s.checked.is_empty() {
                     s.checked.insert(s.cursor);
                 }
@@ -113,14 +120,12 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 None
             }
             KeyCode::Char('D') => {
-                // Trash selected repos
                 if s.repos.get(s.cursor).is_some() {
                     s.state = ScannerState::CleanConfirm;
                 }
                 None
             }
             KeyCode::Char('s') => {
-                // Cycle sort
                 s.sort_by = match s.sort_by {
                     SortField::Name => SortField::Health,
                     SortField::Health => SortField::LastCommit,
@@ -192,6 +197,92 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 s.state = ScannerState::ScanResults;
                 s.checked.clear();
                 s.clean_results.clear();
+                None
+            }
+            _ => None,
+        },
+
+        // Port scanner states
+        ScannerState::PortScan => {
+            let p = &mut app.port_scanner;
+            match key.code {
+                KeyCode::Char('q') | KeyCode::Char('Q') => {
+                    app.should_quit = true;
+                    Some(Action::Quit)
+                }
+                KeyCode::Esc => {
+                    app.scanner.state = ScannerState::ScanConfig;
+                    None
+                }
+                KeyCode::Tab => {
+                    app.mode = AppMode::Updater;
+                    None
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    if p.cursor > 0 {
+                        p.cursor -= 1;
+                    }
+                    None
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if p.cursor < p.ports.len().saturating_sub(1) {
+                        p.cursor += 1;
+                    }
+                    None
+                }
+                KeyCode::Char(' ') => {
+                    if p.checked.contains(&p.cursor) {
+                        p.checked.remove(&p.cursor);
+                    } else {
+                        p.checked.insert(p.cursor);
+                    }
+                    None
+                }
+                KeyCode::Char('r') | KeyCode::Char('R') => {
+                    Some(Action::ScanPorts)
+                }
+                KeyCode::Char('x') => {
+                    // Kill selected (or current)
+                    if p.checked.is_empty() {
+                        p.checked.insert(p.cursor);
+                    }
+                    app.scanner.state = ScannerState::PortKillConfirm;
+                    None
+                }
+                KeyCode::Char('X') => {
+                    // Kill all dev ports
+                    for (i, port_info) in p.ports.iter().enumerate() {
+                        if crate::scanner::port_scanner::is_dev_port(port_info.port) {
+                            p.checked.insert(i);
+                        }
+                    }
+                    if !p.checked.is_empty() {
+                        app.scanner.state = ScannerState::PortKillConfirm;
+                    }
+                    None
+                }
+                _ => None,
+            }
+        }
+
+        ScannerState::PortKillConfirm => match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                let pids: Vec<u32> = app
+                    .port_scanner
+                    .checked
+                    .iter()
+                    .filter_map(|&i| app.port_scanner.ports.get(i).map(|p| p.pid))
+                    .collect();
+                app.scanner.state = ScannerState::PortScan;
+                if !pids.is_empty() {
+                    Some(Action::KillProcesses(pids))
+                } else {
+                    None
+                }
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                app.scanner.state = ScannerState::PortScan;
+                app.port_scanner.checked.clear();
                 None
             }
             _ => None,

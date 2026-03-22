@@ -5,7 +5,8 @@ use crate::tui::styles::*;
 use crate::utils::fs::format_size;
 
 /// Render the scanner mode
-pub fn render_scanner(frame: &mut Frame, area: Rect, model: &ScannerModel, tick: usize) {
+pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
+    let model = &app.scanner;
     match model.state {
         ScannerState::ScanConfig => render_scan_config(frame, area, model),
         ScannerState::Scanning => render_scanning(frame, area, model, tick),
@@ -29,6 +30,25 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, model: &ScannerModel, tick:
         }
         ScannerState::Cleaning => render_cleaning(frame, area, model, tick),
         ScannerState::CleanSummary => render_clean_summary(frame, area, model),
+        ScannerState::PortScan => {
+            super::port_view::render_ports(frame, area, &app.port_scanner);
+        }
+        ScannerState::PortKillConfirm => {
+            super::port_view::render_ports(frame, area, &app.port_scanner);
+            let ports_str: String = app
+                .port_scanner
+                .checked
+                .iter()
+                .filter_map(|&i| app.port_scanner.ports.get(i).map(|p| format!(":{}", p.port)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            super::port_view::render_kill_confirm(
+                frame,
+                area,
+                app.port_scanner.checked.len(),
+                &ports_str,
+            );
+        }
     }
 }
 
@@ -102,7 +122,7 @@ fn render_scan_config(frame: &mut Frame, area: Rect, model: &ScannerModel) {
 
     // Help
     let help = Paragraph::new(Span::styled(
-        "[SPACE] Toggle • [ENTER] Start Scan • [TAB] Switch to Updater • [Q] Quit",
+        "[SPACE] Toggle • [ENTER] Start Scan • [P] Port Scanner • [TAB] Updater • [Q] Quit",
         Style::default().fg(GRAY),
     ));
     frame.render_widget(help, chunks[2]);
@@ -260,7 +280,7 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
 
     // Help bar
     let help = Paragraph::new(Span::styled(
-        "[SPACE] Select • [ENTER] Detail • [d] Clean Artifacts • [D] Trash Repo • [s] Sort • [TAB] Mode • [Q] Quit",
+        "[SPACE] Select • [ENTER] Detail • [d] Clean • [D] Trash • [P] Ports • [s] Sort • [TAB] Mode • [Q] Quit",
         Style::default().fg(GRAY),
     ));
     frame.render_widget(help, chunks[2]);

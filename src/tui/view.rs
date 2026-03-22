@@ -29,7 +29,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
             super::widgets::scanner_view::render_scanner(
                 frame,
                 chunks[1],
-                &app.scanner,
+                app,
                 app.tick_count,
             );
         }
