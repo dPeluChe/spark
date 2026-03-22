@@ -20,6 +20,10 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 s.state = ScannerState::PortScan;
                 Some(Action::ScanPorts)
             }
+            KeyCode::Char('g') | KeyCode::Char('G') => {
+                s.state = ScannerState::RepoManager;
+                Some(Action::ListManagedRepos)
+            }
             KeyCode::Up | KeyCode::Char('k') => {
                 if s.cursor > 0 {
                     s.cursor -= 1;
@@ -73,6 +77,10 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
             KeyCode::Char('p') | KeyCode::Char('P') => {
                 s.state = ScannerState::PortScan;
                 Some(Action::ScanPorts)
+            }
+            KeyCode::Char('g') | KeyCode::Char('G') => {
+                s.state = ScannerState::RepoManager;
+                Some(Action::ListManagedRepos)
             }
             KeyCode::Up | KeyCode::Char('k') => {
                 if s.cursor > 0 {
@@ -260,6 +268,81 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                         app.scanner.state = ScannerState::PortKillConfirm;
                     }
                     None
+                }
+                _ => None,
+            }
+        }
+
+        // Repo manager state
+        ScannerState::RepoManager => {
+            let rm = &mut app.repo_manager;
+            match key.code {
+                KeyCode::Char('q') | KeyCode::Char('Q') => {
+                    app.should_quit = true;
+                    Some(Action::Quit)
+                }
+                KeyCode::Esc => {
+                    app.scanner.state = ScannerState::ScanConfig;
+                    None
+                }
+                KeyCode::Tab => {
+                    app.mode = AppMode::Updater;
+                    None
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    if rm.cursor > 0 {
+                        rm.cursor -= 1;
+                    }
+                    None
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if rm.cursor < rm.repos.len().saturating_sub(1) {
+                        rm.cursor += 1;
+                    }
+                    None
+                }
+                KeyCode::Char(' ') => {
+                    if rm.checked.contains(&rm.cursor) {
+                        rm.checked.remove(&rm.cursor);
+                    } else {
+                        rm.checked.insert(rm.cursor);
+                    }
+                    None
+                }
+                KeyCode::Char('r') | KeyCode::Char('R') => {
+                    Some(Action::ListManagedRepos)
+                }
+                KeyCode::Char('u') => {
+                    // Pull selected repos
+                    if rm.checked.is_empty() {
+                        rm.checked.insert(rm.cursor);
+                    }
+                    let indices: Vec<usize> = rm.checked.iter().copied().collect();
+                    Some(Action::PullRepos(indices))
+                }
+                KeyCode::Char('U') => {
+                    // Pull all repos that are behind
+                    let behind_indices: Vec<usize> = rm
+                        .repos
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, r)| {
+                            matches!(
+                                r.status,
+                                crate::scanner::repo_manager::RepoStatus::Behind(_)
+                                    | crate::scanner::repo_manager::RepoStatus::Diverged { .. }
+                            )
+                        })
+                        .map(|(i, _)| i)
+                        .collect();
+                    if !behind_indices.is_empty() {
+                        for &i in &behind_indices {
+                            rm.checked.insert(i);
+                        }
+                        Some(Action::PullRepos(behind_indices))
+                    } else {
+                        None
+                    }
                 }
                 _ => None,
             }

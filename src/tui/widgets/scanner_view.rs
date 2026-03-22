@@ -30,6 +30,9 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
         }
         ScannerState::Cleaning => render_cleaning(frame, area, model, tick),
         ScannerState::CleanSummary => render_clean_summary(frame, area, model),
+        ScannerState::RepoManager => {
+            super::repo_manager_view::render_repo_manager(frame, area, &app.repo_manager);
+        }
         ScannerState::PortScan => {
             super::port_view::render_ports(frame, area, &app.port_scanner);
         }
@@ -122,7 +125,7 @@ fn render_scan_config(frame: &mut Frame, area: Rect, model: &ScannerModel) {
 
     // Help
     let help = Paragraph::new(Span::styled(
-        "[SPACE] Toggle • [ENTER] Start Scan • [P] Port Scanner • [TAB] Updater • [Q] Quit",
+        "[SPACE] Toggle • [ENTER] Scan • [P] Ports • [G] Repos • [TAB] Updater • [Q] Quit",
         Style::default().fg(GRAY),
     ));
     frame.render_widget(help, chunks[2]);
@@ -280,7 +283,7 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
 
     // Help bar
     let help = Paragraph::new(Span::styled(
-        "[SPACE] Select • [ENTER] Detail • [d] Clean • [D] Trash • [P] Ports • [s] Sort • [TAB] Mode • [Q] Quit",
+        "[SPACE] Select • [ENTER] Detail • [d] Clean • [P] Ports • [G] Repos • [s] Sort • [TAB] Mode • [Q] Quit",
         Style::default().fg(GRAY),
     ));
     frame.render_widget(help, chunks[2]);

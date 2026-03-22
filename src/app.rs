@@ -149,6 +149,62 @@ pub async fn run(
                                 let _ = tx2.send(AppMessage::PortScanResult { ports });
                             });
                         }
+                        Action::ListManagedRepos => {
+                            let tx2 = tx.clone();
+                            let root = app.repo_manager.root.clone()
+                                .map(std::path::PathBuf::from)
+                                .unwrap_or_else(|| {
+                                    dirs::home_dir().unwrap_or_default().join("repos")
+                                });
+                            tokio::spawn(async move {
+                                let repos = tokio::task::spawn_blocking(move || {
+                                    crate::scanner::repo_manager::list_managed_repos(&root)
+                                })
+                                .await
+                                .unwrap_or_default();
+                                let _ = tx2.send(AppMessage::RepoListResult { repos });
+                            });
+                        }
+                        Action::CheckRepoStatuses => {
+                            for (i, repo) in app.repo_manager.repos.iter().enumerate() {
+                                let tx2 = tx.clone();
+                                let path = repo.path.clone();
+                                tokio::spawn(async move {
+                                    let status = tokio::task::spawn_blocking(move || {
+                                        crate::scanner::repo_manager::check_repo_status(&path)
+                                    })
+                                    .await
+                                    .unwrap_or(crate::scanner::repo_manager::RepoStatus::Error(
+                                        "Task failed".into(),
+                                    ));
+                                    let _ = tx2.send(AppMessage::RepoStatusResult { index: i, status });
+                                });
+                            }
+                        }
+                        Action::PullRepos(indices) => {
+                            for idx in indices {
+                                if let Some(repo) = app.repo_manager.repos.get(idx) {
+                                    let tx2 = tx.clone();
+                                    let path = repo.path.clone();
+                                    tokio::spawn(async move {
+                                        let result = tokio::task::spawn_blocking(move || {
+                                            crate::scanner::repo_manager::pull_repo(&path)
+                                        })
+                                        .await;
+                                        let (success, message) = match result {
+                                            Ok(Ok(msg)) => (true, msg),
+                                            Ok(Err(e)) => (false, e),
+                                            Err(e) => (false, e.to_string()),
+                                        };
+                                        let _ = tx2.send(AppMessage::RepoPullResult {
+                                            index: idx,
+                                            success,
+                                            message,
+                                        });
+                                    });
+                                }
+                            }
+                        }
                         Action::KillProcesses(pids) => {
                             let tx2 = tx.clone();
                             tokio::spawn(async move {

@@ -6,6 +6,7 @@ use crate::core::types::*;
 use crate::core::inventory::get_inventory;
 use crate::scanner::repo_scanner::RepoInfo;
 use crate::scanner::port_scanner::PortInfo;
+use crate::scanner::repo_manager::ManagedRepo;
 
 /// Top-level application mode
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,6 +39,7 @@ pub enum ScannerState {
     CleanSummary,
     PortScan,
     PortKillConfirm,
+    RepoManager,
 }
 
 /// Sort field for scanner results
@@ -94,6 +96,20 @@ pub enum AppMessage {
         pid: u32,
         success: bool,
         error: Option<String>,
+    },
+
+    // Repo manager
+    RepoListResult {
+        repos: Vec<ManagedRepo>,
+    },
+    RepoStatusResult {
+        index: usize,
+        status: crate::scanner::repo_manager::RepoStatus,
+    },
+    RepoPullResult {
+        index: usize,
+        success: bool,
+        message: String,
     },
 
     // Discovery
@@ -307,12 +323,33 @@ impl PortScannerModel {
     }
 }
 
+/// Repo manager model: tracks managed repos and pull operations
+pub struct RepoManagerModel {
+    pub repos: Vec<ManagedRepo>,
+    pub cursor: usize,
+    pub checked: HashSet<usize>,
+    pub root: Option<String>,
+}
+
+impl RepoManagerModel {
+    pub fn new() -> Self {
+        let root = dirs::home_dir().map(|h| h.join("repos").display().to_string());
+        Self {
+            repos: Vec::new(),
+            cursor: 0,
+            checked: HashSet::new(),
+            root,
+        }
+    }
+}
+
 /// Top-level application state: holds both mode models, config, and display info
 pub struct App {
     pub mode: AppMode,
     pub updater: UpdaterModel,
     pub scanner: ScannerModel,
     pub port_scanner: PortScannerModel,
+    pub repo_manager: RepoManagerModel,
     pub config: SparkConfig,
     pub should_quit: bool,
     pub dry_run: bool,
@@ -328,6 +365,7 @@ impl App {
             updater: UpdaterModel::new(),
             scanner: ScannerModel::new(),
             port_scanner: PortScannerModel::new(),
+            repo_manager: RepoManagerModel::new(),
             config,
             should_quit: false,
             dry_run: false,

@@ -23,6 +23,12 @@ pub enum Action {
     ScanPorts,
     /// Kill processes by PID list
     KillProcesses(Vec<u32>),
+    /// List managed repos
+    ListManagedRepos,
+    /// Check status of managed repos (fetch + compare)
+    CheckRepoStatuses,
+    /// Pull specific repos by index
+    PullRepos(Vec<usize>),
 }
 
 /// Handle a key event and return optional action
@@ -150,6 +156,30 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
                 app.scanner.state = ScannerState::PortScan;
                 app.port_scanner.checked.clear();
             }
+        }
+        AppMessage::RepoListResult { repos } => {
+            app.repo_manager.repos = repos;
+            app.repo_manager.cursor = 0;
+            app.repo_manager.checked.clear();
+            // Trigger status checks
+            return Some(Action::CheckRepoStatuses);
+        }
+        AppMessage::RepoStatusResult { index, status } => {
+            if index < app.repo_manager.repos.len() {
+                app.repo_manager.repos[index].status = status;
+            }
+        }
+        AppMessage::RepoPullResult { index, success, message } => {
+            if index < app.repo_manager.repos.len() {
+                if success {
+                    app.repo_manager.repos[index].status =
+                        crate::scanner::repo_manager::RepoStatus::UpToDate;
+                } else {
+                    app.repo_manager.repos[index].status =
+                        crate::scanner::repo_manager::RepoStatus::Error(message);
+                }
+            }
+            app.repo_manager.checked.remove(&index);
         }
         AppMessage::DiscoveredDirs { dirs } => {
             app.scanner.discovered_dirs = dirs;
