@@ -85,6 +85,13 @@ func (m Model) ViewPreview() string {
 
 			line := fmt.Sprintf("  %s %s%s\n", statusIcon, tool.Tool.Name, versionInfo)
 			toolsList += line
+			
+			// Add Changelog if available
+			if url := core.GetChangelogURL(tool.Tool); url != "" {
+				toolsList += lipgloss.NewStyle().
+					Foreground(lipgloss.Color("#565f89")). // Dimmed blue-ish
+					Render(fmt.Sprintf("    ↳ Changelog: %s\n", url))
+			}
 		}
 	}
 

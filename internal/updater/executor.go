@@ -35,11 +35,43 @@ func (e *Executor) Update(t core.Tool) error {
 		return e.updateOmz(ctx)
 	case core.MethodToad:
 		return e.updateToad(ctx)
-	case core.MethodManual, core.MethodDroid, core.MethodOpencode:
+	case core.MethodDroid:
+		return e.updateDroid(ctx)
+	case core.MethodOpencode:
+		return e.updateOpencode(ctx)
+	case core.MethodManual:
 		return fmt.Errorf("manual update required (check vendor portal)")
 	default:
 		return fmt.Errorf("update method %s not implemented", t.Method)
 	}
+}
+
+func (e *Executor) updateDroid(ctx context.Context) error {
+	// Droid (Factory AI)
+	// curl -fsSL https://app.factory.ai/cli | sh
+	cmd := exec.CommandContext(ctx, "sh", "-c", "curl -fsSL https://app.factory.ai/cli | sh")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("droid update failed: %s: %v", string(output), err)
+	}
+	return nil
+}
+
+func (e *Executor) updateOpencode(ctx context.Context) error {
+	// OpenCode
+	// opencode upgrade || curl -fsSL https://opencode.ai/install | bash
+	
+	// Try built-in upgrade first
+	cmdUpgrade := exec.CommandContext(ctx, "opencode", "upgrade")
+	if err := cmdUpgrade.Run(); err == nil {
+		return nil
+	}
+
+	// Fallback to install script
+	cmdInstall := exec.CommandContext(ctx, "sh", "-c", "curl -fsSL https://opencode.ai/install | bash")
+	if output, err := cmdInstall.CombinedOutput(); err != nil {
+		return fmt.Errorf("opencode update failed: %s: %v", string(output), err)
+	}
+	return nil
 }
 
 func (e *Executor) updateToad(ctx context.Context) error {
