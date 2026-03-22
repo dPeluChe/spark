@@ -1,8 +1,6 @@
-# ⚡ SPARK TUI v0.6.0
+# SPARK v0.8.0
 
-**SPARK** is a professional, cinematic Terminal User Interface (TUI) for managing development environment updates with surgical precision.
-
-Built with **Go**, **Bubble Tea**, and **Lip Gloss**, it replaces legacy bash scripts with a high-performance, concurrent, and beautiful interactive dashboard.
+**SPARK** is a developer operations platform built as a high-performance TUI. What started as a simple update script evolved through four generations into a comprehensive tool for managing your entire dev environment.
 
 ```
    _____ ____  ___  ____  __ __
@@ -11,402 +9,301 @@ Built with **Go**, **Bubble Tea**, and **Lip Gloss**, it replaces legacy bash sc
  ___/ / ____/ ___ / _, _/ /| |
 /____/_/   /_/  |/_/ |_/_/ |_|
 
-   Surgical Precision Update Utility v0.6.0
+   Developer Operations Platform v0.8.0
 ```
 
----
-
-## 🚀 Features
-
-### 🎨 Cinematic Experience
-- **Animated Splash Screen**: Professional startup sequence
-- **Grid Dashboard**: 2-column layout with categorized cards
-- **Real-time Status**: Live version checking and update progress
-- **Progress Bar**: Visual feedback during updates
-- **Summary Statistics**: Detailed completion report with success rates
-
-### ⚡ Performance
-- **Parallel Scanning**: Checks 71 tools simultaneously using Goroutines (~2s total)
-- **Instant Navigation**: Jump between categories with shortcuts (`C`, `T`, `I`...)
-- **Smart Selection**: Toggle items (`Space`), groups (`G`), or all (`A`)
-- **Search & Filter**: Find tools instantly with `/` key
-- **Optimized Binary**: ~4.5MB static executable with zero dependencies
-
-### 🛡️ Safety First
-- **Danger Zone Modal**: Explicit confirmation for critical runtimes (Node, Python, PostgreSQL)
-- **Dry-Run Preview**: Review changes before executing (`D` key)
-- **Visual Focus**: Dim non-active items during updates
-- **Smart Enter**: Auto-selects current item if nothing selected
-
-### 🔍 Interactive Features (NEW in v0.6.0)
-- **Search Mode**: Real-time filtering across all tools
-- **Preview Mode**: Dry-run before updating
-- **State Validation**: Robust state machine with 7 validated states
+Built with **Rust**, **Ratatui**, and **tokio**. ~5,500 lines of Rust.
 
 ---
 
-## 📦 Quick Start
+## The Evolution
 
-### Installation
+SPARK has gone through a revolution at each stage, evolving from a bash script into a full DevOps platform:
+
+```
+v0.4.x  Bash Script       A collection of shell functions. Manual, fragile.
+          |
+v0.5.x  Go + Bubble Tea   First TUI. Grid layout, splash screen, categories.
+          |
+v0.6.0  Go (Mature)       71 tools, search, dry-run, danger zone modals.
+          |                ~1,956 lines of Go.
+          |
+v0.7.0  Rust Migration    Complete rewrite. Rust + Ratatui + tokio.
+          |                Added Scanner: repo health, artifact cleanup.
+          |                Cross-platform. Async everything.
+          |
+v0.8.0  DevOps Platform   Repo Manager (ghq-style clone/pull/status).
+                           Port Scanner (find/kill dev servers).
+                           Post-clone summary with agent integration tips.
+                           Configurable repos_root. ~5,500 lines of Rust.
+```
+
+Each version was a leap, not an increment. The Rust migration wasn't a port -- it was a rethink. And v0.8.0 transforms SPARK from "update tool" into "dev environment manager."
+
+---
+
+## Core Modules
+
+### 1. Updater -- Tool Update Manager
+
+Manages updates for 44+ developer tools across 8 categories.
+
+| Category | Tools |
+|----------|-------|
+| **AI Development** | Claude, Droid, Gemini, OpenCode, Codex, Crush, Toad |
+| **Terminals** | iTerm2, Ghostty, Warp |
+| **IDEs & Editors** | VS Code, Cursor, Zed, Windsurf, Antigravity |
+| **Productivity** | JQ, FZF, Ripgrep, Bat, HTTPie, LazyGit, TLDR |
+| **Infrastructure** | Docker, Kubernetes, Helm, Terraform, AWS CLI, Ngrok |
+| **Utilities** | Git, Tmux, Zellij, Oh My Zsh, SQLite, Watchman, Direnv |
+| **Runtimes** | Node.js, Python, Go, Ruby, PostgreSQL |
+| **System** | Homebrew Core, NPM Globals |
+
+- Parallel version detection via tokio
+- Danger zone modals for critical runtimes
+- Dry-run preview before executing
+- Search & filter across all tools
+
+### 2. Scanner -- Repository Health Analyzer
+
+Discovers git repos across your system and scores their health.
+
+- Health scoring (0-100, grades A-F)
+- Stale repo detection (configurable threshold)
+- Artifact discovery: `node_modules`, `.venv`, `target/`, build caches
+- Cleanup actions: trash, archive, or delete artifacts
+- Size analysis with human-readable breakdown
+
+### 3. Repo Manager -- ghq-style Repository Organizer
+
+Clone, track, and maintain all your repositories from one place.
+
+```
+~/repos/                          # Configurable via repos_root
+  github.com/
+    user/my-api/
+    user/frontend/
+  gitlab.com/
+    company/internal-tool/
+```
+
+- **Clone**: `[c]` -- paste any git URL, auto-organized by host/owner/name
+- **Status**: See branch, ahead/behind, dirty state at a glance
+- **Pull**: `[u]` selected or `[U]` all behind repos
+- **Post-clone summary**: After cloning, shows:
+  - Full path and alias suggestion (`alias my_api='cd ~/repos/...'`)
+  - Instructions for AI agents (CLAUDE.md, .cursorrules paths)
+  - Quick access commands
+
+### 4. Port Scanner -- Dev Server Monitor
+
+Find and manage development servers running on your machine.
+
+- Detects common dev ports (3000, 5173, 8080, etc.)
+- Shows PID, runtime (Node, Python, Go, Ruby, Rust), and command
+- Kill processes directly from the TUI
+
+---
+
+## Quick Start
 
 ```bash
-# Clone repository
-cd /path/to/labs-spark
-
-# Build
-go build -ldflags="-s -w" -o spark-tui cmd/spark/main.go
+# Clone and build
+git clone <repo-url> && cd labs-spark
+cargo build --release
 
 # Install
-mkdir -p ~/.local/bin
-cp spark-tui ~/.local/bin/spark
-chmod +x ~/.local/bin/spark
-```
+cp target/release/spark ~/.local/bin/spark
 
-### Run
-
-```bash
+# Run
 spark
 ```
 
-**Note**: Your shell should already have the alias configured. If not, add to `~/.zshrc`:
-```bash
-alias spark='~/.local/bin/spark'
-```
-
-See [docs/INSTALLATION.md](docs/INSTALLATION.md) for detailed instructions.
-
 ---
 
-## 🛠 Supported Tools (71 total)
+## Keyboard Controls
 
-| Category | Shortcut | Tools |
-|----------|----------|-------|
-| **AI Development** | `[C]` | Claude, Droid, Gemini, OpenCode, Codex, Crush, Toad |
-| **Terminals** | `[T]` | iTerm2, Ghostty, Warp |
-| **IDEs & Editors** | `[I]` | VS Code, Cursor, Zed, Windsurf, Antigravity |
-| **Productivity** | `[P]` | JQ, FZF, Ripgrep, Bat, HTTPie, LazyGit, TLDR |
-| **Infrastructure** | `[F]` | Docker, Kubernetes, Helm, Terraform, AWS CLI, Ngrok |
-| **Utilities** | `[U]` | Git, Tmux, Zellij, Oh My Zsh, SQLite, Watchman, Direnv |
-| **Runtimes** ⚠️ | `[R]` | Node.js, Python 3.13, Go, Ruby, PostgreSQL 16 |
-| **System** | `[S]` | Homebrew Core, NPM Globals |
-
-⚠️ **Runtimes** trigger safety confirmation modal before updates.
-
----
-
-## ⌨️ Keyboard Controls
-
-### Navigation
+### Global
 | Key | Action |
 |-----|--------|
-| `↑/↓` or `j/k` | Navigate items |
-| `C` `T` `I` `P` `F` `U` `R` `S` | Jump to category |
-| `TAB` | Jump to next category |
-
-### Selection
-| Key | Action |
-|-----|--------|
-| `SPACE` | Toggle item selection |
-| `G` / `A` | Toggle entire category |
-
-### Actions
-| Key | Action |
-|-----|--------|
-| `/` | **Search/filter** tools 🆕 |
-| `D` | **Dry-run preview** 🆕 |
-| `ENTER` | Start updates |
-| `ESC` | Clear filter / Cancel / Quit |
+| `TAB` | Switch between Updater / Scanner tabs |
 | `Q` or `Ctrl+C` | Quit |
 
-See [docs/WORKFLOWS.md](docs/WORKFLOWS.md) for detailed interaction flows.
+### Updater
+| Key | Action |
+|-----|--------|
+| `j/k` or `Up/Down` | Navigate tools |
+| `SPACE` | Toggle selection |
+| `G` / `A` | Select category / all |
+| `/` | Search & filter |
+| `D` | Dry-run preview |
+| `ENTER` | Start updates |
+
+### Scanner
+| Key | Action |
+|-----|--------|
+| `G` | Open Repo Manager |
+| `P` | Open Port Scanner |
+| `ENTER` | Start scan |
+| `SPACE` | Select repos for cleanup |
+
+### Repo Manager
+| Key | Action |
+|-----|--------|
+| `c` | Clone a repo (enter URL) |
+| `SPACE` | Select repos |
+| `u` | Pull selected repos |
+| `U` | Pull all behind repos |
+| `r` | Refresh status |
 
 ---
 
-## 🎯 Usage Examples
+## Configuration
 
-### Example 1: Update Entire Category
+SPARK reads from `~/.config/spark/config.toml`:
 
-```bash
-$ spark
-# Navigate to desired category (or use C, T, I shortcuts)
-# Press A or G (select all in current category)
-# Press D (preview - optional)
-# Press ENTER (update)
-# Review summary
-# Press any key (return to dashboard)
+```toml
+# Directories to scan for git repos
+scan_directories = ["~/Projects", "~/Developer", "~/Code", "~/repos"]
+
+# Stale threshold (days since last commit)
+stale_threshold_days = 90
+
+# Minimum artifact size to flag (bytes, default 100MB)
+large_artifact_threshold = 104857600
+
+# Use OS trash for safe deletions
+use_trash = true
+
+# Max scan depth
+max_scan_depth = 4
+
+# Root for managed repos (ghq-style layout)
+repos_root = "~/repos"
 ```
 
-### Example 2: Search and Update
-
-```bash
-$ spark
-# Press / (search mode)
-# Type "node"
-# See: Node.js, Nodemon (filtered)
-# Press ENTER (confirm filter)
-# Press SPACE on desired tools
-# Press ENTER (update)
-```
-
-### Example 3: Update by Category
-
-```bash
-$ spark
-# Press C (jump to AI Development)
-# Press G (select all in category)
-# Press ENTER (update)
-```
-
-### Example 4: Safe Runtime Update
-
-```bash
-$ spark
-# Navigate to Node.js
-# Press SPACE (select)
-# Press ENTER (update)
-# ⚠️ DANGER ZONE modal appears
-# Press Y (confirm)
-# Monitor progress
-# Review summary
-```
+See [config.example.toml](config.example.toml) for all options.
 
 ---
 
-## 🏗️ Architecture
-
-### Project Structure
+## Architecture
 
 ```
-labs-spark/
-├── cmd/spark/main.go           - Entry point (39 lines)
-├── internal/
-│   ├── core/                   - Domain layer (146 lines)
-│   │   ├── types.go           - Enums & structs
-│   │   └── inventory.go       - Tool catalog (71 tools)
-│   ├── updater/                - Detection layer (340 lines)
-│   │   ├── detector.go        - Version detection
-│   │   └── version.go         - Regex-based parsing 🆕
-│   └── tui/                    - Presentation layer (1,470 lines)
-│       ├── model.go           - State management
-│       ├── view.go            - Dashboard rendering
-│       ├── styles.go          - Centralized theming
-│       ├── summary.go         - Summary screen 🆕
-│       ├── preview.go         - Dry-run preview 🆕
-│       └── states.go          - State machine docs 🆕
-└── docs/                       - Documentation 🆕
-    ├── INSTALLATION.md
-    ├── ARCHITECTURE.md
-    ├── WORKFLOWS.md
-    └── ADDING_TOOLS.md
+src/
+├── main.rs                     # Entry point, terminal setup, tokio runtime
+├── app.rs                      # Event loop, action dispatch via mpsc channels
+├── config.rs                   # SparkConfig from ~/.config/spark/config.toml
+├── core/
+│   ├── types.rs                # Tool, Category, UpdateMethod, ToolStatus
+│   ├── inventory.rs            # 44+ tools catalog
+│   └── changelogs.rs           # Changelog URL mappings
+├── updater/
+│   ├── detector.rs             # Version detection (brew, npm, CLI, macOS apps)
+│   ├── version.rs              # Regex-based version parsing
+│   └── executor.rs             # Update execution
+├── scanner/
+│   ├── repo_scanner.rs         # Git repo discovery + analysis via git2
+│   ├── space_analyzer.rs       # Artifact detection
+│   ├── health.rs               # Health scoring (A-F grades)
+│   ├── cleaner.rs              # Cleanup: trash, archive, delete
+│   ├── repo_manager.rs         # ghq-style clone, pull, status tracking
+│   └── port_scanner.rs         # Dev server port discovery + kill
+├── tui/
+│   ├── model.rs                # All state: App, Updater, Scanner, RepoManager, Ports
+│   ├── update.rs               # Message handling, state transitions
+│   ├── scanner_keys.rs         # Scanner-specific key bindings
+│   ├── view.rs                 # Top-level render + tab bar
+│   ├── styles.rs               # Colors, ASCII art, spinners
+│   └── widgets/
+│       ├── splash.rs           # Animated splash with color cycling
+│       ├── dashboard.rs        # Tool grid (2 columns, 8 categories)
+│       ├── scanner_view.rs     # Scan results, config, cleaning views
+│       ├── detail_panel.rs     # Single repo detail + artifacts
+│       ├── repo_manager_view.rs # Repo list, clone input, clone summary
+│       ├── port_view.rs        # Port scanner table + actions
+│       ├── progress.rs         # Progress bars + overlays
+│       ├── modal.rs            # Confirmation modals
+│       └── search.rs           # Inline search bar
+└── utils/
+    ├── shell.rs                # Async shell with timeouts
+    └── fs.rs                   # Dir size, git root discovery
 ```
 
-**Total**: ~1,956 lines of Go code
+### Key Design Decisions
 
-### State Machine
-
-```
-Splash (2s) → Main ←──────────┐
-                ├─[/]→ Search ─┘
-                ├─[D]→ Preview ─┐
-                └─[ENTER]→ Confirm ──┤
-                              │      │
-                              ↓      ↓
-                         Updating ←──┘
-                              ↓
-                         Summary
-                              ↓
-                            EXIT
-```
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed technical documentation.
+- **tokio async runtime**: All I/O (version checks, git ops, filesystem scans) runs concurrently
+- **mpsc channels**: Background tasks send `AppMessage` back to the TUI event loop
+- **Action dispatch**: Key handlers return `Action` enums, app.rs executes side effects
+- **State machines**: Each module has explicit states with validated transitions
 
 ---
 
-## 🎨 What's New in v0.6.0
+## For AI Agents
 
-### Major Features
+When an AI agent (Claude Code, Cursor, Codex) needs to work with a repo managed by SPARK:
 
-✨ **Interactive Search**: Press `/` to filter tools in real-time
-```
-Search: node█ (3 results)
-[ESC] Cancel • [ENTER] Confirm
-```
+1. The post-clone summary provides the exact path after `[c]` clone
+2. Add to your agent config:
+   - **CLAUDE.md**: `Repo path: ~/repos/github.com/owner/name`
+   - **.cursorrules**: `Project root: ~/repos/github.com/owner/name`
+3. Or create a shell alias: `alias myrepo='cd ~/repos/github.com/owner/name'`
 
-✨ **Dry-Run Preview**: Press `D` to see what will be updated
-```
-🔍 UPDATE PREVIEW
-
-Total Selected: 10
-  • AI Development: 2 tools
-  • Runtimes: 1 tool
-
-⚠ WARNING: Runtime updates detected
-
-[ENTER] Proceed • [ESC] Cancel
-```
-
-✨ **Progress Bar**: Visual feedback during updates
-```
-Progress: 5/10 completed
-[===============>               ] 50%
-```
-
-✨ **Rich Summary**: Detailed statistics after updates
-```
-✓ UPDATE COMPLETE
-
-Total Updates:   10
-✓ Successful:    8
-✘ Failed:        2
-Success Rate:    80.0%
-
-UPDATED TOOLS
-  ✓ Claude CLI (1.2.4)
-  ✓ Node.js (21.0.0)
-  ...
-```
-
-### Technical Improvements
-
-🔧 **Robust Version Parsing**: 5 regex patterns + 11 tool-specific parsers
-🔧 **Modular Architecture**: Refactored into 10 files (was 5)
-🔧 **State Validation**: 7 states with documented transitions
-🔧 **Better UX**: Skip invisible items when filtering, smart enter, clear indicators
-
-### Code Quality
-
-📊 **+156% code growth** (763 → 1,956 lines) with better organization
-📊 **14 rendering functions** (was 3 monolithic)
-📊 **Zero tech debt** from refactoring
-
-See [CHANGELOG.md](CHANGELOG.md) for full version history.
+The ghq-style layout means paths are predictable: `{repos_root}/{host}/{owner}/{name}`
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 | Document | Description |
 |----------|-------------|
 | [INSTALLATION.md](docs/INSTALLATION.md) | Setup and troubleshooting |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical architecture deep-dive |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical deep-dive (Go era, historical) |
 | [WORKFLOWS.md](docs/WORKFLOWS.md) | User interaction flows |
-| [ADDING_TOOLS.md](docs/ADDING_TOOLS.md) | How to add new tools/libraries |
-| [CLAUDE.md](CLAUDE.md) | Developer setup guide |
+| [ADDING_TOOLS.md](docs/ADDING_TOOLS.md) | How to add new tools |
+| [CLAUDE.md](CLAUDE.md) | Developer guidance for Claude Code |
+| [config.example.toml](config.example.toml) | All configuration options |
 
 ---
 
-## 🔧 Development
+## Version History
 
-### Prerequisites
+| Version | Era | What Changed |
+|---------|-----|-------------|
+| **v0.8.0** | **DevOps Platform** | Repo Manager (ghq clone/pull/status), Port Scanner, post-clone summary with agent tips, configurable `repos_root` |
+| **v0.7.0** | **Rust Migration** | Complete rewrite: Rust + Ratatui + tokio. Repository Scanner with health scoring, artifact cleanup. Cross-platform |
+| **v0.6.0** | **Go Mature** | 71 tools, search, dry-run preview, danger zone, state machine |
+| **v0.5.x** | **Go TUI** | First TUI with grid layout, splash screen, categories |
+| **v0.4.x** | **Bash Script** | Original shell scripts (archived) |
 
-- **Go 1.24+**
-- macOS (currently supported)
+---
 
-### Build from Source
+## Development
 
 ```bash
-# Standard build
-go build -o spark-tui cmd/spark/main.go
+# Run in dev mode
+cargo run
 
-# Optimized build (recommended)
-go build -ldflags="-s -w" -o spark-tui cmd/spark/main.go
+# Build optimized release
+cargo build --release
+
+# Add a new tool: edit src/core/inventory.rs
 ```
 
-### Debug Mode
-
-```bash
-DEBUG=1 spark
-# Check logs in spark_debug.log
-```
-
-### Adding a New Tool
-
-See [docs/ADDING_TOOLS.md](docs/ADDING_TOOLS.md) for step-by-step guide.
-
-Quick example:
-
-```go
-// internal/core/inventory.go
-{
-    Name:     "New Tool",
-    Binary:   "newtool",
-    Package:  "newtool",
-    Category: CategoryProd,
-    Method:   MethodBrewPkg,
-}
-```
+See [docs/ADDING_TOOLS.md](docs/ADDING_TOOLS.md) for the full guide.
 
 ---
 
-## 🗺️ Roadmap
-
-### v0.7.0 (Next)
-- [ ] Implement real update execution
-- [ ] Remote version detection (Homebrew, npm registries)
-- [ ] Unit tests (target: 60% coverage)
-- [ ] Update history tracking
-
-### v0.8.0
-- [ ] Configuration file support (`~/.config/spark/tools.toml`)
-- [ ] Rollback functionality
-- [ ] Custom tool definitions
-- [ ] Export results to JSON/Markdown
-
-### v1.0.0
-- [ ] Linux support
-- [ ] Windows support (WSL)
-- [ ] Auto-update mechanism
-- [ ] Plugin system
-
----
-
-## 🤝 Contributing
-
-### Adding Tools
-
-1. Edit `internal/core/inventory.go`
-2. Add tool definition
-3. Test version detection
-4. Submit PR
-
-### Reporting Issues
-
-Please include:
-- SPARK version (`spark --version` or check code)
-- macOS version
-- Steps to reproduce
-- Debug logs (`DEBUG=1 spark` → attach `spark_debug.log`)
-
----
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
+## Acknowledgments
 
 Built with:
-- [Bubble Tea](https://github.com/charmbracelet/bubbletea) - The Elm Architecture for Go
-- [Lip Gloss](https://github.com/charmbracelet/lipgloss) - Style definitions for nice terminal layouts
-- [Bubbles](https://github.com/charmbracelet/bubbles) - TUI components (progress bar)
+- [Ratatui](https://ratatui.rs) -- Rust TUI framework
+- [tokio](https://tokio.rs) -- Async runtime
+- [git2](https://github.com/rust-lang/git2-rs) -- Git operations
+- [crossterm](https://github.com/crossterm-rs/crossterm) -- Terminal manipulation
 
-Inspired by:
-- Modern package managers (Homebrew, npm, apt)
-- TUI applications (lazygit, k9s, htop)
-
----
-
-## 🚀 Quick Links
-
-- **Run**: `spark`
-- **Docs**: `docs/` directory
-- **Build**: `go build -ldflags="-s -w" -o spark-tui cmd/spark/main.go`
-- **Install**: `cp spark-tui ~/.local/bin/spark`
-- **Debug**: `DEBUG=1 spark`
+Inspired by [ghq](https://github.com/x-motemen/ghq), [lazygit](https://github.com/jesseduffield/lazygit), [k9s](https://k9scli.io).
 
 ---
 
-**SPARK** - Surgical Precision Update Utility v0.6.0
-*Manage your development environment with confidence.*
+**SPARK** v0.8.0 -- Developer Operations Platform
+*From bash script to DevOps platform. Four generations of evolution.*
