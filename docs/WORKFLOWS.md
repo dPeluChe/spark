@@ -1,6 +1,6 @@
 # 🔄 SPARK - User Workflows & Processes
 
-This document describes all user interaction flows in SPARK v0.6.0.
+This document describes the Updater interaction flows in SPARK v0.8.0.
 
 ---
 
@@ -33,7 +33,7 @@ This document describes all user interaction flows in SPARK v0.6.0.
          ▼
 ┌─────────────────────────────────────┐
 │ Main Dashboard                      │
-│ - All 71 tools displayed            │
+│ - All 44+ tools displayed           │
 │ - Grouped by category               │
 │ - Version checking in progress...   │
 └────────┬────────────────────────────┘
@@ -513,23 +513,22 @@ Update:
 
 ## State Transitions Reference
 
-See `internal/tui/states.go` for detailed state machine diagram.
+See `src/tui/model.rs` for state definitions and `src/tui/update.rs` for transitions.
 
-**Valid Transitions**:
+**Updater Transitions**:
 ```
-stateSplash → stateMain
-stateMain → stateSearch, statePreview, stateConfirm, stateUpdating
-stateSearch → stateMain
-statePreview → stateMain, stateConfirm, stateUpdating
-stateConfirm → stateMain, stateUpdating
-stateUpdating → stateSummary
-stateSummary → EXIT
+Splash -> Main -> Search/Preview/Confirm -> Updating -> Summary -> Main
 ```
 
-**Invalid Transitions** (blocked by code):
-- Cannot skip from Main directly to Summary
-- Cannot go back from Updating to Main
-- Cannot return from Summary to Main
+**Scanner Transitions**:
+```
+ScanConfig -> Scanning -> ScanResults -> RepoDetail/CleanConfirm -> Cleaning -> CleanSummary
+```
+
+**Repo Manager Transitions**:
+```
+RepoManager -> RepoCloneInput -> RepoCloneSummary -> RepoManager
+```
 
 ---
 

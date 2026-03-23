@@ -1,0 +1,11 @@
+# Rust build artifacts
+/target/
+
+# Debug logs
+spark_debug.log
+
+# OS files
+.DS_Store
+
+# Compiled binaries
+spark-tui
