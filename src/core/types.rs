@@ -124,3 +124,45 @@ pub struct ToolState {
     pub remote_version: String,
     pub message: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_category_labels() {
+        assert_eq!(Category::Code.label(), "AI Development");
+        assert_eq!(Category::Runtime.label(), "Runtimes");
+        assert_eq!(Category::Sys.label(), "System");
+    }
+
+    #[test]
+    fn test_category_short_keys() {
+        assert_eq!(Category::Code.short_key(), "C");
+        assert_eq!(Category::Infra.short_key(), "F");
+    }
+
+    #[test]
+    fn test_category_all_count() {
+        assert_eq!(Category::all().len(), 8);
+    }
+
+    #[test]
+    fn test_category_display() {
+        assert_eq!(format!("{}", Category::Term), "Terminals");
+    }
+
+    #[test]
+    fn test_tool_status_variants() {
+        let statuses = vec![
+            ToolStatus::Checking,
+            ToolStatus::Installed,
+            ToolStatus::Outdated,
+            ToolStatus::Missing,
+            ToolStatus::Updating,
+            ToolStatus::Updated,
+            ToolStatus::Failed,
+        ];
+        assert_eq!(statuses.len(), 7);
+    }
+}

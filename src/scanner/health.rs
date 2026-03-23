@@ -67,3 +67,59 @@ pub fn calculate_health(
 
     (score, grade)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_perfect_health() {
+        let now = Utc::now();
+        let modified = std::time::SystemTime::now();
+        let (score, grade) = calculate_health(Some(now), Some(modified), true, false, 0);
+        assert_eq!(score, 100);
+        assert_eq!(grade, HealthGrade::A);
+    }
+
+    #[test]
+    fn test_no_remote_penalty() {
+        let now = Utc::now();
+        let modified = std::time::SystemTime::now();
+        let (score, _) = calculate_health(Some(now), Some(modified), false, false, 0);
+        assert_eq!(score, 85); // -15 for no remote
+    }
+
+    #[test]
+    fn test_no_commits_penalty() {
+        let modified = std::time::SystemTime::now();
+        let (score, _) = calculate_health(None, Some(modified), true, false, 0);
+        assert_eq!(score, 70); // -30 for no commits
+    }
+
+    #[test]
+    fn test_large_artifacts_penalty() {
+        let now = Utc::now();
+        let modified = std::time::SystemTime::now();
+        let artifact_200mb = 200 * 1024 * 1024;
+        let (score, _) = calculate_health(Some(now), Some(modified), true, false, artifact_200mb);
+        assert_eq!(score, 80); // -20 for >100MB artifacts
+    }
+
+    #[test]
+    fn test_worst_case_scores_low() {
+        let old_commit = DateTime::from_timestamp(0, 0);
+        // epoch commit (-30), no remote (-15), dirty+stale (-10), >100MB artifacts (-20) = 25
+        let (score, grade) = calculate_health(old_commit, None, false, true, 500 * 1024 * 1024);
+        assert_eq!(score, 25);
+        assert_eq!(grade, HealthGrade::D);
+    }
+
+    #[test]
+    fn test_grade_boundaries() {
+        let modified = std::time::SystemTime::now();
+
+        // No commits (-30) = score 70 -> Grade B: 60-79
+        let (_, grade) = calculate_health(None, Some(modified), true, false, 0);
+        assert_eq!(grade, HealthGrade::B);
+    }
+}

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **SPARK** is a **Rust-based developer operations platform** delivered as a TUI.
 
-It evolved through four generations: Bash scripts (v0.4) -> Go/Bubble Tea TUI (v0.5-v0.6) -> Rust/Ratatui (v0.7) -> DevOps Platform (v0.8). Each version was a revolution, not an increment.
+It evolved through four generations: Bash scripts (v0.4) -> Go/Bubble Tea TUI (v0.5-v0.6) -> Rust/Ratatui (v0.7) -> DevOps Platform (v0.8). The active codebase is 100% Rust.
 
 ### Four Core Modules
 
@@ -113,14 +113,16 @@ Key fields:
 
 See [config.example.toml](config.example.toml) for all options.
 
+## Testing
+
+```bash
+cargo test
+```
+
+69 tests covering: version parsing, health scoring, config serialization, inventory validation, changelog mapping, artifact detection, port scanning, and TUI model logic.
+
 ## Version History
 
 - **v0.8.0**: **DevOps Platform**. Repo Manager (ghq-style clone/pull/status), Port Scanner, post-clone summary with alias and AI agent tips, configurable `repos_root`.
 - **v0.7.0**: **The Rust Migration**. Complete rewrite in Rust + Ratatui. Added Repository Scanner with health scoring, artifact cleanup, and trash-based deletion. Cross-platform support.
-- **v0.6.0**: Go/Bubble Tea with 44 tools, 8 categories, full update execution.
-- **v0.5.x**: Go/Bubble Tea era. Grid layout, splash screen, danger zone, search.
-- **v0.4.x**: Legacy Bash Script era (Archived).
-
-## Legacy Go Code
-
-The original Go implementation is preserved in `cmd/`, `internal/`, `go.mod`, `go.sum` for reference. The active codebase is in `src/` (Rust).
+- **v0.6.0 and earlier**: Previous Go/Bubble Tea and Bash implementations (archived, not part of active codebase).

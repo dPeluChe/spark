@@ -4,6 +4,7 @@ use crate::scanner::space_analyzer::ArtifactInfo;
 
 /// Status of git in a repository
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum RepoGitStatus {
     Clean,
     Dirty {
@@ -16,6 +17,7 @@ pub enum RepoGitStatus {
 
 /// Full information about a discovered repository
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct RepoInfo {
     pub path: PathBuf,
     pub name: String,

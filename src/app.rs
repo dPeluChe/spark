@@ -19,7 +19,7 @@ pub async fn run(
     _update_only: bool,
     dry_run: bool,
 ) -> color_eyre::Result<()> {
-    let mut app = App::new(config.clone());
+    let mut app = App::new(config);
     app.dry_run = dry_run;
 
     // Start in scanner mode if --scan-only
@@ -78,7 +78,7 @@ pub async fn run(
                         }
                         Action::StartScan(dirs) => {
                             let tx2 = tx.clone();
-                            let max_depth = config.max_scan_depth;
+                            let max_depth = app.config.max_scan_depth;
                             tokio::spawn(async move {
                                 let (progress_tx, mut progress_rx) =
                                     mpsc::unbounded_channel::<crate::scanner::repo_scanner::ScanProgressMsg>();
@@ -107,7 +107,7 @@ pub async fn run(
                         }
                         Action::CleanArtifacts(paths) => {
                             let tx2 = tx.clone();
-                            let use_trash = config.use_trash;
+                            let use_trash = app.config.use_trash;
                             tokio::spawn(async move {
                                 let action =
                                     crate::scanner::cleaner::CleanAction::DeleteArtifacts(paths);
@@ -124,7 +124,7 @@ pub async fn run(
                         }
                         Action::TrashRepo(path) => {
                             let tx2 = tx.clone();
-                            let use_trash = config.use_trash;
+                            let use_trash = app.config.use_trash;
                             tokio::spawn(async move {
                                 let action =
                                     crate::scanner::cleaner::CleanAction::TrashRepo(path);

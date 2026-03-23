@@ -3,6 +3,7 @@ use crate::utils::fs::dir_size;
 
 /// Type of build artifact or dependency cache
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum ArtifactKind {
     // JavaScript / Node
     NodeModules,
@@ -170,4 +171,51 @@ pub fn find_artifacts(repo_path: &Path) -> Vec<ArtifactInfo> {
     // Sort by size descending
     artifacts.sort_by(|a, b| b.size.cmp(&a.size));
     artifacts
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_artifact_kind_display() {
+        assert_eq!(format!("{}", ArtifactKind::NodeModules), "node_modules");
+        assert_eq!(format!("{}", ArtifactKind::RustTarget), "Rust target");
+        assert_eq!(format!("{}", ArtifactKind::PythonVenv), "Python venv");
+    }
+
+    #[test]
+    fn test_find_artifacts_empty_dir() {
+        let tmp = std::env::temp_dir().join("spark_test_no_artifacts");
+        let _ = std::fs::create_dir_all(&tmp);
+        let artifacts = find_artifacts(&tmp);
+        assert!(artifacts.is_empty());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_find_artifacts_node_modules() {
+        let tmp = std::env::temp_dir().join("spark_test_node_artifacts");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        // Create package.json (validator for node_modules)
+        std::fs::write(tmp.join("package.json"), "{}").unwrap();
+        // Create node_modules with a file
+        let nm = tmp.join("node_modules");
+        std::fs::create_dir_all(&nm).unwrap();
+        std::fs::write(nm.join("dummy.js"), "module.exports = {}").unwrap();
+
+        let artifacts = find_artifacts(&tmp);
+        assert!(!artifacts.is_empty());
+        assert_eq!(artifacts[0].kind, ArtifactKind::NodeModules);
+        assert!(artifacts[0].size > 0);
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_artifact_checks_not_empty() {
+        assert!(!ARTIFACT_CHECKS.is_empty());
+    }
 }

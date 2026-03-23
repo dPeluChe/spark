@@ -43,6 +43,7 @@ impl std::fmt::Display for RepoStatus {
 
 /// A managed git repository
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ManagedRepo {
     pub path: PathBuf,
     pub name: String,

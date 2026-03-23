@@ -73,3 +73,52 @@ pub fn get_inventory() -> Vec<Tool> {
 
     tools
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_inventory_not_empty() {
+        let inv = get_inventory();
+        assert!(!inv.is_empty());
+    }
+
+    #[test]
+    fn test_inventory_ids_auto_assigned() {
+        let inv = get_inventory();
+        assert_eq!(inv[0].id, "S-01");
+        assert_eq!(inv[1].id, "S-02");
+    }
+
+    #[test]
+    fn test_inventory_ids_unique() {
+        let inv = get_inventory();
+        let ids: std::collections::HashSet<&str> = inv.iter().map(|t| t.id.as_str()).collect();
+        assert_eq!(ids.len(), inv.len());
+    }
+
+    #[test]
+    fn test_inventory_all_categories_present() {
+        let inv = get_inventory();
+        for cat in Category::all() {
+            assert!(
+                inv.iter().any(|t| t.category == *cat),
+                "Category {:?} has no tools",
+                cat
+            );
+        }
+    }
+
+    #[test]
+    fn test_inventory_has_claude_cli() {
+        let inv = get_inventory();
+        assert!(inv.iter().any(|t| t.name == "Claude CLI"));
+    }
+
+    #[test]
+    fn test_inventory_first_tool_is_code_category() {
+        let inv = get_inventory();
+        assert_eq!(inv[0].category, Category::Code);
+    }
+}

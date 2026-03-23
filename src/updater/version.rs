@@ -144,3 +144,84 @@ pub fn parse_tool_version(binary: &str, output: &str) -> String {
 
     clean_version_string(output)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clean_version_string_semver() {
+        assert_eq!(clean_version_string("v1.2.3"), "1.2.3");
+        assert_eq!(clean_version_string("1.2.3"), "1.2.3");
+        assert_eq!(clean_version_string("V1.0.0"), "1.0.0");
+    }
+
+    #[test]
+    fn test_clean_version_string_empty() {
+        assert_eq!(clean_version_string(""), "Unknown");
+    }
+
+    #[test]
+    fn test_clean_version_string_major_minor() {
+        assert_eq!(clean_version_string("v3.12"), "3.12");
+    }
+
+    #[test]
+    fn test_clean_version_string_git_hash() {
+        assert_eq!(clean_version_string("abc1234"), "abc1234");
+    }
+
+    #[test]
+    fn test_parse_tool_version_aws() {
+        assert_eq!(
+            parse_tool_version("aws", "aws-cli/2.22.35 Python/3.11.9 Darwin/24.0.0"),
+            "2.22.35"
+        );
+    }
+
+    #[test]
+    fn test_parse_tool_version_go() {
+        assert_eq!(
+            parse_tool_version("go", "go version go1.23.4 darwin/arm64"),
+            "1.23.4"
+        );
+    }
+
+    #[test]
+    fn test_parse_tool_version_python() {
+        assert_eq!(parse_tool_version("python3", "Python 3.13.1"), "3.13.1");
+    }
+
+    #[test]
+    fn test_parse_tool_version_node() {
+        assert_eq!(parse_tool_version("node", "v20.11.0"), "20.11.0");
+    }
+
+    #[test]
+    fn test_parse_tool_version_docker() {
+        assert_eq!(
+            parse_tool_version("docker", "Docker version 24.0.7, build afdd53b"),
+            "24.0.7"
+        );
+    }
+
+    #[test]
+    fn test_parse_tool_version_brew() {
+        assert_eq!(parse_tool_version("brew", "Homebrew 4.2.0"), "4.2.0");
+    }
+
+    #[test]
+    fn test_parse_tool_version_git() {
+        assert_eq!(parse_tool_version("git", "git version 2.43.0"), "2.43.0");
+    }
+
+    #[test]
+    fn test_parse_tool_version_empty() {
+        assert_eq!(parse_tool_version("anything", ""), "Unknown");
+    }
+
+    #[test]
+    fn test_parse_tool_version_npm() {
+        assert_eq!(parse_tool_version("npm", "10.2.4"), "10.2.4");
+    }
+}

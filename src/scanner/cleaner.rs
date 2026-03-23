@@ -73,7 +73,7 @@ pub fn execute_clean(action: &CleanAction, use_trash: bool) -> CleanResult {
 }
 
 /// Remove a directory and return a CleanResult
-fn remove_dir(path: &PathBuf, size: u64) -> CleanResult {
+fn remove_dir(path: &std::path::Path, size: u64) -> CleanResult {
     match std::fs::remove_dir_all(path) {
         Ok(_) => CleanResult {
             bytes_recovered: size,

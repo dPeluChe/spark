@@ -90,3 +90,66 @@ pub fn get_changelog_url(tool: &Tool) -> Option<String> {
 
     Some(url.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_known_tools_have_changelogs() {
+        let tool = Tool {
+            id: "S-01".into(),
+            name: "Claude CLI".into(),
+            binary: "claude".into(),
+            package: "@anthropic-ai/claude-code".into(),
+            category: crate::core::types::Category::Code,
+            method: UpdateMethod::Claude,
+        };
+        let url = get_changelog_url(&tool);
+        assert!(url.is_some());
+        assert!(url.unwrap().contains("npmjs.com"));
+    }
+
+    #[test]
+    fn test_brew_fallback() {
+        let tool = Tool {
+            id: "X-01".into(),
+            name: "Unknown Brew".into(),
+            binary: "unknown".into(),
+            package: "unknown-pkg".into(),
+            category: crate::core::types::Category::Utils,
+            method: UpdateMethod::BrewPkg,
+        };
+        let url = get_changelog_url(&tool);
+        assert!(url.is_some());
+        assert!(url.unwrap().contains("formulae.brew.sh"));
+    }
+
+    #[test]
+    fn test_npm_fallback() {
+        let tool = Tool {
+            id: "X-02".into(),
+            name: "Unknown NPM".into(),
+            binary: "unknown".into(),
+            package: "unknown-npm-pkg".into(),
+            category: crate::core::types::Category::Utils,
+            method: UpdateMethod::NpmPkg,
+        };
+        let url = get_changelog_url(&tool);
+        assert!(url.is_some());
+        assert!(url.unwrap().contains("npmjs.com"));
+    }
+
+    #[test]
+    fn test_manual_no_fallback() {
+        let tool = Tool {
+            id: "X-03".into(),
+            name: "Unknown Manual".into(),
+            binary: "unknown".into(),
+            package: "unknown".into(),
+            category: crate::core::types::Category::Utils,
+            method: UpdateMethod::Manual,
+        };
+        assert!(get_changelog_url(&tool).is_none());
+    }
+}

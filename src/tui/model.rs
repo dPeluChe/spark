@@ -269,7 +269,6 @@ pub struct ScannerModel {
     pub checked: HashSet<usize>,
     pub sort_by: SortField,
     pub sort_ascending: bool,
-    pub search_query: String,
     pub scan_progress_repos: usize,
     pub scan_progress_dirs: usize,
     pub scan_progress_current: String,
@@ -288,7 +287,6 @@ impl ScannerModel {
             checked: HashSet::new(),
             sort_by: SortField::Health,
             sort_ascending: true,
-            search_query: String::new(),
             scan_progress_repos: 0,
             scan_progress_dirs: 0,
             scan_progress_current: String::new(),
@@ -398,5 +396,106 @@ impl App {
             height: 0,
             tick_count: 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_app_new_defaults() {
+        let app = App::new(SparkConfig::default());
+        assert_eq!(app.mode, AppMode::Updater);
+        assert!(!app.should_quit);
+        assert!(!app.dry_run);
+    }
+
+    #[test]
+    fn test_updater_model_initializes_with_tools() {
+        let m = UpdaterModel::new();
+        assert!(!m.items.is_empty());
+        assert_eq!(m.state, UpdaterState::Splash);
+        assert_eq!(m.cursor, 0);
+        assert!(m.checked.is_empty());
+        assert_eq!(m.loading_count, m.items.len());
+    }
+
+    #[test]
+    fn test_updater_search_filter() {
+        let mut m = UpdaterModel::new();
+        m.search_query = "claude".into();
+        m.update_filter();
+        assert!(m.filtered_indices.is_some());
+        let indices = m.filtered_indices.as_ref().unwrap();
+        assert!(!indices.is_empty());
+        assert!(m.items[indices[0]].tool.name.to_lowercase().contains("claude"));
+    }
+
+    #[test]
+    fn test_updater_clear_search() {
+        let mut m = UpdaterModel::new();
+        m.search_query = "claude".into();
+        m.update_filter();
+        assert!(m.filtered_indices.is_some());
+
+        m.search_query.clear();
+        m.update_filter();
+        assert!(m.filtered_indices.is_none());
+    }
+
+    #[test]
+    fn test_updater_is_item_visible_no_filter() {
+        let m = UpdaterModel::new();
+        assert!(m.is_item_visible(0));
+        assert!(m.is_item_visible(m.items.len() - 1));
+    }
+
+    #[test]
+    fn test_updater_jump_to_category() {
+        let mut m = UpdaterModel::new();
+        m.jump_to_category(Category::Runtime);
+        assert_eq!(m.items[m.cursor].tool.category, Category::Runtime);
+    }
+
+    #[test]
+    fn test_updater_has_critical_selected() {
+        let mut m = UpdaterModel::new();
+        assert!(!m.has_critical_selected());
+
+        // Find a Runtime tool and select it
+        for (i, item) in m.items.iter().enumerate() {
+            if item.tool.category == Category::Runtime {
+                m.checked.insert(i);
+                break;
+            }
+        }
+        assert!(m.has_critical_selected());
+    }
+
+    #[test]
+    fn test_updater_build_update_queue() {
+        let mut m = UpdaterModel::new();
+        m.checked.insert(0);
+        m.checked.insert(1);
+        m.build_update_queue();
+        assert_eq!(m.total_update, 2);
+        assert_eq!(m.updating_remaining, 2);
+        assert_eq!(m.update_queue.len(), 2);
+    }
+
+    #[test]
+    fn test_scanner_model_defaults() {
+        let s = ScannerModel::new();
+        assert_eq!(s.state, ScannerState::ScanConfig);
+        assert!(s.repos.is_empty());
+        assert_eq!(s.sort_by, SortField::Health);
+    }
+
+    #[test]
+    fn test_port_scanner_model_defaults() {
+        let p = PortScannerModel::new();
+        assert!(p.ports.is_empty());
+        assert_eq!(p.cursor, 0);
     }
 }

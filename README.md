@@ -257,7 +257,7 @@ The ghq-style layout means paths are predictable: `{repos_root}/{host}/{owner}/{
 | Document | Description |
 |----------|-------------|
 | [INSTALLATION.md](docs/INSTALLATION.md) | Setup and troubleshooting |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical deep-dive (Go era, historical) |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical deep-dive |
 | [WORKFLOWS.md](docs/WORKFLOWS.md) | User interaction flows |
 | [ADDING_TOOLS.md](docs/ADDING_TOOLS.md) | How to add new tools |
 | [CLAUDE.md](CLAUDE.md) | Developer guidance for Claude Code |

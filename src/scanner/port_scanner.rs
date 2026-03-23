@@ -71,6 +71,7 @@ impl Runtime {
 
 /// Information about a listening port
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct PortInfo {
     pub port: u16,
     pub pid: u32,
@@ -273,14 +274,14 @@ fn detect_runtime(process_name: &str, cmdline: &str) -> Runtime {
         return Runtime::Elixir;
     }
 
+    // Rust (check if it's a cargo-run or known Rust process) - before Go to avoid "cargo run" matching "go run"
+    if cmd.contains("cargo run") || cmd.contains("cargo watch") || cmd.contains("cargo ") {
+        return Runtime::Rust;
+    }
+
     // Go (compiled binaries are trickier - check /proc/pid/exe for Go signature)
     if is_go_binary(process_name) || cmd.contains("go run") {
         return Runtime::Go;
-    }
-
-    // Rust (check if it's a cargo-run or known Rust process)
-    if cmd.contains("cargo run") || cmd.contains("cargo watch") {
-        return Runtime::Rust;
     }
 
     // nginx
@@ -370,9 +371,18 @@ fn parse_proc_net_tcp() -> Option<HashMap<u64, u16>> {
         }
 
         let local_addr = fields[1];
-        let port_hex = local_addr.split(':').nth(1)?;
-        let port = u16::from_str_radix(port_hex, 16).ok()?;
-        let inode: u64 = fields[9].parse().ok()?;
+        let port_hex = match local_addr.split(':').nth(1) {
+            Some(h) => h,
+            None => continue,
+        };
+        let port = match u16::from_str_radix(port_hex, 16) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        let inode: u64 = match fields[9].parse() {
+            Ok(i) => i,
+            Err(_) => continue,
+        };
 
         map.insert(inode, port);
     }
@@ -402,6 +412,66 @@ fn read_proc_field(pid: u32, field: &str) -> String {
         .unwrap_or_default()
         .trim()
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_dev_port_common() {
+        assert!(is_dev_port(3000));
+        assert!(is_dev_port(5173));
+        assert!(is_dev_port(8080));
+        assert!(is_dev_port(8000));
+    }
+
+    #[test]
+    fn test_is_dev_port_range() {
+        assert!(is_dev_port(4567)); // in 3000-9999 range
+        assert!(!is_dev_port(80));
+        assert!(!is_dev_port(443));
+        assert!(!is_dev_port(22));
+    }
+
+    #[test]
+    fn test_detect_runtime_node() {
+        assert_eq!(detect_runtime("node", "node server.js"), Runtime::Node);
+    }
+
+    #[test]
+    fn test_detect_runtime_python() {
+        assert_eq!(detect_runtime("python3", "python3 manage.py runserver"), Runtime::Python);
+    }
+
+    #[test]
+    fn test_detect_runtime_go() {
+        assert_eq!(detect_runtime("unknown", "go run main.go"), Runtime::Go);
+    }
+
+    #[test]
+    fn test_detect_runtime_rust() {
+        assert_eq!(detect_runtime("myapp", "cargo run"), Runtime::Rust);
+    }
+
+    #[test]
+    fn test_detect_runtime_unknown() {
+        let rt = detect_runtime("mystery", "mystery --serve");
+        assert!(matches!(rt, Runtime::Other(_)));
+    }
+
+    #[test]
+    fn test_runtime_short_label() {
+        assert_eq!(Runtime::Node.short_label(), "JS");
+        assert_eq!(Runtime::Python.short_label(), "PY");
+        assert_eq!(Runtime::Rust.short_label(), "RS");
+    }
+
+    #[test]
+    fn test_runtime_display() {
+        assert_eq!(format!("{}", Runtime::Node), "Node.js");
+        assert_eq!(format!("{}", Runtime::Docker), "Docker");
+    }
 }
 
 fn read_proc_cmdline(pid: u32) -> String {

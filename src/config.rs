@@ -62,6 +62,7 @@ impl SparkConfig {
     }
 
     /// Save config to disk
+    #[allow(dead_code)]
     pub fn save(&self) -> color_eyre::Result<()> {
         let config_dir = dirs::config_dir()
             .map(|d| d.join("spark"))
@@ -72,5 +73,49 @@ impl SparkConfig {
         let contents = toml::to_string_pretty(self)?;
         std::fs::write(config_path, contents)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_config() {
+        let config = SparkConfig::default();
+        assert!(!config.scan_directories.is_empty());
+        assert_eq!(config.stale_threshold_days, 90);
+        assert_eq!(config.large_artifact_threshold, 100 * 1024 * 1024);
+        assert!(config.use_trash);
+        assert_eq!(config.max_scan_depth, 4);
+    }
+
+    #[test]
+    fn test_default_repos_root_ends_with_repos() {
+        let config = SparkConfig::default();
+        assert!(config.repos_root.ends_with("repos"));
+    }
+
+    #[test]
+    fn test_load_returns_defaults_when_no_file() {
+        let config = SparkConfig::load();
+        assert_eq!(config.stale_threshold_days, 90);
+    }
+
+    #[test]
+    fn test_config_deserialize() {
+        let toml_str = r#"
+            scan_directories = ["/tmp/test"]
+            stale_threshold_days = 30
+            large_artifact_threshold = 50000000
+            use_trash = false
+            max_scan_depth = 2
+            repos_root = "/tmp/repos"
+        "#;
+        let config: SparkConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.stale_threshold_days, 30);
+        assert!(!config.use_trash);
+        assert_eq!(config.max_scan_depth, 2);
+        assert_eq!(config.repos_root, PathBuf::from("/tmp/repos"));
     }
 }
