@@ -1,6 +1,22 @@
 use std::time::Duration;
 use tokio::process::Command;
 
+const LOG_PATH: &str = "/tmp/spark.log";
+
+/// Initialize debug log (clears previous run)
+pub fn init_log() {
+    let _ = std::fs::write(LOG_PATH, format!("=== SPARK started at {:?} ===\n", std::time::SystemTime::now()));
+}
+
+/// Append a debug message to /tmp/spark.log
+#[allow(dead_code)]
+pub fn debug_log(msg: &str) {
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new().append(true).create(true).open(LOG_PATH) {
+        let _ = writeln!(f, "{}", msg);
+    }
+}
+
 /// Run a shell command with a timeout and return stdout as string
 pub async fn run_command(
     cmd: &str,

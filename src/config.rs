@@ -19,7 +19,42 @@ pub struct SparkConfig {
 }
 
 fn default_repos_root() -> PathBuf {
-    dirs::home_dir().unwrap_or_else(|| PathBuf::from("~")).join("repos")
+    // Try ghq root first, fall back to ~/repos
+    detect_ghq_root().unwrap_or_else(|| {
+        dirs::home_dir().unwrap_or_else(|| PathBuf::from("~")).join("repos")
+    })
+}
+
+/// Detect ghq root from `ghq root` command or git config
+fn detect_ghq_root() -> Option<PathBuf> {
+    // Try `ghq root` first
+    if let Ok(output) = std::process::Command::new("ghq").arg("root").output() {
+        if output.status.success() {
+            let root = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !root.is_empty() {
+                let path = PathBuf::from(&root);
+                if path.exists() {
+                    return Some(path);
+                }
+            }
+        }
+    }
+    // Fallback: read git config ghq.root
+    if let Ok(output) = std::process::Command::new("git")
+        .args(["config", "--global", "ghq.root"])
+        .output()
+    {
+        if output.status.success() {
+            let root = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !root.is_empty() {
+                let path = PathBuf::from(&root);
+                if path.exists() {
+                    return Some(path);
+                }
+            }
+        }
+    }
+    None
 }
 
 impl Default for SparkConfig {
@@ -38,7 +73,7 @@ impl Default for SparkConfig {
             large_artifact_threshold: 100 * 1024 * 1024, // 100MB
             use_trash: true,
             max_scan_depth: 4,
-            repos_root: home.join("repos"),
+            repos_root: default_repos_root(),
         }
     }
 }
@@ -91,9 +126,10 @@ mod tests {
     }
 
     #[test]
-    fn test_default_repos_root_ends_with_repos() {
+    fn test_default_repos_root_is_valid_dir() {
         let config = SparkConfig::default();
-        assert!(config.repos_root.ends_with("repos"));
+        // Should resolve to ghq root or ~/repos
+        assert!(config.repos_root.is_absolute() || config.repos_root.starts_with("~"));
     }
 
     #[test]

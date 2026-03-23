@@ -41,7 +41,7 @@ pub const SPARK_ART: &str = r#"
 /____/_/   /_/  |/_/ |_/_/ |_|
 "#;
 
-pub const VERSION: &str = "v0.7.0";
+pub const VERSION: &str = "v0.8.0";
 
 /// Center a modal of given width/height within an area, clear background, return inner Rect
 pub fn center_modal(frame: &mut Frame, area: Rect, width: u16, height: u16) -> Rect {

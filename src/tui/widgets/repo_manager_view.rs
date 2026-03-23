@@ -90,6 +90,7 @@ fn render_repo_table(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
         Cell::from("  Repository").style(Style::default().fg(PURPLE).bold()),
         Cell::from("Branch").style(Style::default().fg(PURPLE).bold()),
         Cell::from("Status").style(Style::default().fg(PURPLE).bold()),
+        Cell::from("Last Commit").style(Style::default().fg(PURPLE).bold()),
         Cell::from("Host/Owner").style(Style::default().fg(PURPLE).bold()),
     ]);
 
@@ -130,6 +131,8 @@ fn render_repo_table(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
                 Style::default()
             };
 
+            let last_commit = repo.last_commit.as_deref().unwrap_or("-");
+
             Row::new(vec![
                 Cell::from(format!("{} [{}] {}", cursor, checkbox, repo.name))
                     .style(if is_selected {
@@ -141,6 +144,8 @@ fn render_repo_table(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
                     .style(Style::default().fg(PURPLE)),
                 Cell::from(format!("{} {}", status_icon, repo.status))
                     .style(status_style),
+                Cell::from(last_commit)
+                    .style(Style::default().fg(TERM_GRAY)),
                 Cell::from(format!("{}/{}", repo.host, repo.owner))
                     .style(Style::default().fg(GRAY)),
             ])
@@ -151,10 +156,11 @@ fn render_repo_table(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
     let table = Table::new(
         rows,
         [
-            Constraint::Min(25),
-            Constraint::Length(15),
-            Constraint::Length(20),
-            Constraint::Min(20),
+            Constraint::Min(22),
+            Constraint::Length(12),
+            Constraint::Length(18),
+            Constraint::Length(14),
+            Constraint::Min(18),
         ],
     )
     .header(header)
@@ -173,10 +179,109 @@ fn render_repo_table(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
 
 fn render_help(frame: &mut Frame, area: Rect, _model: &RepoManagerModel) {
     let help = Paragraph::new(Span::styled(
-        "[c] Clone URL • [SPACE] Select • [u] Pull Selected • [U] Pull All Behind • [r] Refresh • [ESC] Back",
+        "[ENTER] Actions • [c] Clone • [SPACE] Select • [u] Pull • [U] Pull All Behind • [r] Refresh • [TAB] Switch",
         Style::default().fg(GRAY),
     ));
     frame.render_widget(help, area);
+}
+
+/// Render action modal for the currently selected repo
+pub fn render_action_modal(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
+    let repo = match model.repos.get(model.cursor) {
+        Some(r) => r,
+        None => return,
+    };
+
+    let modal_area = center_modal(frame, area, 62, 18);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Thick)
+        .border_style(Style::default().fg(GREEN))
+        .style(Style::default().bg(MODAL_BG));
+
+    let inner = block.inner(modal_area);
+    frame.render_widget(block, modal_area);
+
+    let home = std::env::var("HOME").unwrap_or_default();
+    let path_display = repo.path.display().to_string();
+    let short_path = if path_display.starts_with(&home) {
+        format!("~{}", &path_display[home.len()..])
+    } else {
+        path_display
+    };
+
+    let status_icon = match &repo.status {
+        RepoStatus::UpToDate => "✓ Up to date",
+        RepoStatus::Behind(n) => &format!("↓ {} behind", n),
+        RepoStatus::Ahead(n) => &format!("↑ {} ahead", n),
+        RepoStatus::Diverged { ahead, behind } => &format!("↕ {} ahead, {} behind", ahead, behind),
+        RepoStatus::Dirty => "● Dirty (uncommitted changes)",
+        RepoStatus::Error(e) => e,
+        RepoStatus::Checking => "⟳ Checking...",
+    };
+
+    let last_commit = repo.last_commit.as_deref().unwrap_or("unknown");
+
+    let lines = vec![
+        Line::from(Span::styled(
+            format!(" {} ", repo.name),
+            Style::default().fg(WHITE).bg(GREEN).bold(),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Branch:  ", Style::default().fg(PURPLE)),
+            Span::styled(&repo.branch, Style::default().fg(WHITE)),
+        ]),
+        Line::from(vec![
+            Span::styled("  Status:  ", Style::default().fg(PURPLE)),
+            Span::styled(status_icon, Style::default().fg(match &repo.status {
+                RepoStatus::UpToDate => GREEN,
+                RepoStatus::Behind(_) => YELLOW,
+                RepoStatus::Ahead(_) => BLUE,
+                RepoStatus::Diverged { .. } => RED,
+                RepoStatus::Dirty => YELLOW,
+                _ => GRAY,
+            })),
+        ]),
+        Line::from(vec![
+            Span::styled("  Updated: ", Style::default().fg(PURPLE)),
+            Span::styled(last_commit, Style::default().fg(GRAY)),
+        ]),
+        Line::from(vec![
+            Span::styled("  Host:    ", Style::default().fg(PURPLE)),
+            Span::styled(format!("{}/{}", repo.host, repo.owner), Style::default().fg(GRAY)),
+        ]),
+        Line::from(vec![
+            Span::styled("  Path:    ", Style::default().fg(PURPLE)),
+            Span::styled(&short_path, Style::default().fg(GRAY)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  Actions:",
+            Style::default().fg(YELLOW).bold(),
+        )),
+        Line::from(vec![
+            Span::styled("  [u] ", Style::default().fg(BLUE).bold()),
+            Span::styled("Pull (fast-forward)", Style::default().fg(WHITE)),
+        ]),
+        Line::from(vec![
+            Span::styled("  [o] ", Style::default().fg(CYAN).bold()),
+            Span::styled("Open in terminal", Style::default().fg(WHITE)),
+        ]),
+        Line::from(vec![
+            Span::styled("  [d] ", Style::default().fg(RED).bold()),
+            Span::styled("Remove repository", Style::default().fg(WHITE)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  [q] Close    [ESC] Close",
+            Style::default().fg(GRAY),
+        )),
+    ];
+
+    let paragraph = Paragraph::new(lines);
+    frame.render_widget(paragraph, inner);
 }
 
 /// Render post-clone summary with path, alias suggestion, and agent tips

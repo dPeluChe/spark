@@ -12,10 +12,6 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 app.should_quit = true;
                 Some(Action::Quit)
             }
-            KeyCode::Tab => {
-                app.mode = AppMode::Updater;
-                None
-            }
             KeyCode::Char('p') | KeyCode::Char('P') => {
                 s.state = ScannerState::PortScan;
                 Some(Action::ScanPorts)
@@ -25,15 +21,11 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 Some(Action::ListManagedRepos)
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                if s.cursor > 0 {
-                    s.cursor -= 1;
-                }
+                if s.cursor > 0 { s.cursor -= 1; }
                 None
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if s.cursor < s.discovered_dirs.len().saturating_sub(1) {
-                    s.cursor += 1;
-                }
+                if s.cursor < s.discovered_dirs.len().saturating_sub(1) { s.cursor += 1; }
                 None
             }
             KeyCode::Char(' ') => {
@@ -44,12 +36,39 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 }
                 None
             }
+            KeyCode::Char('r') | KeyCode::Char('R') => {
+                // Refresh: re-discover directories with updated counts
+                s.discovered_dirs.clear();
+                s.selected_scan_dirs.clear();
+                s.cursor = 0;
+                Some(Action::DiscoverDirs)
+            }
+            KeyCode::Char('a') | KeyCode::Char('A') => {
+                s.path_input.clear();
+                s.state = ScannerState::ScanAddPath;
+                None
+            }
+            KeyCode::Char('d') | KeyCode::Char('D') => {
+                if s.cursor < s.discovered_dirs.len() {
+                    s.discovered_dirs.remove(s.cursor);
+                    s.selected_scan_dirs.clear();
+                    if s.cursor > 0 && s.cursor >= s.discovered_dirs.len() {
+                        s.cursor -= 1;
+                    }
+                }
+                None
+            }
             KeyCode::Enter => {
-                let dirs: Vec<std::path::PathBuf> = s
+                let mut dirs: Vec<std::path::PathBuf> = s
                     .selected_scan_dirs
                     .iter()
-                    .filter_map(|&i| s.discovered_dirs.get(i).cloned())
+                    .filter_map(|&i| s.discovered_dirs.get(i).map(|d| d.path.clone()))
                     .collect();
+                if dirs.is_empty() {
+                    if let Some(d) = s.discovered_dirs.get(s.cursor) {
+                        dirs.push(d.path.clone());
+                    }
+                }
                 if !dirs.is_empty() {
                     s.state = ScannerState::Scanning;
                     return Some(Action::StartScan(dirs));
@@ -59,39 +78,57 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
             _ => None,
         },
 
-        ScannerState::Scanning => None,
-
-        ScannerState::ScanResults => match key.code {
-            KeyCode::Char('q') | KeyCode::Char('Q') => {
-                app.should_quit = true;
-                Some(Action::Quit)
-            }
-            KeyCode::Tab => {
-                app.mode = AppMode::Updater;
-                None
-            }
-            KeyCode::Esc => {
+        ScannerState::ScanAddPath => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
                 s.state = ScannerState::ScanConfig;
                 None
             }
-            KeyCode::Char('p') | KeyCode::Char('P') => {
-                s.state = ScannerState::PortScan;
-                Some(Action::ScanPorts)
+            KeyCode::Enter => {
+                let input = s.path_input.trim().to_string();
+                if !input.is_empty() {
+                    let path = if input.starts_with('~') {
+                        let home = dirs::home_dir().unwrap_or_default();
+                        home.join(input.strip_prefix("~/").unwrap_or(&input))
+                    } else {
+                        std::path::PathBuf::from(&input)
+                    };
+                    if path.exists() && path.is_dir() {
+                        let idx = s.discovered_dirs.len();
+                        let repo_count = crate::scanner::repo_scanner::count_repos_in(&path);
+                        s.discovered_dirs.push(crate::scanner::repo_scanner::DiscoveredDir {
+                            path, repo_count,
+                        });
+                        s.selected_scan_dirs.insert(idx);
+                    }
+                }
+                s.state = ScannerState::ScanConfig;
+                None
             }
-            KeyCode::Char('g') | KeyCode::Char('G') => {
-                s.state = ScannerState::RepoManager;
-                Some(Action::ListManagedRepos)
+            KeyCode::Backspace => { s.path_input.pop(); None }
+            KeyCode::Char(c) => { s.path_input.push(c); None }
+            _ => None,
+        },
+
+        ScannerState::Scanning => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                s.state = ScannerState::ScanConfig;
+                None
+            }
+            _ => None,
+        },
+
+        // q = back to ScanConfig, not quit
+        ScannerState::ScanResults => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                s.state = ScannerState::ScanConfig;
+                None
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                if s.cursor > 0 {
-                    s.cursor -= 1;
-                }
+                if s.cursor > 0 { s.cursor -= 1; }
                 None
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if s.cursor < s.repos.len().saturating_sub(1) {
-                    s.cursor += 1;
-                }
+                if s.cursor < s.repos.len().saturating_sub(1) { s.cursor += 1; }
                 None
             }
             KeyCode::Char(' ') => {
@@ -103,33 +140,24 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 None
             }
             KeyCode::Enter => {
-                if !s.repos.is_empty() {
-                    s.state = ScannerState::RepoDetail;
-                }
+                if !s.repos.is_empty() { s.state = ScannerState::RepoDetail; }
                 None
             }
-            KeyCode::Char('d') => {
-                if s.checked.is_empty() {
-                    s.checked.insert(s.cursor);
-                }
-                let paths: Vec<std::path::PathBuf> = s
-                    .checked
-                    .iter()
+            KeyCode::Char('c') => {
+                if s.checked.is_empty() { s.checked.insert(s.cursor); }
+                let paths: Vec<std::path::PathBuf> = s.checked.iter()
                     .flat_map(|&i| {
-                        s.repos
-                            .get(i)
+                        s.repos.get(i)
                             .map(|r| r.artifacts.iter().map(|a| a.path.clone()).collect::<Vec<_>>())
                             .unwrap_or_default()
                     })
                     .collect();
-                if !paths.is_empty() {
-                    s.state = ScannerState::CleanConfirm;
-                }
+                if !paths.is_empty() { s.state = ScannerState::CleanConfirm; }
                 None
             }
-            KeyCode::Char('D') => {
+            KeyCode::Char('x') => {
                 if s.repos.get(s.cursor).is_some() {
-                    s.state = ScannerState::CleanConfirm;
+                    s.state = ScannerState::DeleteRepoConfirm;
                 }
                 None
             }
@@ -152,12 +180,36 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
             _ => None,
         },
 
+        // q = back to results
         ScannerState::RepoDetail => match key.code {
-            KeyCode::Esc => {
+            KeyCode::Esc | KeyCode::Char('q') => {
                 s.state = ScannerState::ScanResults;
                 None
             }
-            KeyCode::Char('d') => {
+            KeyCode::Char('a') => {
+                // Add this repo's path as a scan directory
+                let info = s.repos.get(s.cursor).map(|r| (r.path.clone(), r.name.clone()));
+                if let Some((path, name)) = info {
+                    let repo_count = crate::scanner::repo_scanner::count_repos_in(&path);
+                    let already = s.discovered_dirs.iter().any(|d| d.path == path);
+                    if !already {
+                        let idx = s.discovered_dirs.len();
+                        s.discovered_dirs.push(crate::scanner::repo_scanner::DiscoveredDir {
+                            path, repo_count,
+                        });
+                        s.selected_scan_dirs.insert(idx);
+                        s.state = ScannerState::ScanConfig;
+                        app.show_toast(format!("Added {} ({} repos inside)", name, repo_count), false);
+                    } else {
+                        s.state = ScannerState::ScanConfig;
+                        app.show_toast(format!("{} already in scan paths", name), false);
+                    }
+                } else {
+                    s.state = ScannerState::ScanConfig;
+                }
+                None
+            }
+            KeyCode::Char('c') => {
                 if let Some(repo) = s.repos.get(s.cursor) {
                     let paths: Vec<std::path::PathBuf> =
                         repo.artifacts.iter().map(|a| a.path.clone()).collect();
@@ -167,9 +219,9 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 }
                 None
             }
-            KeyCode::Char('D') => {
-                if let Some(repo) = s.repos.get(s.cursor) {
-                    return Some(Action::TrashRepo(repo.path.clone()));
+            KeyCode::Char('x') => {
+                if s.repos.get(s.cursor).is_some() {
+                    s.state = ScannerState::DeleteRepoConfirm;
                 }
                 None
             }
@@ -179,19 +231,40 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
         ScannerState::CleanConfirm => match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') => {
                 s.state = ScannerState::Cleaning;
-                let paths: Vec<std::path::PathBuf> = s
-                    .checked
-                    .iter()
+                let paths: Vec<std::path::PathBuf> = s.checked.iter()
                     .flat_map(|&i| {
-                        s.repos
-                            .get(i)
+                        s.repos.get(i)
                             .map(|r| r.artifacts.iter().map(|a| a.path.clone()).collect::<Vec<_>>())
                             .unwrap_or_default()
                     })
                     .collect();
                 Some(Action::CleanArtifacts(paths))
             }
-            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc | KeyCode::Char('q') => {
+                s.state = ScannerState::ScanResults;
+                None
+            }
+            _ => None,
+        },
+
+        ScannerState::DeleteRepoConfirm => match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                if let Some(repo) = s.repos.get(s.cursor) {
+                    let path = repo.path.clone();
+                    let name = repo.name.clone();
+                    // Remove from list immediately
+                    s.repos.remove(s.cursor);
+                    if s.cursor > 0 && s.cursor >= s.repos.len() {
+                        s.cursor -= 1;
+                    }
+                    s.state = ScannerState::ScanResults;
+                    app.show_toast(format!("Deleted {}", name), false);
+                    return Some(Action::TrashRepo(path));
+                }
+                s.state = ScannerState::ScanResults;
+                None
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc | KeyCode::Char('q') => {
                 s.state = ScannerState::ScanResults;
                 None
             }
@@ -200,49 +273,32 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
 
         ScannerState::Cleaning => None,
 
-        ScannerState::CleanSummary => match key.code {
-            KeyCode::Enter | KeyCode::Esc => {
-                s.state = ScannerState::ScanResults;
-                s.checked.clear();
-                s.clean_results.clear();
-                None
-            }
-            _ => None,
-        },
-
-        // Port scanner states
+        // Port scanner: q = back to ScanConfig
         ScannerState::PortScan => {
             let p = &mut app.port_scanner;
             match key.code {
-                KeyCode::Char('q') | KeyCode::Char('Q') => {
-                    app.should_quit = true;
-                    Some(Action::Quit)
-                }
-                KeyCode::Esc => {
+                KeyCode::Esc | KeyCode::Char('q') => {
                     app.scanner.state = ScannerState::ScanConfig;
                     None
                 }
-                KeyCode::Tab => {
-                    app.mode = AppMode::Updater;
-                    None
-                }
                 KeyCode::Up | KeyCode::Char('k') => {
-                    if p.cursor > 0 {
-                        p.cursor -= 1;
-                    }
+                    if p.cursor > 0 { p.cursor -= 1; }
                     None
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
-                    if p.cursor < p.ports.len().saturating_sub(1) {
-                        p.cursor += 1;
-                    }
+                    if p.cursor < p.display_order.len().saturating_sub(1) { p.cursor += 1; }
                     None
                 }
                 KeyCode::Char(' ') => {
-                    if p.checked.contains(&p.cursor) {
-                        p.checked.remove(&p.cursor);
-                    } else {
-                        p.checked.insert(p.cursor);
+                    if let Some(idx) = p.cursor_port_index() {
+                        if p.checked.contains(&idx) { p.checked.remove(&idx); }
+                        else { p.checked.insert(idx); }
+                    }
+                    None
+                }
+                KeyCode::Enter => {
+                    if p.cursor_port_index().is_some() {
+                        app.scanner.state = ScannerState::PortAction;
                     }
                     None
                 }
@@ -250,15 +306,13 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                     Some(Action::ScanPorts)
                 }
                 KeyCode::Char('x') => {
-                    // Kill selected (or current)
-                    if p.checked.is_empty() {
-                        p.checked.insert(p.cursor);
+                    if let Some(idx) = p.cursor_port_index() {
+                        if p.checked.is_empty() { p.checked.insert(idx); }
+                        app.scanner.state = ScannerState::PortKillConfirm;
                     }
-                    app.scanner.state = ScannerState::PortKillConfirm;
                     None
                 }
                 KeyCode::Char('X') => {
-                    // Kill all dev ports
                     for (i, port_info) in p.ports.iter().enumerate() {
                         if crate::scanner::port_scanner::is_dev_port(port_info.port) {
                             p.checked.insert(i);
@@ -273,39 +327,79 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
             }
         }
 
-        // Repo manager state
+        // Port action modal: q = close
+        ScannerState::PortAction => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
+                app.scanner.state = ScannerState::PortScan;
+                None
+            }
+            KeyCode::Char('k') => {
+                if let Some(idx) = app.port_scanner.cursor_port_index() {
+                    if let Some(port_info) = app.port_scanner.ports.get(idx) {
+                        let pid = port_info.pid;
+                        app.scanner.state = ScannerState::PortScan;
+                        return Some(Action::KillProcesses(vec![pid]));
+                    }
+                }
+                app.scanner.state = ScannerState::PortScan;
+                None
+            }
+            KeyCode::Char('o') => {
+                if let Some(idx) = app.port_scanner.cursor_port_index() {
+                    if let Some(port_info) = app.port_scanner.ports.get(idx) {
+                        if let Some(ref cwd) = port_info.cwd {
+                            let path = cwd.clone();
+                            app.scanner.state = ScannerState::PortScan;
+                            return Some(Action::OpenDir(path));
+                        }
+                    }
+                }
+                app.scanner.state = ScannerState::PortScan;
+                None
+            }
+            _ => None,
+        },
+
+        ScannerState::PortKillConfirm => match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                let pids: Vec<u32> = app.port_scanner.checked.iter()
+                    .filter_map(|&i| app.port_scanner.ports.get(i).map(|p| p.pid))
+                    .collect();
+                app.scanner.state = ScannerState::PortScan;
+                if !pids.is_empty() { Some(Action::KillProcesses(pids)) } else { None }
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc | KeyCode::Char('q') => {
+                app.scanner.state = ScannerState::PortScan;
+                app.port_scanner.checked.clear();
+                None
+            }
+            _ => None,
+        },
+
+        // Repo manager: q = back to ScanConfig
         ScannerState::RepoManager => {
             let rm = &mut app.repo_manager;
             match key.code {
-                KeyCode::Char('q') | KeyCode::Char('Q') => {
-                    app.should_quit = true;
-                    Some(Action::Quit)
-                }
-                KeyCode::Esc => {
+                KeyCode::Esc | KeyCode::Char('q') => {
                     app.scanner.state = ScannerState::ScanConfig;
                     None
                 }
-                KeyCode::Tab => {
-                    app.mode = AppMode::Updater;
-                    None
-                }
                 KeyCode::Up | KeyCode::Char('k') => {
-                    if rm.cursor > 0 {
-                        rm.cursor -= 1;
-                    }
+                    if rm.cursor > 0 { rm.cursor -= 1; }
                     None
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
-                    if rm.cursor < rm.repos.len().saturating_sub(1) {
-                        rm.cursor += 1;
-                    }
+                    if rm.cursor < rm.repos.len().saturating_sub(1) { rm.cursor += 1; }
                     None
                 }
                 KeyCode::Char(' ') => {
-                    if rm.checked.contains(&rm.cursor) {
-                        rm.checked.remove(&rm.cursor);
-                    } else {
-                        rm.checked.insert(rm.cursor);
+                    if rm.checked.contains(&rm.cursor) { rm.checked.remove(&rm.cursor); }
+                    else { rm.checked.insert(rm.cursor); }
+                    None
+                }
+                KeyCode::Enter => {
+                    if !rm.repos.is_empty() {
+                        app.scanner.state = ScannerState::RepoAction;
                     }
                     None
                 }
@@ -319,55 +413,70 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                     None
                 }
                 KeyCode::Char('u') => {
-                    // Pull selected repos
-                    if rm.checked.is_empty() {
-                        rm.checked.insert(rm.cursor);
-                    }
+                    if rm.checked.is_empty() { rm.checked.insert(rm.cursor); }
                     let indices: Vec<usize> = rm.checked.iter().copied().collect();
                     Some(Action::PullRepos(indices))
                 }
                 KeyCode::Char('U') => {
-                    // Pull all repos that are behind
-                    let behind_indices: Vec<usize> = rm
-                        .repos
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, r)| {
-                            matches!(
-                                r.status,
-                                crate::scanner::repo_manager::RepoStatus::Behind(_)
-                                    | crate::scanner::repo_manager::RepoStatus::Diverged { .. }
-                            )
-                        })
-                        .map(|(i, _)| i)
-                        .collect();
-                    if !behind_indices.is_empty() {
-                        for &i in &behind_indices {
-                            rm.checked.insert(i);
-                        }
-                        Some(Action::PullRepos(behind_indices))
-                    } else {
-                        None
-                    }
+                    let behind: Vec<usize> = rm.repos.iter().enumerate()
+                        .filter(|(_, r)| matches!(r.status,
+                            crate::scanner::repo_manager::RepoStatus::Behind(_)
+                            | crate::scanner::repo_manager::RepoStatus::Diverged { .. }
+                        ))
+                        .map(|(i, _)| i).collect();
+                    if !behind.is_empty() {
+                        for &i in &behind { rm.checked.insert(i); }
+                        Some(Action::PullRepos(behind))
+                    } else { None }
                 }
                 _ => None,
             }
         }
 
-        // Clone summary (post-clone info)
+        // Repo action modal: q = close
+        ScannerState::RepoAction => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
+                app.scanner.state = ScannerState::RepoManager;
+                None
+            }
+            KeyCode::Char('u') => {
+                let idx = app.repo_manager.cursor;
+                app.scanner.state = ScannerState::RepoManager;
+                Some(Action::PullRepos(vec![idx]))
+            }
+            KeyCode::Char('d') => {
+                if let Some(repo) = app.repo_manager.repos.get(app.repo_manager.cursor) {
+                    let path = repo.path.clone();
+                    app.scanner.state = ScannerState::RepoManager;
+                    return Some(Action::TrashRepo(path));
+                }
+                app.scanner.state = ScannerState::RepoManager;
+                None
+            }
+            KeyCode::Char('o') => {
+                if let Some(repo) = app.repo_manager.repos.get(app.repo_manager.cursor) {
+                    let path = repo.path.clone();
+                    app.scanner.state = ScannerState::RepoManager;
+                    return Some(Action::OpenDir(path));
+                }
+                app.scanner.state = ScannerState::RepoManager;
+                None
+            }
+            _ => None,
+        },
+
         ScannerState::RepoCloneSummary => match key.code {
-            KeyCode::Enter | KeyCode::Esc => {
+            KeyCode::Enter | KeyCode::Esc | KeyCode::Char('q') => {
                 app.scanner.state = ScannerState::RepoManager;
                 Some(Action::ListManagedRepos)
             }
             _ => None,
         },
 
-        // Clone URL text input
         ScannerState::RepoCloneInput => {
             let rm = &mut app.repo_manager;
             match key.code {
-                KeyCode::Esc => {
+                KeyCode::Esc | KeyCode::Char('q') => {
                     rm.clone_input.clear();
                     rm.clone_error = None;
                     app.scanner.state = ScannerState::RepoManager;
@@ -392,41 +501,10 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                         Some(Action::CloneRepo(url))
                     }
                 }
-                KeyCode::Backspace => {
-                    rm.clone_input.pop();
-                    rm.clone_error = None;
-                    None
-                }
-                KeyCode::Char(c) => {
-                    rm.clone_input.push(c);
-                    rm.clone_error = None;
-                    None
-                }
+                KeyCode::Backspace => { rm.clone_input.pop(); rm.clone_error = None; None }
+                KeyCode::Char(c) => { rm.clone_input.push(c); rm.clone_error = None; None }
                 _ => None,
             }
         }
-
-        ScannerState::PortKillConfirm => match key.code {
-            KeyCode::Char('y') | KeyCode::Char('Y') => {
-                let pids: Vec<u32> = app
-                    .port_scanner
-                    .checked
-                    .iter()
-                    .filter_map(|&i| app.port_scanner.ports.get(i).map(|p| p.pid))
-                    .collect();
-                app.scanner.state = ScannerState::PortScan;
-                if !pids.is_empty() {
-                    Some(Action::KillProcesses(pids))
-                } else {
-                    None
-                }
-            }
-            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
-                app.scanner.state = ScannerState::PortScan;
-                app.port_scanner.checked.clear();
-                None
-            }
-            _ => None,
-        },
     }
 }

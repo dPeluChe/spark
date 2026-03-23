@@ -21,6 +21,9 @@ pub enum RepoGitStatus {
 pub struct RepoInfo {
     pub path: PathBuf,
     pub name: String,
+    pub group: String,
+    pub is_container: bool,
+    pub child_repo_count: usize,
     pub last_commit_date: Option<DateTime<Utc>>,
     pub last_modified: Option<std::time::SystemTime>,
     pub total_size: u64,
@@ -72,22 +75,43 @@ pub async fn scan_directories(
             continue;
         }
 
+        // Derive group name from scan root
+        let group = dir.file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| dir.display().to_string());
+
         for entry in walkdir::WalkDir::new(dir)
             .max_depth(max_depth)
             .into_iter()
+            .filter_entry(|e| {
+                let name = e.file_name().to_string_lossy();
+                // Skip node_modules, .git internals, venvs during walk
+                !matches!(name.as_ref(), "node_modules" | ".venv" | "venv" | "__pycache__")
+            })
             .filter_map(|e| e.ok())
         {
             dirs_scanned += 1;
 
             if entry.file_type().is_dir() && entry.file_name() == ".git" {
                 if let Some(parent) = entry.path().parent() {
-                    if let Some(repo) = analyze_repo(parent) {
-                        repos.push(repo);
+                    if let Some(mut repo) = analyze_repo(parent) {
+                        // Set group based on relative path from scan root
+                        let rel = parent.strip_prefix(dir).unwrap_or(parent);
+                        repo.group = if rel.components().count() > 1 {
+                            // Use first subdir as group
+                            rel.components().next()
+                                .map(|c| c.as_os_str().to_string_lossy().to_string())
+                                .unwrap_or_else(|| group.clone())
+                        } else {
+                            group.clone()
+                        };
+
                         let _ = tx.send(ScanProgressMsg {
-                            repos_found: repos.len(),
+                            repos_found: repos.len() + 1,
                             dirs_scanned,
                             current_dir: parent.display().to_string(),
                         });
+                        repos.push(repo);
                     }
                 }
             }
@@ -189,15 +213,15 @@ pub fn analyze_repo(path: &std::path::Path) -> Option<RepoInfo> {
         None => (RepoGitStatus::Clean, false),
     };
 
-    // Count commits (cap at 1000)
-    let commit_count = count_commits(&repo, 1000);
+    // Skip commit counting for speed (use 0)
+    let commit_count = 0;
 
-    // Artifacts
+    // Artifacts (fast: just checks existence, sizes via dir_size)
     let artifacts = find_artifacts(path);
     let artifact_size: u64 = artifacts.iter().map(|a| a.size).sum();
 
-    // Total size
-    let total_size = crate::utils::fs::dir_size(path);
+    // Total size: use artifact_size as approximation to avoid full walk
+    let total_size = artifact_size;
 
     // Last modified
     let last_modified = std::fs::metadata(path).ok().and_then(|m| m.modified().ok());
@@ -206,9 +230,16 @@ pub fn analyze_repo(path: &std::path::Path) -> Option<RepoInfo> {
     let (health_score, health_grade) =
         calculate_health(last_commit_date, last_modified, has_remote, is_dirty, artifact_size);
 
+    // Detect if this is a container (has child repos)
+    let child_count = count_git_repos(path, 2);
+    let is_container = child_count > 1; // >1 because count includes itself
+
     Some(RepoInfo {
         path: path.to_path_buf(),
         name,
+        group: String::new(), // set by scan_directories
+        is_container,
+        child_repo_count: if is_container { child_count - 1 } else { 0 },
         last_commit_date,
         last_modified,
         total_size,
@@ -225,57 +256,66 @@ pub fn analyze_repo(path: &std::path::Path) -> Option<RepoInfo> {
     })
 }
 
-fn count_commits(repo: &git2::Repository, max: usize) -> usize {
-    let mut revwalk = match repo.revwalk() {
-        Ok(rw) => rw,
-        Err(_) => return 0,
-    };
-    if revwalk.push_head().is_err() {
-        return 0;
-    }
-    revwalk.take(max).filter(|r| r.is_ok()).count()
+/// Directories to always skip when discovering project dirs
+const SKIP_DIRS: &[&str] = &[
+    "Library", "Applications", "Music", "Movies", "Pictures",
+    "Public", "Downloads", "Documents",
+];
+
+/// A discovered directory with its repo count
+#[derive(Debug)]
+pub struct DiscoveredDir {
+    pub path: PathBuf,
+    pub repo_count: usize,
 }
 
-/// Quick discovery: find root directories that contain git repos
-pub fn discover_project_dirs() -> Vec<PathBuf> {
+/// Quick discovery: suggest root directories that contain git repos.
+/// Only returns **parent** dirs (not individual repos), with repo counts.
+/// Scans each direct child of ~/ checking if it contains repos inside.
+pub fn discover_project_dirs() -> Vec<DiscoveredDir> {
     let home = dirs::home_dir().unwrap_or_default();
-    let candidates = [
-        "Projects",
-        "Developer",
-        "Code",
-        "repos",
-        "src",
-        "workspace",
-        "dev",
-        "git",
-        "work",
-    ];
-
     let mut found = Vec::new();
-    for name in &candidates {
-        let path = home.join(name);
-        if path.exists() && path.is_dir() {
-            // Check if it contains at least one .git dir (depth 2)
-            let has_repos = walkdir::WalkDir::new(&path)
-                .max_depth(2)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .any(|e| e.file_type().is_dir() && e.file_name() == ".git");
-            if has_repos {
-                found.push(path);
-            }
+
+    let children = match std::fs::read_dir(&home) {
+        Ok(entries) => entries,
+        Err(_) => return found,
+    };
+
+    for entry in children.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') || SKIP_DIRS.contains(&name.as_str()) {
+            continue;
+        }
+        let repo_count = count_git_repos(&path, 4);
+        if repo_count > 0 {
+            found.push(DiscoveredDir { path, repo_count });
         }
     }
 
-    // Also check home dir directly (some people have repos at ~/)
-    let home_has_repos = walkdir::WalkDir::new(&home)
-        .max_depth(1)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .any(|e| e.file_type().is_dir() && e.file_name() == ".git");
-    if home_has_repos {
-        found.push(home);
-    }
-
+    // Sort by repo count descending (most repos first)
+    found.sort_by(|a, b| b.repo_count.cmp(&a.repo_count));
     found
 }
+
+/// Count repos in a directory (public helper for manual add)
+pub fn count_repos_in(path: &std::path::Path) -> usize {
+    count_git_repos(path, 4)
+}
+
+fn count_git_repos(path: &std::path::Path, depth: usize) -> usize {
+    walkdir::WalkDir::new(path)
+        .max_depth(depth)
+        .into_iter()
+        .filter_entry(|e| {
+            let name = e.file_name().to_string_lossy();
+            !name.starts_with('.') || name == ".git"
+        })
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_dir() && e.file_name() == ".git")
+        .count()
+}
+

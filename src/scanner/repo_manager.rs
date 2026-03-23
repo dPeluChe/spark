@@ -52,6 +52,7 @@ pub struct ManagedRepo {
     pub status: RepoStatus,
     pub host: String,
     pub owner: String,
+    pub last_commit: Option<String>,
 }
 
 /// Clone a repository into the managed root with host/owner/name layout.
@@ -69,6 +70,31 @@ pub fn clone_repo(url: &str, root: &Path) -> Result<PathBuf, String> {
 
     let output = Command::new("git")
         .args(["clone", url, &target.display().to_string()])
+        .output()
+        .map_err(|e| format!("git clone failed: {}", e))?;
+
+    if output.status.success() {
+        Ok(target)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("git clone failed: {}", stderr.trim()))
+    }
+}
+
+/// Clone a repository with --depth 1 (shallow)
+pub fn clone_repo_shallow(url: &str, root: &Path) -> Result<PathBuf, String> {
+    let (host, owner, name) = parse_git_url(url)?;
+    let target = root.join(&host).join(&owner).join(&name);
+
+    if target.exists() {
+        return Err(format!("Already exists: {}", target.display()));
+    }
+
+    std::fs::create_dir_all(target.parent().unwrap_or(root))
+        .map_err(|e| format!("Failed to create directory: {}", e))?;
+
+    let output = Command::new("git")
+        .args(["clone", "--depth", "1", url, &target.display().to_string()])
         .output()
         .map_err(|e| format!("git clone failed: {}", e))?;
 
@@ -203,6 +229,7 @@ pub fn list_managed_repos(root: &Path) -> Vec<ManagedRepo> {
                 let name = repo_entry.file_name().to_string_lossy().to_string();
                 let remote_url = get_remote_url(&repo_path);
                 let branch = get_current_branch(&repo_path);
+                let last_commit = get_last_commit_date(&repo_path);
 
                 repos.push(ManagedRepo {
                     path: repo_path,
@@ -212,6 +239,7 @@ pub fn list_managed_repos(root: &Path) -> Vec<ManagedRepo> {
                     status: RepoStatus::Checking,
                     host: host.clone(),
                     owner: owner.clone(),
+                    last_commit,
                 });
             }
         }
@@ -286,6 +314,22 @@ fn get_current_branch(path: &Path) -> String {
             }
         })
         .unwrap_or_else(|| "unknown".into())
+}
+
+fn get_last_commit_date(path: &Path) -> Option<String> {
+    Command::new("git")
+        .args(["log", "-1", "--format=%cr"])
+        .current_dir(path)
+        .output()
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                if s.is_empty() { None } else { Some(s) }
+            } else {
+                None
+            }
+        })
 }
 
 #[cfg(test)]

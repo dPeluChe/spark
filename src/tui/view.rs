@@ -8,9 +8,9 @@ use crate::tui::styles::*;
 pub fn draw(frame: &mut Frame, app: &App) {
     let area = frame.area();
 
-    // Splash screen (full screen, no tab bar)
-    if app.mode == AppMode::Updater && app.updater.state == UpdaterState::Splash {
-        super::widgets::splash::render_splash(frame, area, app.updater.splash_frame);
+    // Welcome screen (full screen, no tab bar)
+    if app.show_welcome {
+        super::widgets::splash::render_splash(frame, area, app.tick_count);
         return;
     }
 
@@ -21,7 +21,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     ])
     .split(area);
 
-    render_tab_bar(frame, chunks[0], &app.mode);
+    render_tab_bar(frame, chunks[0], app);
 
     match app.mode {
         AppMode::Updater => render_updater(frame, chunks[1], app),
@@ -34,29 +34,82 @@ pub fn draw(frame: &mut Frame, app: &App) {
             );
         }
     }
+
+    // Toast notification overlay (bottom right)
+    if let Some(toast) = &app.toast {
+        let age = app.tick_count.saturating_sub(toast.created_at);
+        if age < 30 {
+            render_toast(frame, area, toast);
+        }
+    }
 }
 
-fn render_tab_bar(frame: &mut Frame, area: Rect, mode: &AppMode) {
-    let updater_style = if *mode == AppMode::Updater {
-        Style::default().fg(WHITE).bg(BLUE).bold()
+fn render_toast(frame: &mut Frame, area: Rect, toast: &crate::tui::model::Toast) {
+    let msg_len = toast.message.len() as u16 + 4;
+    let width = msg_len.min(area.width.saturating_sub(4));
+    let x = area.width.saturating_sub(width + 2);
+    let y = area.height.saturating_sub(3);
+
+    let toast_area = Rect::new(x, y, width, 1);
+
+    let (fg, bg) = if toast.is_error {
+        (WHITE, Color::Rgb(180, 40, 40))
     } else {
-        Style::default().fg(GRAY)
+        (WHITE, Color::Rgb(30, 120, 70))
     };
 
-    let scanner_style = if *mode == AppMode::Scanner {
-        Style::default().fg(WHITE).bg(PURPLE).bold()
-    } else {
-        Style::default().fg(GRAY)
+    let text = Paragraph::new(Span::styled(
+        format!(" {} ", toast.message),
+        Style::default().fg(fg).bg(bg).bold(),
+    ));
+    frame.render_widget(text, toast_area);
+}
+
+fn render_tab_bar(frame: &mut Frame, area: Rect, app: &App) {
+    let is_updater = app.mode == AppMode::Updater;
+    let is_scanner_base = app.mode == AppMode::Scanner
+        && matches!(
+            app.scanner.state,
+            ScannerState::ScanConfig
+                | ScannerState::Scanning
+                | ScannerState::ScanResults
+                | ScannerState::RepoDetail
+                | ScannerState::CleanConfirm
+                | ScannerState::Cleaning
+                | ScannerState::DeleteRepoConfirm
+        );
+    let is_repo_mgr = app.mode == AppMode::Scanner
+        && matches!(
+            app.scanner.state,
+            ScannerState::RepoManager | ScannerState::RepoAction
+                | ScannerState::RepoCloneInput | ScannerState::RepoCloneSummary
+        );
+    let is_ports = app.mode == AppMode::Scanner
+        && matches!(
+            app.scanner.state,
+            ScannerState::PortScan | ScannerState::PortAction | ScannerState::PortKillConfirm
+        );
+
+    let active = |on: bool, color: Color| -> Style {
+        if on {
+            Style::default().fg(WHITE).bg(color).bold()
+        } else {
+            Style::default().fg(GRAY)
+        }
     };
 
     let tabs = Line::from(vec![
-        Span::styled(" [1] Updater ", updater_style),
+        Span::styled(" Scanner ", active(is_scanner_base, PURPLE)),
+        Span::styled(" Repos ", active(is_repo_mgr, GREEN)),
+        Span::styled(" Ports ", active(is_ports, YELLOW)),
+        Span::styled(" Updater ", active(is_updater, BLUE)),
         Span::raw("  "),
-        Span::styled(" [2] Scanner ", scanner_style),
+        Span::styled("TAB ", Style::default().fg(GRAY).bold()),
+        Span::styled("switch", Style::default().fg(GRAY)),
         Span::raw("  "),
         Span::styled(
-            format!(" SPARK {} ", VERSION),
-            Style::default().fg(DARK).italic(),
+            format!("SPARK {} ", VERSION),
+            Style::default().fg(DARK_BG).italic(),
         ),
     ]);
 

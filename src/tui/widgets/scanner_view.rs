@@ -9,10 +9,18 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
     let model = &app.scanner;
     match model.state {
         ScannerState::ScanConfig => render_scan_config(frame, area, model),
+        ScannerState::ScanAddPath => {
+            render_scan_config(frame, area, model);
+            render_add_path_modal(frame, area, model);
+        }
         ScannerState::Scanning => render_scanning(frame, area, model, tick),
         ScannerState::ScanResults => render_scan_results(frame, area, model),
         ScannerState::RepoDetail => {
             super::detail_panel::render_detail(frame, area, model);
+        }
+        ScannerState::DeleteRepoConfirm => {
+            render_scan_results(frame, area, model);
+            render_delete_repo_confirm(frame, area, model);
         }
         ScannerState::CleanConfirm => {
             render_scan_results(frame, area, model);
@@ -29,9 +37,13 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
             );
         }
         ScannerState::Cleaning => render_cleaning(frame, area, model, tick),
-        ScannerState::CleanSummary => render_clean_summary(frame, area, model),
+        // CleanSummary removed — cleanup goes back to ScanResults with toast
         ScannerState::RepoManager => {
             super::repo_manager_view::render_repo_manager(frame, area, &app.repo_manager);
+        }
+        ScannerState::RepoAction => {
+            super::repo_manager_view::render_repo_manager(frame, area, &app.repo_manager);
+            super::repo_manager_view::render_action_modal(frame, area, &app.repo_manager);
         }
         ScannerState::RepoCloneInput => {
             super::repo_manager_view::render_repo_manager(frame, area, &app.repo_manager);
@@ -42,6 +54,10 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
         }
         ScannerState::PortScan => {
             super::port_view::render_ports(frame, area, &app.port_scanner);
+        }
+        ScannerState::PortAction => {
+            super::port_view::render_ports(frame, area, &app.port_scanner);
+            super::port_view::render_action_modal(frame, area, &app.port_scanner);
         }
         ScannerState::PortKillConfirm => {
             super::port_view::render_ports(frame, area, &app.port_scanner);
@@ -64,39 +80,59 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
 
 fn render_scan_config(frame: &mut Frame, area: Rect, model: &ScannerModel) {
     let chunks = Layout::vertical([
-        Constraint::Length(3), // title
+        Constraint::Length(4), // title
         Constraint::Min(5),   // directory list
         Constraint::Length(2), // help
     ])
     .split(area);
 
-    // Title
+    let selected_count = model.selected_scan_dirs.len();
     let title = Paragraph::new(vec![
-        Line::from(Span::styled(
-            " 🔍 REPOSITORY SCANNER ",
-            Style::default().fg(WHITE).bg(PURPLE).bold(),
-        )),
+        Line::from(vec![
+            Span::styled(" REPOSITORY SCANNER ", Style::default().fg(WHITE).bg(PURPLE).bold()),
+            Span::raw("  "),
+            if selected_count > 0 {
+                Span::styled(
+                    format!("{} selected", selected_count),
+                    Style::default().fg(GREEN).bold(),
+                )
+            } else {
+                Span::styled("none selected", Style::default().fg(YELLOW))
+            },
+        ]),
         Line::from(""),
         Line::from(Span::styled(
-            "Select directories to scan for repositories:",
+            "Folders in ~/ with git repos detected. Select which to scan.",
             Style::default().fg(GRAY),
+        )),
+        Line::from(Span::styled(
+            "[a] to add a custom path manually.",
+            Style::default().fg(TERM_GRAY),
         )),
     ]);
     frame.render_widget(title, chunks[0]);
 
-    // Directory list
+    // Directory list with repo counts
+    let home = std::env::var("HOME").unwrap_or_default();
     let mut lines = Vec::new();
-    for (i, dir) in model.discovered_dirs.iter().enumerate() {
+    for (i, discovered) in model.discovered_dirs.iter().enumerate() {
         let is_selected = model.cursor == i;
         let is_checked = model.selected_scan_dirs.contains(&i);
 
         let cursor = if is_selected {
-            Span::styled("❯ ", Style::default().fg(GREEN).bold())
+            Span::styled("> ", Style::default().fg(GREEN).bold())
         } else {
             Span::raw("  ")
         };
 
         let checkbox = render_checkbox(is_checked);
+
+        let dir_str = discovered.path.display().to_string();
+        let short = if dir_str.starts_with(&home) {
+            format!("~{}", &dir_str[home.len()..])
+        } else {
+            dir_str
+        };
 
         let dir_style = if is_selected {
             Style::default().fg(WHITE).bold()
@@ -104,17 +140,31 @@ fn render_scan_config(frame: &mut Frame, area: Rect, model: &ScannerModel) {
             Style::default().fg(GRAY)
         };
 
+        let count_label = if discovered.repo_count == 1 {
+            "1 repo".to_string()
+        } else {
+            format!("{} repos", discovered.repo_count)
+        };
+
         lines.push(Line::from(vec![
             cursor,
             checkbox,
-            Span::styled(dir.display().to_string(), dir_style),
+            Span::styled(format!("{:<40}", short), dir_style),
+            Span::styled(
+                count_label,
+                Style::default().fg(if discovered.repo_count > 10 { GREEN } else { TERM_GRAY }),
+            ),
         ]));
     }
 
     if lines.is_empty() {
         lines.push(Line::from(Span::styled(
-            "  No project directories found. Press 'a' to add a custom path.",
+            "  No directories with git repos found in ~/",
             Style::default().fg(YELLOW),
+        )));
+        lines.push(Line::from(Span::styled(
+            "  Press [a] to add a specific path",
+            Style::default().fg(TERM_GRAY),
         )));
     }
 
@@ -132,40 +182,76 @@ fn render_scan_config(frame: &mut Frame, area: Rect, model: &ScannerModel) {
 
     // Help
     let help = Paragraph::new(Span::styled(
-        "[SPACE] Toggle • [ENTER] Scan • [P] Ports • [G] Repos • [TAB] Updater • [Q] Quit",
+        "[ENTER] Scan • [SPACE] Toggle • [a] Add path • [d] Remove • [r] Refresh • [TAB] Next • [q] Quit",
         Style::default().fg(GRAY),
     ));
     frame.render_widget(help, chunks[2]);
 }
 
 fn render_scanning(frame: &mut Frame, area: Rect, model: &ScannerModel, tick: usize) {
-    let spinner = crate::tui::styles::SPINNER_FRAMES[tick % SPINNER_FRAMES.len()];
+    let spinner = SPINNER_FRAMES[tick % SPINNER_FRAMES.len()];
+    let home = std::env::var("HOME").unwrap_or_default();
 
-    let lines = vec![
+    // Show selected dirs being scanned
+    let scanning_dirs: Vec<String> = model.selected_scan_dirs.iter()
+        .filter_map(|&i| model.discovered_dirs.get(i))
+        .map(|d| {
+            let s = d.path.display().to_string();
+            if s.starts_with(&home) { format!("~{}", &s[home.len()..]) } else { s }
+        })
+        .collect();
+
+    let mut lines = vec![
         Line::from(""),
         Line::from(Span::styled(
             format!("{} Scanning directories...", spinner),
             Style::default().fg(BLUE).bold(),
         )),
         Line::from(""),
-        Line::from(format!(
-            "  Directories scanned: {}",
-            model.scan_progress_dirs
-        )),
-        Line::from(format!(
-            "  Repositories found:  {}",
-            model.scan_progress_repos
-        )),
-        Line::from(""),
-        Line::from(Span::styled(
-            format!("  Current: {}", model.scan_progress_current),
-            Style::default().fg(GRAY),
-        )),
     ];
 
+    // Show which dirs
+    for dir_name in &scanning_dirs {
+        lines.push(Line::from(vec![
+            Span::styled("  > ", Style::default().fg(GREEN)),
+            Span::styled(dir_name.clone(), Style::default().fg(WHITE)),
+        ]));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled("  Entries scanned: ", Style::default().fg(GRAY)),
+        Span::styled(format!("{}", model.scan_progress_dirs), Style::default().fg(WHITE)),
+        Span::styled("    Repos found: ", Style::default().fg(GRAY)),
+        Span::styled(format!("{}", model.scan_progress_repos), Style::default().fg(GREEN).bold()),
+    ]));
+
+    if !model.scan_progress_current.is_empty() {
+        let current = if model.scan_progress_current.starts_with(&home) {
+            format!("~{}", &model.scan_progress_current[home.len()..])
+        } else {
+            model.scan_progress_current.clone()
+        };
+        // Truncate long paths
+        let display = if current.len() > 60 {
+            format!("...{}", &current[current.len()-57..])
+        } else {
+            current
+        };
+        lines.push(Line::from(Span::styled(
+            format!("  {}", display),
+            Style::default().fg(TERM_GRAY),
+        )));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  [ESC] Cancel scan",
+        Style::default().fg(GRAY),
+    )));
+
     let paragraph = Paragraph::new(lines).block(
-        Block::default()
-            .padding(Padding::new(2, 2, 2, 2)),
+        Block::default().padding(Padding::new(2, 2, 1, 1)),
     );
     frame.render_widget(paragraph, area);
 }
@@ -200,47 +286,66 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
     ]));
     frame.render_widget(summary, chunks[0]);
 
-    // Table
+    // Build grouped display: group headers + repo rows
     let header = Row::new(vec![
         Cell::from("  Name").style(Style::default().fg(PURPLE).bold()),
         Cell::from("Health").style(Style::default().fg(PURPLE).bold()),
+        Cell::from("Branch").style(Style::default().fg(PURPLE).bold()),
         Cell::from("Last Commit").style(Style::default().fg(PURPLE).bold()),
-        Cell::from("Size").style(Style::default().fg(PURPLE).bold()),
         Cell::from("Artifacts").style(Style::default().fg(PURPLE).bold()),
-        Cell::from("Remote").style(Style::default().fg(PURPLE).bold()),
+        Cell::from("Dirty").style(Style::default().fg(PURPLE).bold()),
     ]);
 
-    let rows: Vec<Row> = model
-        .repos
-        .iter()
-        .enumerate()
-        .map(|(i, repo)| {
+    // Collect groups in order of appearance
+    let mut group_order: Vec<String> = Vec::new();
+    for repo in &model.repos {
+        if !group_order.contains(&repo.group) {
+            group_order.push(repo.group.clone());
+        }
+    }
+
+    let mut rows: Vec<Row> = Vec::new();
+    for group in &group_order {
+        let group_repos: Vec<(usize, &crate::scanner::repo_scanner::RepoInfo)> = model.repos.iter()
+            .enumerate()
+            .filter(|(_, r)| r.group == *group)
+            .collect();
+
+        // Group header - in first cell so it's always visible
+        let group_artifact: u64 = group_repos.iter().map(|(_, r)| r.artifact_size).sum();
+        let group_label = if group_artifact > 0 {
+            format!("  {} ({}, {} cleanable)", group, group_repos.len(), format_size(group_artifact))
+        } else {
+            format!("  {} ({})", group, group_repos.len())
+        };
+        rows.push(
+            Row::new(vec![
+                Cell::from(Span::styled(group_label, Style::default().fg(CYAN).bold())),
+                Cell::from(""), Cell::from(""), Cell::from(""),
+                Cell::from(""), Cell::from(""),
+            ])
+            .style(Style::default().bg(Color::Rgb(25, 25, 35)))
+        );
+
+        for (i, repo) in group_repos {
             let is_selected = model.cursor == i;
             let is_checked = model.checked.contains(&i);
-
-            let cursor = if is_selected { "❯" } else { " " };
-            let checkbox = if is_checked { "✔" } else { " " };
-            let name = format!("{} [{}] {}", cursor, checkbox, repo.name);
+            let cursor = if is_selected { ">" } else { " " };
+            let checkbox = if is_checked { "x" } else { " " };
 
             let grade_style = health_grade_style(&repo.health_grade);
 
-            let last_commit = repo
-                .last_commit_date
+            let last_commit = repo.last_commit_date
                 .map(|d| {
                     let days = (chrono::Utc::now() - d).num_days();
-                    if days < 1 {
-                        "today".into()
-                    } else if days < 30 {
-                        format!("{}d ago", days)
-                    } else if days < 365 {
-                        format!("{}mo ago", days / 30)
-                    } else {
-                        format!("{}y ago", days / 365)
-                    }
+                    if days < 1 { "today".into() }
+                    else if days < 30 { format!("{}d", days) }
+                    else if days < 365 { format!("{}mo", days / 30) }
+                    else { format!("{}y", days / 365) }
                 })
-                .unwrap_or_else(|| "never".into());
+                .unwrap_or_else(|| "-".into());
 
-            let remote = if repo.has_remote { "✔" } else { "✘" };
+            let dirty = if repo.is_dirty { "●" } else { "" };
 
             let row_style = if is_selected {
                 Style::default().bg(DARK_BG)
@@ -248,35 +353,47 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
                 Style::default()
             };
 
-            Row::new(vec![
-                Cell::from(name),
-                Cell::from(format!("{} ({})", repo.health_grade, repo.health_score))
-                    .style(grade_style),
-                Cell::from(last_commit),
-                Cell::from(format_size(repo.total_size)),
-                Cell::from(format_size(repo.artifact_size))
-                    .style(if repo.artifact_size > 100_000_000 {
-                        Style::default().fg(RED)
-                    } else if repo.artifact_size > 10_000_000 {
-                        Style::default().fg(YELLOW)
-                    } else {
-                        Style::default()
-                    }),
-                Cell::from(remote),
-            ])
-            .style(row_style)
-        })
-        .collect();
+            // Container repos get a special display
+            let name_display = if repo.is_container {
+                format!("{} [{}] {} ({} repos inside)", cursor, checkbox, repo.name, repo.child_repo_count)
+            } else {
+                format!("{} [{}] {}", cursor, checkbox, repo.name)
+            };
+
+            let name_style = if repo.is_container {
+                Style::default().fg(CYAN).italic()
+            } else if is_selected {
+                Style::default().fg(WHITE)
+            } else {
+                Style::default()
+            };
+
+            rows.push(Row::new(vec![
+                Cell::from(name_display).style(name_style),
+                Cell::from(if repo.is_container { "-".into() } else { format!("{} {}", repo.health_grade, repo.health_score) })
+                    .style(if repo.is_container { Style::default().fg(GRAY) } else { grade_style }),
+                Cell::from(if repo.is_container { "container".into() } else { repo.branch.clone() })
+                    .style(if repo.is_container { Style::default().fg(CYAN) } else { Style::default().fg(PURPLE) }),
+                Cell::from(if repo.is_container { "-".into() } else { last_commit }),
+                Cell::from(if repo.artifact_size > 0 { format_size(repo.artifact_size) } else { "-".into() })
+                    .style(if repo.artifact_size > 100_000_000 { Style::default().fg(RED) }
+                        else if repo.artifact_size > 10_000_000 { Style::default().fg(YELLOW) }
+                        else { Style::default() }),
+                Cell::from(dirty)
+                    .style(Style::default().fg(YELLOW)),
+            ]).style(row_style));
+        }
+    }
 
     let table = Table::new(
         rows,
         [
-            Constraint::Min(25),
-            Constraint::Length(10),
+            Constraint::Min(22),
+            Constraint::Length(8),
             Constraint::Length(12),
+            Constraint::Length(8),
             Constraint::Length(10),
-            Constraint::Length(12),
-            Constraint::Length(7),
+            Constraint::Length(6),
         ],
     )
     .header(header)
@@ -290,7 +407,7 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
 
     // Help bar
     let help = Paragraph::new(Span::styled(
-        "[SPACE] Select • [ENTER] Detail • [d] Clean • [P] Ports • [G] Repos • [s] Sort • [TAB] Mode • [Q] Quit",
+        "[ENTER] Detail • [SPACE] Select • [c] Clean artifacts • [x] Delete repo • [s] Sort • [TAB] Next",
         Style::default().fg(GRAY),
     ));
     frame.render_widget(help, chunks[2]);
@@ -316,45 +433,111 @@ fn render_cleaning(frame: &mut Frame, area: Rect, model: &ScannerModel, tick: us
     frame.render_widget(paragraph, area);
 }
 
-fn render_clean_summary(frame: &mut Frame, area: Rect, model: &ScannerModel) {
-    let total_recovered: u64 = model.clean_results.iter().map(|(_, bytes, _, _)| *bytes).sum();
-    let success_count = model.clean_results.iter().filter(|(_, _, ok, _)| *ok).count();
-    let fail_count = model.clean_results.len() - success_count;
+fn render_delete_repo_confirm(frame: &mut Frame, area: Rect, model: &ScannerModel) {
+    let repo = match model.repos.get(model.cursor) {
+        Some(r) => r,
+        None => return,
+    };
+
+    let modal_area = center_modal(frame, area, 62, 12);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Thick)
+        .border_style(Style::default().fg(RED))
+        .style(Style::default().bg(MODAL_BG));
+
+    let inner = block.inner(modal_area);
+    frame.render_widget(block, modal_area);
+
+    let home = std::env::var("HOME").unwrap_or_default();
+    let path_str = repo.path.display().to_string();
+    let short_path = if path_str.starts_with(&home) {
+        format!("~{}", &path_str[home.len()..])
+    } else {
+        path_str
+    };
 
     let mut lines = vec![
         Line::from(Span::styled(
-            " 🧹 CLEANUP COMPLETE ",
-            Style::default().fg(WHITE).bg(GREEN).bold(),
+            "DELETE REPOSITORY",
+            Style::default().fg(RED).bold(),
         )),
         Line::from(""),
-        Line::from(format!("Space recovered: {}", format_size(total_recovered))),
-        Line::from(format!(
-            "Successful: {}  |  Failed: {}",
-            success_count, fail_count
-        )),
-        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Repo: ", Style::default().fg(PURPLE)),
+            Span::styled(&repo.name, Style::default().fg(WHITE).bold()),
+        ]),
+        Line::from(vec![
+            Span::styled("  Path: ", Style::default().fg(PURPLE)),
+            Span::styled(&short_path, Style::default().fg(GRAY)),
+        ]),
     ];
 
-    for (_, _, success, error) in &model.clean_results {
-        if !success {
-            if let Some(err) = error {
-                lines.push(Line::from(Span::styled(
-                    format!("  ✘ {}", err),
-                    Style::default().fg(RED),
-                )));
-            }
-        }
+    // Warn if dirty
+    if repo.is_dirty {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  WARNING: Uncommitted changes will be lost!",
+            Style::default().fg(RED).bold(),
+        )));
     }
 
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        "[Press ENTER to return]",
-        Style::default().fg(GRAY),
+        "  This will move the entire folder to trash.",
+        Style::default().fg(YELLOW),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  Delete? (y/N)",
+        Style::default().fg(WHITE),
     )));
 
-    let paragraph = Paragraph::new(lines)
-        .alignment(Alignment::Center)
-        .block(Block::default().padding(Padding::new(2, 2, 2, 2)));
-    frame.render_widget(paragraph, area);
+    let paragraph = Paragraph::new(lines).alignment(Alignment::Center);
+    frame.render_widget(paragraph, inner);
+}
+
+fn render_add_path_modal(frame: &mut Frame, area: Rect, model: &ScannerModel) {
+    let modal_area = center_modal(frame, area, 65, 9);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Thick)
+        .border_style(Style::default().fg(PURPLE))
+        .style(Style::default().bg(MODAL_BG));
+
+    let inner = block.inner(modal_area);
+    frame.render_widget(block, modal_area);
+
+    let lines = vec![
+        Line::from(Span::styled(
+            "ADD SCAN DIRECTORY",
+            Style::default().fg(PURPLE).bold(),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Enter full path (~ for home):",
+            Style::default().fg(GRAY),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            format!("{}█", model.path_input),
+            Style::default().fg(WHITE).bg(DARK),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "e.g.  ~/Projects  or  /opt/code",
+            Style::default().fg(TERM_GRAY),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "[ENTER] Add • [ESC] Cancel",
+            Style::default().fg(GRAY),
+        )),
+    ];
+
+    let paragraph = Paragraph::new(lines).alignment(Alignment::Center);
+    frame.render_widget(paragraph, inner);
 }
 

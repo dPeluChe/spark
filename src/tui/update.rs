@@ -2,6 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::core::types::*;
 use crate::tui::model::*;
 use crate::tui::scanner_keys;
+use crate::utils::shell::debug_log;
 
 /// Side-effect actions dispatched from key/message handlers to the event loop
 pub enum Action {
@@ -31,6 +32,8 @@ pub enum Action {
     PullRepos(Vec<usize>),
     /// Clone a repo from URL into managed root
     CloneRepo(String),
+    /// Open a directory in the system file manager / terminal
+    OpenDir(std::path::PathBuf),
 }
 
 /// Handle a key event and return optional action
@@ -41,9 +44,101 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Option<Action> {
         return Some(Action::Quit);
     }
 
+    // Welcome screen handler
+    if app.show_welcome {
+        return handle_welcome_key(app, key);
+    }
+
+    debug_log(&format!("KEY: {:?} | mode={:?} scanner_state={:?}", key.code, app.mode, app.scanner.state));
+
+    // Global: Tab cycles through views (Updater -> Scanner -> Repos -> Ports -> Updater)
+    // Except during text input or active operations
+    let in_text_input = app.mode == AppMode::Scanner
+        && matches!(app.scanner.state, ScannerState::RepoCloneInput | ScannerState::ScanAddPath);
+    let in_search = app.mode == AppMode::Updater
+        && app.updater.state == UpdaterState::Search;
+    let in_blocking = (app.mode == AppMode::Updater && app.updater.state == UpdaterState::Updating)
+        || (app.mode == AppMode::Scanner && app.scanner.state == ScannerState::Scanning)
+        || (app.mode == AppMode::Scanner && app.scanner.state == ScannerState::Cleaning);
+
+    if key.code == KeyCode::Tab && !in_text_input && !in_search && !in_blocking {
+        // Cycle: Scanner -> Repos -> Ports -> Updater -> Scanner
+        // Scanner base states -> Repos
+        if app.mode == AppMode::Scanner && matches!(
+            app.scanner.state,
+            ScannerState::ScanConfig | ScannerState::ScanResults
+                | ScannerState::RepoDetail
+        ) {
+            app.scanner.state = ScannerState::RepoManager;
+            return Some(Action::ListManagedRepos);
+        }
+        // Repos -> Ports
+        if app.mode == AppMode::Scanner && matches!(
+            app.scanner.state,
+            ScannerState::RepoManager | ScannerState::RepoCloneSummary
+        ) {
+            app.scanner.state = ScannerState::PortScan;
+            return Some(Action::ScanPorts);
+        }
+        // Ports -> Updater
+        if app.mode == AppMode::Scanner && matches!(
+            app.scanner.state,
+            ScannerState::PortScan
+        ) {
+            app.mode = AppMode::Updater;
+            return None;
+        }
+        // Updater -> Scanner
+        if app.mode == AppMode::Updater {
+            app.mode = AppMode::Scanner;
+            if app.scanner.state != ScannerState::ScanResults {
+                app.scanner.state = ScannerState::ScanConfig;
+            }
+            if app.scanner.discovered_dirs.is_empty() {
+                return Some(Action::DiscoverDirs);
+            }
+            return None;
+        }
+    }
+
     match app.mode {
         AppMode::Updater => handle_updater_key(app, key),
         AppMode::Scanner => scanner_keys::handle_scanner_key(app, key),
+    }
+}
+
+fn handle_welcome_key(app: &mut App, key: KeyEvent) -> Option<Action> {
+    match key.code {
+        KeyCode::Char('q') | KeyCode::Char('Q') => {
+            app.should_quit = true;
+            Some(Action::Quit)
+        }
+        KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Enter => {
+            app.show_welcome = false;
+            app.mode = AppMode::Scanner;
+            if app.scanner.discovered_dirs.is_empty() {
+                return Some(Action::DiscoverDirs);
+            }
+            None
+        }
+        KeyCode::Char('u') | KeyCode::Char('U') => {
+            app.show_welcome = false;
+            app.mode = AppMode::Updater;
+            None
+        }
+        KeyCode::Char('p') | KeyCode::Char('P') => {
+            app.show_welcome = false;
+            app.mode = AppMode::Scanner;
+            app.scanner.state = ScannerState::PortScan;
+            Some(Action::ScanPorts)
+        }
+        KeyCode::Char('g') | KeyCode::Char('G') => {
+            app.show_welcome = false;
+            app.mode = AppMode::Scanner;
+            app.scanner.state = ScannerState::RepoManager;
+            Some(Action::ListManagedRepos)
+        }
+        _ => None,
     }
 }
 
@@ -132,28 +227,59 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
                 .push((index, bytes_recovered, success, error));
         }
         AppMessage::CleanAllComplete => {
-            app.scanner.state = ScannerState::CleanSummary;
+            let recovered: u64 = app.scanner.clean_results.iter().map(|(_, b, _, _)| *b).sum();
+            let ok = app.scanner.clean_results.iter().filter(|(_, _, s, _)| *s).count();
+            let fail = app.scanner.clean_results.len() - ok;
+            if fail == 0 {
+                app.show_toast(format!("Cleaned {} recovered", crate::utils::fs::format_size(recovered)), false);
+            } else {
+                app.show_toast(format!("Clean: {} ok, {} failed", ok, fail), true);
+            }
+            // Refresh artifact data for cleaned repos
+            for repo in app.scanner.repos.iter_mut() {
+                repo.artifacts.retain(|a| a.path.exists());
+                repo.artifact_size = repo.artifacts.iter().map(|a| a.size).sum();
+            }
+            // Go back to results directly instead of showing a separate screen
+            app.scanner.checked.clear();
+            app.scanner.clean_results.clear();
+            app.scanner.state = ScannerState::ScanResults;
         }
         AppMessage::PortScanResult { ports } => {
             app.port_scanner.ports = ports;
             app.port_scanner.cursor = 0;
             app.port_scanner.checked.clear();
+            app.port_scanner.scanning = false;
+            rebuild_port_display_order(&mut app.port_scanner);
         }
         AppMessage::KillResult { pid, success, error } => {
             if success {
-                // Remove killed port from the list
+                // Find name before removing
+                let name = app.port_scanner.ports.iter()
+                    .find(|p| p.pid == pid)
+                    .map(|p| {
+                        let project = p.project_dir.as_deref().unwrap_or("");
+                        if project.is_empty() || project == "/" {
+                            format!(":{} ({})", p.port, p.process_name)
+                        } else {
+                            let short = project.split(" (").next().unwrap_or(project);
+                            format!(":{} {}", p.port, short)
+                        }
+                    })
+                    .unwrap_or_else(|| format!("PID {}", pid));
+
                 app.port_scanner.ports.retain(|p| p.pid != pid);
-                if app.port_scanner.cursor >= app.port_scanner.ports.len()
+                rebuild_port_display_order(&mut app.port_scanner);
+                if app.port_scanner.cursor >= app.port_scanner.display_order.len()
                     && app.port_scanner.cursor > 0
                 {
                     app.port_scanner.cursor -= 1;
                 }
+                app.show_toast(format!("Killed {}", name), false);
             }
             if let Some(err) = error {
-                // Could show in a status bar, for now just log
-                let _ = err;
+                app.show_toast(format!("Kill failed: {}", err), true);
             }
-            // If all kills done and we were in confirm, go back to port scan
             if app.scanner.state == ScannerState::PortKillConfirm {
                 app.scanner.state = ScannerState::PortScan;
                 app.port_scanner.checked.clear();
@@ -173,12 +299,15 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
         }
         AppMessage::RepoPullResult { index, success, message } => {
             if index < app.repo_manager.repos.len() {
+                let name = app.repo_manager.repos[index].name.clone();
                 if success {
                     app.repo_manager.repos[index].status =
                         crate::scanner::repo_manager::RepoStatus::UpToDate;
+                    app.show_toast(format!("Pulled {}", name), false);
                 } else {
                     app.repo_manager.repos[index].status =
-                        crate::scanner::repo_manager::RepoStatus::Error(message);
+                        crate::scanner::repo_manager::RepoStatus::Error(message.clone());
+                    app.show_toast(format!("Pull failed: {} - {}", name, message), true);
                 }
             }
             app.repo_manager.checked.remove(&index);
@@ -216,19 +345,24 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
                     short_path,
                 });
 
+                let cloned_name = app.repo_manager.last_clone.as_ref()
+                    .map(|c| c.repo_name.clone()).unwrap_or_default();
                 app.repo_manager.clone_input.clear();
                 app.repo_manager.clone_error = None;
                 app.scanner.state = ScannerState::RepoCloneSummary;
+                app.show_toast(format!("Cloned {}", cloned_name), false);
             } else {
+                app.show_toast(format!("Clone failed: {}", message), true);
                 app.repo_manager.clone_error = Some(message);
             }
         }
         AppMessage::DiscoveredDirs { dirs } => {
-            app.scanner.discovered_dirs = dirs;
-            // Auto-select all discovered dirs
-            for i in 0..app.scanner.discovered_dirs.len() {
-                app.scanner.selected_scan_dirs.insert(i);
+            debug_log(&format!("DiscoveredDirs: {} dirs found", dirs.len()));
+            for d in &dirs {
+                debug_log(&format!("  dir: {:?} ({} repos)", d.path, d.repo_count));
             }
+            app.scanner.discovered_dirs = dirs;
+            app.scanner.selected_scan_dirs.clear();
         }
     }
     None
@@ -238,11 +372,6 @@ fn handle_updater_key(app: &mut App, key: KeyEvent) -> Option<Action> {
     let m = &mut app.updater;
 
     match m.state {
-        UpdaterState::Splash => {
-            m.state = UpdaterState::Main;
-            None
-        }
-
         UpdaterState::Search => {
             match key.code {
                 KeyCode::Esc => {
@@ -338,13 +467,6 @@ fn handle_updater_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                     app.should_quit = true;
                     Some(Action::Quit)
                 }
-            }
-            KeyCode::Tab => {
-                app.mode = AppMode::Scanner;
-                if app.scanner.discovered_dirs.is_empty() {
-                    return Some(Action::DiscoverDirs);
-                }
-                None
             }
             KeyCode::Char('/') => {
                 m.state = UpdaterState::Search;
@@ -456,6 +578,60 @@ fn handle_updater_key(app: &mut App, key: KeyEvent) -> Option<Action> {
             }
             _ => None,
         },
+    }
+}
+
+/// Build the visual display order for port scanner: dev (sorted by project) then system (sorted by process)
+fn rebuild_port_display_order(model: &mut PortScannerModel) {
+    use crate::scanner::port_scanner;
+
+    let mut dev_indices: Vec<usize> = Vec::new();
+    let mut sys_indices: Vec<usize> = Vec::new();
+
+    for (i, p) in model.ports.iter().enumerate() {
+        if port_scanner::is_dev_server(p) {
+            dev_indices.push(i);
+        } else {
+            sys_indices.push(i);
+        }
+    }
+
+    // Dev: project name first (with project before without), then port
+    dev_indices.sort_by(|&a, &b| {
+        let pa = project_name(&model.ports[a].project_dir);
+        let pb = project_name(&model.ports[b].project_dir);
+        let has_a = !pa.is_empty();
+        let has_b = !pb.is_empty();
+        has_b
+            .cmp(&has_a)
+            .then_with(|| pa.to_lowercase().cmp(&pb.to_lowercase()))
+            .then_with(|| model.ports[a].port.cmp(&model.ports[b].port))
+    });
+
+    // System: process name then port
+    sys_indices.sort_by(|&a, &b| {
+        model.ports[a]
+            .process_name
+            .to_lowercase()
+            .cmp(&model.ports[b].process_name.to_lowercase())
+            .then_with(|| model.ports[a].port.cmp(&model.ports[b].port))
+    });
+
+    model.display_order.clear();
+    model.display_order.extend(dev_indices);
+    model.display_order.extend(sys_indices);
+}
+
+fn project_name(project_dir: &Option<String>) -> String {
+    match project_dir {
+        Some(p) if p != "/" && !p.is_empty() => {
+            if let Some(paren) = p.find(" (") {
+                p[..paren].to_string()
+            } else {
+                p.rsplit('/').next().unwrap_or(p).to_string()
+            }
+        }
+        _ => String::new(),
     }
 }
 

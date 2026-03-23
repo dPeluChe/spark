@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use crate::config::SparkConfig;
 use crate::core::types::*;
 use crate::core::inventory::get_inventory;
-use crate::scanner::repo_scanner::RepoInfo;
+use crate::scanner::repo_scanner::{RepoInfo, DiscoveredDir};
 use crate::scanner::port_scanner::PortInfo;
 use crate::scanner::repo_manager::ManagedRepo;
 
@@ -18,7 +18,6 @@ pub enum AppMode {
 /// Updater state machine
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpdaterState {
-    Splash,
     Main,
     Search,
     Preview,
@@ -31,15 +30,18 @@ pub enum UpdaterState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScannerState {
     ScanConfig,
+    ScanAddPath,
     Scanning,
     ScanResults,
     RepoDetail,
     CleanConfirm,
+    DeleteRepoConfirm,
     Cleaning,
-    CleanSummary,
     PortScan,
+    PortAction,
     PortKillConfirm,
     RepoManager,
+    RepoAction,
     RepoCloneInput,
     RepoCloneSummary,
 }
@@ -122,7 +124,7 @@ pub enum AppMessage {
 
     // Discovery
     DiscoveredDirs {
-        dirs: Vec<PathBuf>,
+        dirs: Vec<DiscoveredDir>,
     },
 }
 
@@ -159,7 +161,7 @@ impl UpdaterModel {
         let loading_count = items.len();
 
         Self {
-            state: UpdaterState::Splash,
+            state: UpdaterState::Main,
             items,
             cursor: 0,
             checked: HashSet::new(),
@@ -274,8 +276,9 @@ pub struct ScannerModel {
     pub scan_progress_current: String,
     pub clean_results: Vec<(usize, u64, bool, Option<String>)>,
     pub total_recoverable: u64,
-    pub discovered_dirs: Vec<PathBuf>,
+    pub discovered_dirs: Vec<DiscoveredDir>,
     pub selected_scan_dirs: HashSet<usize>,
+    pub path_input: String,
 }
 
 impl ScannerModel {
@@ -294,6 +297,7 @@ impl ScannerModel {
             total_recoverable: 0,
             discovered_dirs: Vec::new(),
             selected_scan_dirs: HashSet::new(),
+            path_input: String::new(),
         }
     }
 
@@ -315,17 +319,28 @@ impl ScannerModel {
 /// Port scanner model: tracks discovered ports and kill selections
 pub struct PortScannerModel {
     pub ports: Vec<PortInfo>,
+    /// Visual display order: indices into `ports`, built after scan
+    pub display_order: Vec<usize>,
+    /// Cursor position in display_order (not in ports)
     pub cursor: usize,
     pub checked: HashSet<usize>,
+    pub scanning: bool,
 }
 
 impl PortScannerModel {
     pub fn new() -> Self {
         Self {
             ports: Vec::new(),
+            display_order: Vec::new(),
             cursor: 0,
             checked: HashSet::new(),
+            scanning: false,
         }
+    }
+
+    /// Get the actual port index for the current cursor position
+    pub fn cursor_port_index(&self) -> Option<usize> {
+        self.display_order.get(self.cursor).copied()
     }
 }
 
@@ -366,9 +381,18 @@ impl RepoManagerModel {
     }
 }
 
+/// A toast notification shown briefly at the bottom of the screen
+pub struct Toast {
+    pub message: String,
+    pub is_error: bool,
+    /// Tick when the toast was created (auto-dismiss after N ticks)
+    pub created_at: usize,
+}
+
 /// Top-level application state: holds both mode models, config, and display info
 pub struct App {
     pub mode: AppMode,
+    pub show_welcome: bool,
     pub updater: UpdaterModel,
     pub scanner: ScannerModel,
     pub port_scanner: PortScannerModel,
@@ -379,12 +403,14 @@ pub struct App {
     pub width: u16,
     pub height: u16,
     pub tick_count: usize,
+    pub toast: Option<Toast>,
 }
 
 impl App {
     pub fn new(config: SparkConfig) -> Self {
         Self {
-            mode: AppMode::Updater,
+            mode: AppMode::Scanner,
+            show_welcome: true,
             updater: UpdaterModel::new(),
             scanner: ScannerModel::new(),
             port_scanner: PortScannerModel::new(),
@@ -395,7 +421,16 @@ impl App {
             width: 0,
             height: 0,
             tick_count: 0,
+            toast: None,
         }
+    }
+
+    pub fn show_toast(&mut self, message: String, is_error: bool) {
+        self.toast = Some(Toast {
+            message,
+            is_error,
+            created_at: self.tick_count,
+        });
     }
 }
 
@@ -406,7 +441,8 @@ mod tests {
     #[test]
     fn test_app_new_defaults() {
         let app = App::new(SparkConfig::default());
-        assert_eq!(app.mode, AppMode::Updater);
+        assert_eq!(app.mode, AppMode::Scanner);
+        assert!(app.show_welcome);
         assert!(!app.should_quit);
         assert!(!app.dry_run);
     }
@@ -415,7 +451,7 @@ mod tests {
     fn test_updater_model_initializes_with_tools() {
         let m = UpdaterModel::new();
         assert!(!m.items.is_empty());
-        assert_eq!(m.state, UpdaterState::Splash);
+        assert_eq!(m.state, UpdaterState::Main);
         assert_eq!(m.cursor, 0);
         assert!(m.checked.is_empty());
         assert_eq!(m.loading_count, m.items.len());

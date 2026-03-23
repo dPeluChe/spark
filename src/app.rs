@@ -22,25 +22,27 @@ pub async fn run(
     let mut app = App::new(config);
     app.dry_run = dry_run;
 
-    // Start in scanner mode if --scan-only
+    // Skip welcome if --scan-only
     if scan_only {
+        app.show_welcome = false;
         app.mode = AppMode::Scanner;
     }
 
     let (tx, mut rx) = mpsc::unbounded_channel::<AppMessage>();
     let detector = Arc::new(Detector::new());
 
-    // Start initial version checks and cache warmup
+    // Start initial version checks and cache warmup in background
     spawn_version_checks(&app.updater, detector.clone(), tx.clone());
     spawn_warmup(detector.clone(), tx.clone());
 
-    // Splash timer
-    let splash_tx = tx.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_secs(2)).await;
-        // Splash auto-advance is handled by tick
-        let _ = splash_tx; // keep alive
-    });
+    // Pre-discover directories so scanner is ready
+    {
+        let tx2 = tx.clone();
+        tokio::spawn(async move {
+            let dirs = crate::scanner::repo_scanner::discover_project_dirs();
+            let _ = tx2.send(AppMessage::DiscoveredDirs { dirs });
+        });
+    }
 
     let tick_rate = Duration::from_millis(100);
 
@@ -79,12 +81,24 @@ pub async fn run(
                         Action::StartScan(dirs) => {
                             let tx2 = tx.clone();
                             let max_depth = app.config.max_scan_depth;
+                            let count = dirs.len();
+                            let first = dirs.first()
+                                .and_then(|d| d.file_name())
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_default();
+                            let label = if count == 1 {
+                                format!("Scanning {}...", first)
+                            } else {
+                                format!("Scanning {} dirs ({}, ...)", count, first)
+                            };
+                            app.show_toast(label, false);
+
                             tokio::spawn(async move {
                                 let (progress_tx, mut progress_rx) =
                                     mpsc::unbounded_channel::<crate::scanner::repo_scanner::ScanProgressMsg>();
                                 let tx3 = tx2.clone();
 
-                                // Forward scan progress
+                                // Forward progress from blocking thread to TUI
                                 let progress_forwarder = tokio::spawn(async move {
                                     while let Some(msg) = progress_rx.recv().await {
                                         let _ = tx3.send(AppMessage::ScanProgress {
@@ -95,11 +109,15 @@ pub async fn run(
                                     }
                                 });
 
-                                let repos =
-                                    crate::scanner::repo_scanner::scan_directories(
-                                        &dirs, max_depth, progress_tx,
+                                // Run scan on blocking thread so progress can flow
+                                let repos = tokio::task::spawn_blocking(move || {
+                                    let rt = tokio::runtime::Handle::current();
+                                    rt.block_on(
+                                        crate::scanner::repo_scanner::scan_directories(
+                                            &dirs, max_depth, progress_tx,
+                                        )
                                     )
-                                    .await;
+                                }).await.unwrap_or_default();
 
                                 let _ = progress_forwarder.await;
                                 let _ = tx2.send(AppMessage::ScanComplete { repos });
@@ -140,6 +158,7 @@ pub async fn run(
                             });
                         }
                         Action::ScanPorts => {
+                            app.port_scanner.scanning = true;
                             let tx2 = tx.clone();
                             tokio::spawn(async move {
                                 let ports =
@@ -224,6 +243,16 @@ pub async fn run(
                                 });
                             });
                         }
+                        Action::OpenDir(path) => {
+                            let cmd = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+                            let name = path.file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_else(|| path.display().to_string());
+                            match std::process::Command::new(cmd).arg(&path).spawn() {
+                                Ok(_) => app.show_toast(format!("Opened {}", name), false),
+                                Err(e) => app.show_toast(format!("Failed to open: {}", e), true),
+                            }
+                        }
                         Action::KillProcesses(pids) => {
                             let tx2 = tx.clone();
                             tokio::spawn(async move {
@@ -268,15 +297,15 @@ pub async fn run(
 
         // Tick animation
         app.tick_count = app.tick_count.wrapping_add(1);
-        if app.updater.state == UpdaterState::Splash
-            || app.updater.state == UpdaterState::Updating
-        {
+        if app.updater.state == UpdaterState::Updating {
             app.updater.splash_frame = app.tick_count;
         }
 
-        // Auto-advance splash after ~20 ticks (2 seconds at 100ms)
-        if app.updater.state == UpdaterState::Splash && app.tick_count >= 20 {
-            app.updater.state = UpdaterState::Main;
+        // Auto-dismiss toast after 30 ticks (3 seconds)
+        if let Some(toast) = &app.toast {
+            if app.tick_count.saturating_sub(toast.created_at) >= 30 {
+                app.toast = None;
+            }
         }
 
         if app.should_quit {
