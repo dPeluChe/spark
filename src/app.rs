@@ -58,7 +58,19 @@ pub async fn run(
         .unwrap_or(false);
 
         if has_event {
-            if let Ok(Event::Key(key)) = event::read() {
+            let ev = event::read();
+
+            // Force full redraw on focus or resize
+            if let Ok(Event::FocusGained) = &ev {
+                terminal.clear()?;
+            }
+            if let Ok(Event::Resize(w, h)) = &ev {
+                app.width = *w;
+                app.height = *h;
+                terminal.clear()?;
+            }
+
+            if let Ok(Event::Key(key)) = ev {
                 if let Some(action) = update::handle_key(&mut app, key) {
                     match action {
                         Action::Quit => break,
@@ -281,9 +293,6 @@ pub async fn run(
                         }
                     }
                 }
-            } else if let Ok(Event::Resize(w, h)) = event::read() {
-                app.width = w;
-                app.height = h;
             }
         }
 

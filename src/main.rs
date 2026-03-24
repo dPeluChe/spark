@@ -108,7 +108,12 @@ async fn main() -> color_eyre::Result<()> {
     // TUI mode
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    execute!(
+        stdout,
+        EnterAlternateScreen,
+        crossterm::event::EnableFocusChange,
+        crossterm::event::EnableMouseCapture,
+    )?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -122,7 +127,12 @@ async fn main() -> color_eyre::Result<()> {
     .await;
 
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    execute!(
+        terminal.backend_mut(),
+        crossterm::event::DisableFocusChange,
+        crossterm::event::DisableMouseCapture,
+        LeaveAlternateScreen,
+    )?;
     terminal.show_cursor()?;
 
     if result.is_ok() {
