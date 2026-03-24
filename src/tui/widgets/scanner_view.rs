@@ -407,8 +407,42 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
         }
     }
 
+    // Calculate scroll offset for manual scrolling
+    let visible_height = chunks[1].height.saturating_sub(3) as usize;
+    let scroll_offset = if model.cursor >= visible_height {
+        // Find cursor position in the flat rows list
+        let mut cursor_row = 0;
+        let mut found = false;
+        for row_group in &group_order {
+            cursor_row += 1; // group header
+            let repos_in_group: Vec<usize> = model.repos.iter().enumerate()
+                .filter(|(_, r)| r.group == *row_group)
+                .map(|(i, _)| i)
+                .collect();
+            for &repo_idx in &repos_in_group {
+                if repo_idx == model.cursor {
+                    found = true;
+                    break;
+                }
+                cursor_row += 1;
+            }
+            if found { break; }
+        }
+        if cursor_row >= visible_height {
+            cursor_row - visible_height + 1
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+
+    let scrolled_rows: Vec<Row> = rows.into_iter().skip(scroll_offset).collect();
+
+    let scroll_info = format!(" {}/{} ", model.cursor + 1, model.repos.len());
+
     let table = Table::new(
-        rows,
+        scrolled_rows,
         [
             Constraint::Min(22),
             Constraint::Length(8),
@@ -423,7 +457,8 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
         Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(PURPLE)),
+            .border_style(Style::default().fg(PURPLE))
+            .title_bottom(Span::styled(scroll_info, Style::default().fg(GRAY))),
     );
     frame.render_widget(table, chunks[1]);
 

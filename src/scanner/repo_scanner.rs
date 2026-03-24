@@ -124,13 +124,14 @@ pub async fn scan_directories(
             if entry.file_type().is_dir() && entry.file_name() == ".git" {
                 if let Some(parent) = entry.path().parent() {
                     if let Some(mut repo) = analyze_repo(parent) {
-                        // Set group based on relative path from scan root
+                        // Group = parent dir of the repo, relative to scan root
                         let rel = parent.strip_prefix(dir).unwrap_or(parent);
-                        repo.group = if rel.components().count() > 1 {
-                            // Use first subdir as group
-                            rel.components().next()
-                                .map(|c| c.as_os_str().to_string_lossy().to_string())
-                                .unwrap_or_else(|| group.clone())
+                        repo.group = if let Some(rel_parent) = rel.parent() {
+                            if rel_parent.as_os_str().is_empty() {
+                                group.clone() // repo is direct child of scan root
+                            } else {
+                                rel_parent.display().to_string()
+                            }
                         } else {
                             group.clone()
                         };
