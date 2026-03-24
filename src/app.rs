@@ -255,6 +255,35 @@ pub async fn run(
                                 });
                             });
                         }
+                        Action::ScanSystem => {
+                            app.system_cleaner.scanning = true;
+                            let tx2 = tx.clone();
+                            tokio::spawn(async move {
+                                let items = tokio::task::spawn_blocking(
+                                    crate::scanner::system_cleaner::scan_system
+                                ).await.unwrap_or_default();
+                                let _ = tx2.send(AppMessage::SystemScanResult { items });
+                            });
+                        }
+                        Action::CleanSystemItem(index) => {
+                            let item = app.system_cleaner.items.get(index).cloned();
+                            let is_dry_run = app.dry_run;
+                            if let Some(item) = item {
+                                let tx2 = tx.clone();
+                                tokio::spawn(async move {
+                                    let result = tokio::task::spawn_blocking(move || {
+                                        crate::scanner::system_cleaner::execute_clean(&item, is_dry_run)
+                                    }).await.unwrap_or(Err("Task failed".into()));
+                                    let (success, recovered, error) = match result {
+                                        Ok(r) => (true, r, None),
+                                        Err(e) => (false, 0, Some(e)),
+                                    };
+                                    let _ = tx2.send(AppMessage::SystemCleanItemResult {
+                                        index, recovered, success, error,
+                                    });
+                                });
+                            }
+                        }
                         Action::LoadContainerChildren(path) => {
                             let tx2 = tx.clone();
                             tokio::spawn(async move {

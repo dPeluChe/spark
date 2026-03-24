@@ -24,7 +24,7 @@ pub fn render_splash(frame: &mut Frame, area: Rect, tick: usize) {
         Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Length(2),
-        Constraint::Length(11),
+        Constraint::Length(14),
         Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Fill(1),
@@ -89,6 +89,16 @@ pub fn render_splash(frame: &mut Frame, area: Rect, tick: usize) {
         ]),
         Line::from(Span::styled(
             "                   Node, Python, Go, Rust, ...",
+            Style::default().fg(TERM_GRAY),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  C  ", Style::default().fg(Color::Rgb(180, 80, 40)).bold()),
+            Span::styled("System Clean ", Style::default().fg(WHITE).bold()),
+            Span::styled("Docker, caches, logs", Style::default().fg(GRAY)),
+        ]),
+        Line::from(Span::styled(
+            "                   brew, npm, pip, cargo caches",
             Style::default().fg(TERM_GRAY),
         )),
         Line::from(""),

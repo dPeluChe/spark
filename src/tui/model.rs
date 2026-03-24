@@ -7,6 +7,7 @@ use crate::core::inventory::get_inventory;
 use crate::scanner::repo_scanner::{RepoInfo, DiscoveredDir};
 use crate::scanner::port_scanner::PortInfo;
 use crate::scanner::repo_manager::ManagedRepo;
+use crate::scanner::system_cleaner::CleanableItem;
 
 /// Top-level application mode
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,6 +43,9 @@ pub enum ScannerState {
     PortScan,
     PortAction,
     PortKillConfirm,
+    SystemClean,
+    #[allow(dead_code)]
+    SystemCleanConfirm,
     RepoManager,
     RepoAction,
     RepoCloneInput,
@@ -122,6 +126,17 @@ pub enum AppMessage {
         message: String,
         /// On success, the cloned repo path for summary
         clone_path: Option<String>,
+    },
+
+    // System cleaner
+    SystemScanResult {
+        items: Vec<CleanableItem>,
+    },
+    SystemCleanItemResult {
+        index: usize,
+        recovered: u64,
+        success: bool,
+        error: Option<String>,
     },
 
     // Container children
@@ -395,6 +410,25 @@ impl RepoManagerModel {
     }
 }
 
+/// System cleaner model: Docker, caches, logs
+pub struct SystemCleanerModel {
+    pub items: Vec<CleanableItem>,
+    pub cursor: usize,
+    pub checked: std::collections::HashSet<usize>,
+    pub scanning: bool,
+}
+
+impl SystemCleanerModel {
+    pub fn new() -> Self {
+        Self {
+            items: Vec::new(),
+            cursor: 0,
+            checked: std::collections::HashSet::new(),
+            scanning: false,
+        }
+    }
+}
+
 /// A toast notification shown briefly at the bottom of the screen
 pub struct Toast {
     pub message: String,
@@ -410,6 +444,7 @@ pub struct App {
     pub updater: UpdaterModel,
     pub scanner: ScannerModel,
     pub port_scanner: PortScannerModel,
+    pub system_cleaner: SystemCleanerModel,
     pub repo_manager: RepoManagerModel,
     pub config: SparkConfig,
     pub should_quit: bool,
@@ -428,6 +463,7 @@ impl App {
             updater: UpdaterModel::new(),
             scanner: ScannerModel::new(),
             port_scanner: PortScannerModel::new(),
+            system_cleaner: SystemCleanerModel::new(),
             repo_manager: RepoManagerModel::new(&config.repos_root),
             config,
             should_quit: false,

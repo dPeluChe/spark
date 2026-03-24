@@ -90,6 +90,11 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, app: &App) {
             app.scanner.state,
             ScannerState::PortScan | ScannerState::PortAction | ScannerState::PortKillConfirm
         );
+    let is_system = app.mode == AppMode::Scanner
+        && matches!(
+            app.scanner.state,
+            ScannerState::SystemClean | ScannerState::SystemCleanConfirm
+        );
 
     let active = |on: bool, color: Color| -> Style {
         if on {
@@ -103,6 +108,7 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, app: &App) {
         Span::styled(" Scanner ", active(is_scanner_base, PURPLE)),
         Span::styled(" Repos ", active(is_repo_mgr, GREEN)),
         Span::styled(" Ports ", active(is_ports, YELLOW)),
+        Span::styled(" System ", active(is_system, Color::Rgb(180, 80, 40))),
         Span::styled(" Updater ", active(is_updater, BLUE)),
         Span::raw("  "),
         Span::styled("TAB ", Style::default().fg(GRAY).bold()),

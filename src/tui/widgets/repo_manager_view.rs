@@ -3,6 +3,7 @@ use ratatui::widgets::*;
 use crate::tui::model::*;
 use crate::tui::styles::*;
 use crate::scanner::repo_manager::RepoStatus;
+use crate::utils::fs::format_size;
 
 /// Render the repo manager view
 pub fn render_repo_manager(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
@@ -90,7 +91,8 @@ fn render_repo_table(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
         Cell::from("  Repository").style(Style::default().fg(PURPLE).bold()),
         Cell::from("Branch").style(Style::default().fg(PURPLE).bold()),
         Cell::from("Status").style(Style::default().fg(PURPLE).bold()),
-        Cell::from("Last Commit").style(Style::default().fg(PURPLE).bold()),
+        Cell::from("Size").style(Style::default().fg(PURPLE).bold()),
+        Cell::from("Commit").style(Style::default().fg(PURPLE).bold()),
         Cell::from("Host/Owner").style(Style::default().fg(PURPLE).bold()),
     ]);
 
@@ -133,6 +135,8 @@ fn render_repo_table(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
 
             let last_commit = repo.last_commit.as_deref().unwrap_or("-");
 
+            let size_str = if repo.size > 0 { format_size(repo.size) } else { "-".into() };
+
             Row::new(vec![
                 Cell::from(format!("{} [{}] {}", cursor, checkbox, repo.name))
                     .style(if is_selected {
@@ -144,6 +148,8 @@ fn render_repo_table(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
                     .style(Style::default().fg(PURPLE)),
                 Cell::from(format!("{} {}", status_icon, repo.status))
                     .style(status_style),
+                Cell::from(size_str)
+                    .style(Style::default().fg(GRAY)),
                 Cell::from(last_commit)
                     .style(Style::default().fg(TERM_GRAY)),
                 Cell::from(format!("{}/{}", repo.host, repo.owner))
@@ -156,11 +162,12 @@ fn render_repo_table(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
     let table = Table::new(
         rows,
         [
-            Constraint::Min(22),
-            Constraint::Length(12),
-            Constraint::Length(18),
+            Constraint::Percentage(22),
+            Constraint::Length(10),
             Constraint::Length(14),
-            Constraint::Min(18),
+            Constraint::Length(10),
+            Constraint::Length(14),
+            Constraint::Min(15),
         ],
     )
     .header(header)

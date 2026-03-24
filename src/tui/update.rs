@@ -36,6 +36,10 @@ pub enum Action {
     OpenDir(std::path::PathBuf),
     /// Load container children in background
     LoadContainerChildren(std::path::PathBuf),
+    /// Scan system for cleanable items (Docker, caches, logs)
+    ScanSystem,
+    /// Clean a specific system item by index
+    CleanSystemItem(usize),
 }
 
 /// Handle a key event and return optional action
@@ -83,10 +87,18 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Option<Action> {
             app.scanner.state = ScannerState::PortScan;
             return Some(Action::ScanPorts);
         }
-        // Ports -> Updater
+        // Ports -> System
         if app.mode == AppMode::Scanner && matches!(
             app.scanner.state,
             ScannerState::PortScan
+        ) {
+            app.scanner.state = ScannerState::SystemClean;
+            return Some(Action::ScanSystem);
+        }
+        // System -> Updater
+        if app.mode == AppMode::Scanner && matches!(
+            app.scanner.state,
+            ScannerState::SystemClean
         ) {
             app.mode = AppMode::Updater;
             return None;
@@ -125,6 +137,12 @@ fn handle_welcome_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 return Some(Action::DiscoverDirs);
             }
             None
+        }
+        KeyCode::Char('c') | KeyCode::Char('C') => {
+            app.show_welcome = false;
+            app.mode = AppMode::Scanner;
+            app.scanner.state = ScannerState::SystemClean;
+            Some(Action::ScanSystem)
         }
         KeyCode::Char('u') | KeyCode::Char('U') => {
             app.show_welcome = false;
@@ -360,6 +378,34 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
                 app.show_toast(format!("Clone failed: {}", message), true);
                 app.repo_manager.clone_error = Some(message);
             }
+        }
+        AppMessage::SystemScanResult { items } => {
+            app.system_cleaner.items = items;
+            app.system_cleaner.cursor = 0;
+            app.system_cleaner.checked.clear();
+            app.system_cleaner.scanning = false;
+        }
+        AppMessage::SystemCleanItemResult { index, recovered, success, error } => {
+            if success {
+                let name = app.system_cleaner.items.get(index)
+                    .map(|i| i.name.clone()).unwrap_or_default();
+                app.show_toast(
+                    format!("Cleaned {} ({})", name, crate::utils::fs::format_size(recovered)),
+                    false,
+                );
+                // Remove cleaned item
+                if index < app.system_cleaner.items.len() {
+                    app.system_cleaner.items.remove(index);
+                    if app.system_cleaner.cursor > 0
+                        && app.system_cleaner.cursor >= app.system_cleaner.items.len()
+                    {
+                        app.system_cleaner.cursor -= 1;
+                    }
+                }
+            } else if let Some(err) = error {
+                app.show_toast(format!("Clean failed: {}", err), true);
+            }
+            app.system_cleaner.checked.remove(&index);
         }
         AppMessage::ContainerChildrenResult { children } => {
             app.scanner.container_children = children;

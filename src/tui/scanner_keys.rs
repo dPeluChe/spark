@@ -356,6 +356,68 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
 
         ScannerState::Cleaning => None,
 
+        // System cleaner
+        ScannerState::SystemClean => {
+            let sc = &mut app.system_cleaner;
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    app.scanner.state = ScannerState::ScanConfig;
+                    None
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    if sc.cursor > 0 { sc.cursor -= 1; }
+                    None
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if sc.cursor < sc.items.len().saturating_sub(1) { sc.cursor += 1; }
+                    None
+                }
+                KeyCode::Char(' ') => {
+                    if sc.checked.contains(&sc.cursor) {
+                        sc.checked.remove(&sc.cursor);
+                    } else {
+                        sc.checked.insert(sc.cursor);
+                    }
+                    None
+                }
+                KeyCode::Enter => {
+                    // Clean the item under cursor
+                    if sc.items.get(sc.cursor).is_some() {
+                        let idx = sc.cursor;
+                        return Some(Action::CleanSystemItem(idx));
+                    }
+                    None
+                }
+                KeyCode::Char('x') => {
+                    // Clean all selected (or cursor)
+                    if sc.checked.is_empty() {
+                        if sc.items.get(sc.cursor).is_some() {
+                            return Some(Action::CleanSystemItem(sc.cursor));
+                        }
+                    } else {
+                        let indices: Vec<usize> = sc.checked.iter().copied().collect();
+                        // Clean first one (chain via message handler)
+                        if let Some(&first) = indices.first() {
+                            return Some(Action::CleanSystemItem(first));
+                        }
+                    }
+                    None
+                }
+                KeyCode::Char('r') | KeyCode::Char('R') => {
+                    Some(Action::ScanSystem)
+                }
+                _ => None,
+            }
+        }
+
+        ScannerState::SystemCleanConfirm => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('n') => {
+                app.scanner.state = ScannerState::SystemClean;
+                None
+            }
+            _ => None,
+        },
+
         // Port scanner: q = back to ScanConfig
         ScannerState::PortScan => {
             let p = &mut app.port_scanner;

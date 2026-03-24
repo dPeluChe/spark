@@ -53,6 +53,7 @@ pub struct ManagedRepo {
     pub host: String,
     pub owner: String,
     pub last_commit: Option<String>,
+    pub size: u64,
 }
 
 /// Clone a repository into the managed root with host/owner/name layout.
@@ -230,6 +231,7 @@ pub fn list_managed_repos(root: &Path) -> Vec<ManagedRepo> {
                 let remote_url = get_remote_url(&repo_path);
                 let branch = get_current_branch(&repo_path);
                 let last_commit = get_last_commit_date(&repo_path);
+                let size = crate::utils::fs::dir_size(&repo_path.join(".git"));
 
                 repos.push(ManagedRepo {
                     path: repo_path,
@@ -240,6 +242,7 @@ pub fn list_managed_repos(root: &Path) -> Vec<ManagedRepo> {
                     host: host.clone(),
                     owner: owner.clone(),
                     last_commit,
+                    size,
                 });
             }
         }
