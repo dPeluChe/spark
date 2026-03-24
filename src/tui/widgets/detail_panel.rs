@@ -96,7 +96,7 @@ fn render_container_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) 
                 .unwrap_or_else(|| "-".into());
 
             let cursor = if is_selected { ">" } else { " " };
-            let dirty = if child.is_dirty { "●" } else { "" };
+            let dirty = if child.is_dirty { "changes" } else { "" };
             let ws = if child.workspace != crate::scanner::repo_scanner::WorkspaceType::None {
                 format!(" [{}]", child.workspace)
             } else {
@@ -132,7 +132,7 @@ fn render_container_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) 
             Constraint::Length(10),
             Constraint::Length(6),
             Constraint::Length(10),
-            Constraint::Length(2),
+            Constraint::Length(8),
         ],
     )
     .header(table_header)

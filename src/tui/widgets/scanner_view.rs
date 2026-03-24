@@ -314,7 +314,7 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
         Cell::from("Commit").style(Style::default().fg(PURPLE).bold()),
         Cell::from("Size").style(Style::default().fg(PURPLE).bold()),
         Cell::from("Cleanup").style(Style::default().fg(PURPLE).bold()),
-        Cell::from("").style(Style::default().fg(PURPLE).bold()),
+        Cell::from("Status").style(Style::default().fg(PURPLE).bold()),
     ]);
 
     // Collect groups in order of appearance
@@ -361,7 +361,7 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
                 })
                 .unwrap_or_else(|| "-".into());
 
-            let dirty = if repo.is_dirty { "●" } else { "" };
+            let dirty = if repo.is_dirty { "changes" } else { "" };
 
             let row_style = if is_selected {
                 Style::default().bg(DARK_BG)
@@ -419,32 +419,25 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
         }
     }
 
-    // Calculate scroll offset for manual scrolling
+    // Find cursor's position in the flat row list (including group headers)
     let visible_height = chunks[1].height.saturating_sub(3) as usize;
-    let scroll_offset = if model.cursor >= visible_height {
-        // Find cursor position in the flat rows list
-        let mut cursor_row = 0;
-        let mut found = false;
-        for row_group in &group_order {
-            cursor_row += 1; // group header
-            let repos_in_group: Vec<usize> = model.repos.iter().enumerate()
-                .filter(|(_, r)| r.group == *row_group)
-                .map(|(i, _)| i)
-                .collect();
-            for &repo_idx in &repos_in_group {
-                if repo_idx == model.cursor {
-                    found = true;
-                    break;
-                }
-                cursor_row += 1;
+    let mut cursor_row_pos = 0usize;
+    let mut found = false;
+    for row_group in &group_order {
+        cursor_row_pos += 1; // group header row
+        for (i, repo) in model.repos.iter().enumerate() {
+            if repo.group != *row_group { continue; }
+            if i == model.cursor {
+                found = true;
+                break;
             }
-            if found { break; }
+            cursor_row_pos += 1;
         }
-        if cursor_row >= visible_height {
-            cursor_row - visible_height + 1
-        } else {
-            0
-        }
+        if found { break; }
+    }
+
+    let scroll_offset = if cursor_row_pos >= visible_height {
+        cursor_row_pos - visible_height + 1
     } else {
         0
     };
@@ -462,7 +455,7 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
             Constraint::Length(5),
             Constraint::Length(8),
             Constraint::Length(8),
-            Constraint::Length(2),
+            Constraint::Length(8),
         ],
     )
     .header(header)

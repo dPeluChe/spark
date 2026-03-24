@@ -2,6 +2,8 @@ use crossterm::event::{KeyCode, KeyEvent};
 use crate::tui::model::*;
 use crate::tui::update::Action;
 
+const PAGE_JUMP: usize = 20;
+
 /// Handle key events for Scanner mode
 pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
     let s = &mut app.scanner;
@@ -139,6 +141,22 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 if s.cursor < s.repos.len().saturating_sub(1) { s.cursor += 1; }
                 None
             }
+            KeyCode::Home => {
+                s.cursor = 0;
+                None
+            }
+            KeyCode::End => {
+                s.cursor = s.repos.len().saturating_sub(1);
+                None
+            }
+            KeyCode::PageUp => {
+                s.cursor = s.cursor.saturating_sub(PAGE_JUMP);
+                None
+            }
+            KeyCode::PageDown => {
+                s.cursor = (s.cursor + PAGE_JUMP).min(s.repos.len().saturating_sub(1));
+                None
+            }
             KeyCode::Char(' ') => {
                 if s.checked.contains(&s.cursor) {
                     s.checked.remove(&s.cursor);
@@ -216,6 +234,22 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 {
                     s.container_cursor += 1;
                 }
+                None
+            }
+            KeyCode::Home => {
+                s.container_cursor = 0;
+                None
+            }
+            KeyCode::End => {
+                s.container_cursor = s.container_children.len().saturating_sub(1);
+                None
+            }
+            KeyCode::PageUp => {
+                s.container_cursor = s.container_cursor.saturating_sub(PAGE_JUMP);
+                None
+            }
+            KeyCode::PageDown => {
+                s.container_cursor = (s.container_cursor + PAGE_JUMP).min(s.container_children.len().saturating_sub(1));
                 None
             }
             KeyCode::Char('s') => {

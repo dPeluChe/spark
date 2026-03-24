@@ -91,14 +91,16 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Option<Action> {
             app.mode = AppMode::Updater;
             return None;
         }
-        // Updater -> Scanner
+        // Updater -> Scanner (preserve ScanResults if we had them)
         if app.mode == AppMode::Updater {
             app.mode = AppMode::Scanner;
-            if app.scanner.state != ScannerState::ScanResults {
+            if !app.scanner.repos.is_empty() {
+                app.scanner.state = ScannerState::ScanResults;
+            } else {
                 app.scanner.state = ScannerState::ScanConfig;
-            }
-            if app.scanner.discovered_dirs.is_empty() {
-                return Some(Action::DiscoverDirs);
+                if app.scanner.discovered_dirs.is_empty() {
+                    return Some(Action::DiscoverDirs);
+                }
             }
             return None;
         }
