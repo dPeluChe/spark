@@ -193,20 +193,48 @@ pub async fn run(
                             });
                         }
                         Action::CheckRepoStatuses => {
-                            for (i, repo) in app.repo_manager.repos.iter().enumerate() {
-                                let tx2 = tx.clone();
-                                let path = repo.path.clone();
-                                tokio::spawn(async move {
+                            // Load cache first, apply cached statuses immediately
+                            let cache = crate::scanner::repo_manager::load_status_cache();
+                            let mut uncached_indices = Vec::new();
+
+                            for (i, repo) in app.repo_manager.repos.iter_mut().enumerate() {
+                                let key = repo.path.display().to_string();
+                                if let Some((status_str, ts)) = cache.get(&key) {
+                                    if crate::scanner::repo_manager::is_cache_valid(*ts) {
+                                        repo.status = crate::scanner::repo_manager::string_to_status(status_str);
+                                        continue;
+                                    }
+                                }
+                                uncached_indices.push(i);
+                            }
+
+                            // Check uncached repos one by one in background
+                            let paths: Vec<(usize, std::path::PathBuf)> = uncached_indices.iter()
+                                .filter_map(|&i| app.repo_manager.repos.get(i).map(|r| (i, r.path.clone())))
+                                .collect();
+
+                            let tx2 = tx.clone();
+                            tokio::spawn(async move {
+                                for (i, path) in paths {
+                                    let path_clone = path.clone();
                                     let status = tokio::task::spawn_blocking(move || {
-                                        crate::scanner::repo_manager::check_repo_status(&path)
+                                        crate::scanner::repo_manager::check_repo_status(&path_clone)
                                     })
                                     .await
                                     .unwrap_or(crate::scanner::repo_manager::RepoStatus::Error(
                                         "Task failed".into(),
                                     ));
+
+                                    // Save to cache
+                                    let key = path.display().to_string();
+                                    crate::scanner::repo_manager::save_status_to_cache(
+                                        &key,
+                                        &crate::scanner::repo_manager::status_to_string(&status),
+                                    );
+
                                     let _ = tx2.send(AppMessage::RepoStatusResult { index: i, status });
-                                });
-                            }
+                                }
+                            });
                         }
                         Action::PullRepos(indices) => {
                             for idx in indices {
@@ -335,6 +363,41 @@ pub async fn run(
                     Action::StartUpdate(index) => {
                         let tool = app.updater.items[index].tool.clone();
                         spawn_update_task(index, tool, detector.clone(), tx.clone());
+                    }
+                    Action::CheckRepoStatuses => {
+                        // Load cache, check uncached repos sequentially
+                        let cache = crate::scanner::repo_manager::load_status_cache();
+                        let mut uncached: Vec<(usize, std::path::PathBuf)> = Vec::new();
+
+                        for (i, repo) in app.repo_manager.repos.iter_mut().enumerate() {
+                            let key = repo.path.display().to_string();
+                            if let Some((status_str, ts)) = cache.get(&key) {
+                                if crate::scanner::repo_manager::is_cache_valid(*ts) {
+                                    repo.status = crate::scanner::repo_manager::string_to_status(status_str);
+                                    continue;
+                                }
+                            }
+                            uncached.push((i, repo.path.clone()));
+                        }
+
+                        if !uncached.is_empty() {
+                            let tx2 = tx.clone();
+                            tokio::spawn(async move {
+                                for (i, path) in uncached {
+                                    let p = path.clone();
+                                    let status = tokio::task::spawn_blocking(move || {
+                                        crate::scanner::repo_manager::check_repo_status(&p)
+                                    }).await.unwrap_or(
+                                        crate::scanner::repo_manager::RepoStatus::Error("Task failed".into())
+                                    );
+                                    crate::scanner::repo_manager::save_status_to_cache(
+                                        &path.display().to_string(),
+                                        &crate::scanner::repo_manager::status_to_string(&status),
+                                    );
+                                    let _ = tx2.send(AppMessage::RepoStatusResult { index: i, status });
+                                }
+                            });
+                        }
                     }
                     Action::Quit => break,
                     _ => {}

@@ -278,11 +278,11 @@ pub fn render_action_modal(frame: &mut Frame, area: Rect, model: &RepoManagerMod
         ]),
         Line::from(vec![
             Span::styled("  [d] ", Style::default().fg(RED).bold()),
-            Span::styled("Remove repository", Style::default().fg(WHITE)),
+            Span::styled("Delete repository and all files", Style::default().fg(WHITE)),
         ]),
         Line::from(""),
         Line::from(Span::styled(
-            "  [q] Close    [ESC] Close",
+            "  [q] Close",
             Style::default().fg(GRAY),
         )),
     ];

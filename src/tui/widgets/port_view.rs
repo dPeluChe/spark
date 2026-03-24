@@ -389,7 +389,7 @@ pub fn render_action_modal(frame: &mut Frame, area: Rect, model: &PortScannerMod
     ]));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        "  [q] Close    [ESC] Close",
+        "  [q] Close",
         Style::default().fg(GRAY),
     )));
 
