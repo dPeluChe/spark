@@ -231,7 +231,7 @@ pub fn execute_clean(item: &CleanableItem, dry_run: bool) -> Result<u64, String>
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 log_operation("CLEAN", &item.detail, 0, "FAILED");
-                Err(format!("{}", stderr.trim()))
+                Err(stderr.trim().to_string())
             }
         }
         CleanCommand::RemoveDir(path) => {

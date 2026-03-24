@@ -535,7 +535,7 @@ fn parse_proc_net_tcp() -> Option<HashMap<u64, u16>> {
             if fields.len() < 10 || fields[3] != "0A" {
                 continue;
             }
-            if let Some(port_hex) = fields[1].split(':').last() {
+            if let Some(port_hex) = fields[1].split(':').next_back() {
                 if let (Ok(port), Ok(inode)) =
                     (u16::from_str_radix(port_hex, 16), fields[9].parse::<u64>())
                 {

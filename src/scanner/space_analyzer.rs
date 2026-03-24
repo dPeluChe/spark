@@ -72,7 +72,8 @@ pub struct ArtifactInfo {
 }
 
 /// Artifact check: (dir_name, kind, optional_validator_file)
-const ARTIFACT_CHECKS: &[(&str, fn() -> ArtifactKind, Option<&str>)] = &[
+type ArtifactCheck = (&'static str, fn() -> ArtifactKind, Option<&'static str>);
+const ARTIFACT_CHECKS: &[ArtifactCheck] = &[
     // JavaScript / Node
     ("node_modules", || ArtifactKind::NodeModules, Some("package.json")),
     (".next", || ArtifactKind::DotNext, Some("package.json")),
@@ -131,12 +132,11 @@ pub fn find_artifacts(repo_path: &Path) -> Vec<ArtifactInfo> {
         let kind = kind_fn();
 
         // For Python venvs, verify it's actually a venv
-        if kind == ArtifactKind::PythonVenv {
-            if !artifact_path.join("pyvenv.cfg").exists()
-                && !artifact_path.join("bin").join("activate").exists()
-            {
-                continue;
-            }
+        if kind == ArtifactKind::PythonVenv
+            && !artifact_path.join("pyvenv.cfg").exists()
+            && !artifact_path.join("bin").join("activate").exists()
+        {
+            continue;
         }
 
         // For .NET bin/obj, verify it's a .NET project

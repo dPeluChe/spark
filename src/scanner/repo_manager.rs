@@ -259,8 +259,7 @@ pub fn list_managed_repos(root: &Path) -> Vec<ManagedRepo> {
 /// Parse a git URL into (host, owner, repo_name)
 fn parse_git_url(url: &str) -> Result<(String, String, String), String> {
     // Handle SSH: git@github.com:owner/repo.git
-    if url.starts_with("git@") {
-        let rest = &url[4..];
+    if let Some(rest) = url.strip_prefix("git@") {
         let parts: Vec<&str> = rest.splitn(2, ':').collect();
         if parts.len() == 2 {
             let host = parts[0].to_string();

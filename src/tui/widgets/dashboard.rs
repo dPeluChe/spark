@@ -218,12 +218,10 @@ fn render_column(frame: &mut Frame, area: Rect, model: &UpdaterModel, categories
 
     let chunks = Layout::vertical(constraints).split(area);
 
-    let mut chunk_idx = 0;
-    for cat in categories {
-        if cat_heights[categories.iter().position(|c| c == cat).unwrap()] > 0 {
+    for (chunk_idx, cat) in categories.iter().enumerate() {
+        if cat_heights[chunk_idx] > 0 {
             render_category_card(frame, chunks[chunk_idx], model, *cat);
         }
-        chunk_idx += 1;
     }
 }
 

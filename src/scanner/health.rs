@@ -56,7 +56,7 @@ pub fn calculate_health(
         score -= 5;
     }
 
-    let score = score.max(0).min(100) as u8;
+    let score = score.clamp(0, 100) as u8;
     let grade = match score {
         80..=100 => HealthGrade::A,
         60..=79 => HealthGrade::B,
