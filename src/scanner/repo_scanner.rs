@@ -124,16 +124,19 @@ pub async fn scan_directories(
             if entry.file_type().is_dir() && entry.file_name() == ".git" {
                 if let Some(parent) = entry.path().parent() {
                     if let Some(mut repo) = analyze_repo(parent) {
-                        // Group = parent dir of the repo, relative to scan root
+                        // Group = first 2 levels of relative path from scan root
                         let rel = parent.strip_prefix(dir).unwrap_or(parent);
-                        repo.group = if let Some(rel_parent) = rel.parent() {
-                            if rel_parent.as_os_str().is_empty() {
-                                group.clone() // repo is direct child of scan root
-                            } else {
-                                rel_parent.display().to_string()
-                            }
-                        } else {
+                        let components: Vec<String> = rel.components()
+                            .map(|c| c.as_os_str().to_string_lossy().to_string())
+                            .collect();
+
+                        repo.group = if components.len() <= 1 {
+                            // Repo is direct child or 1 level deep
                             group.clone()
+                        } else {
+                            // Use up to 2 parent levels as group
+                            let depth = (components.len() - 1).min(2);
+                            components[..depth].join("/")
                         };
 
                         let _ = tx.send(ScanProgressMsg {

@@ -331,13 +331,8 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
             .filter(|(_, r)| r.group == *group)
             .collect();
 
-        // Group header - in first cell so it's always visible
-        let group_artifact: u64 = group_repos.iter().map(|(_, r)| r.artifact_size).sum();
-        let group_label = if group_artifact > 0 {
-            format!("  {} ({}, {} cleanable)", group, group_repos.len(), format_size(group_artifact))
-        } else {
-            format!("  {} ({})", group, group_repos.len())
-        };
+        // Group header - compact
+        let group_label = format!("  {} ({})", group, group_repos.len());
         rows.push(
             Row::new(vec![
                 Cell::from(Span::styled(group_label, Style::default().fg(CYAN).bold())),
@@ -444,12 +439,12 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
     let table = Table::new(
         scrolled_rows,
         [
-            Constraint::Min(22),
-            Constraint::Length(8),
-            Constraint::Length(12),
-            Constraint::Length(8),
+            Constraint::Percentage(35),
+            Constraint::Length(6),
             Constraint::Length(10),
             Constraint::Length(6),
+            Constraint::Length(10),
+            Constraint::Length(2),
         ],
     )
     .header(header)
