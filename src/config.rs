@@ -72,7 +72,7 @@ impl Default for SparkConfig {
             stale_threshold_days: 90,
             large_artifact_threshold: 100 * 1024 * 1024, // 100MB
             use_trash: true,
-            max_scan_depth: 4,
+            max_scan_depth: 6,
             repos_root: default_repos_root(),
         }
     }
@@ -122,7 +122,7 @@ mod tests {
         assert_eq!(config.stale_threshold_days, 90);
         assert_eq!(config.large_artifact_threshold, 100 * 1024 * 1024);
         assert!(config.use_trash);
-        assert_eq!(config.max_scan_depth, 4);
+        assert_eq!(config.max_scan_depth, 6);
     }
 
     #[test]

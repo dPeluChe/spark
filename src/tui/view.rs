@@ -77,6 +77,7 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, app: &App) {
                 | ScannerState::CleanConfirm
                 | ScannerState::Cleaning
                 | ScannerState::DeleteRepoConfirm
+                | ScannerState::HealthHelp
         );
     let is_repo_mgr = app.mode == AppMode::Scanner
         && matches!(

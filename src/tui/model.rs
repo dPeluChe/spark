@@ -36,6 +36,7 @@ pub enum ScannerState {
     ScanResults,
     RepoDetail,
     CleanConfirm,
+    HealthHelp,
     DeleteRepoConfirm,
     Cleaning,
     PortScan,

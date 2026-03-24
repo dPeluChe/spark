@@ -34,6 +34,10 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
         ScannerState::RepoDetail => {
             super::detail_panel::render_detail(frame, area, model);
         }
+        ScannerState::HealthHelp => {
+            render_scan_results(frame, area, model);
+            render_health_help(frame, area);
+        }
         ScannerState::DeleteRepoConfirm => {
             render_scan_results(frame, area, model);
             render_delete_repo_confirm(frame, area, model);
@@ -425,7 +429,7 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
 
     // Help bar
     let help = Paragraph::new(Span::styled(
-        "[ENTER] Detail • [SPACE] Select • [c] Clean artifacts • [x] Delete repo • [s] Sort • [TAB] Next",
+        "[ENTER] Detail • [c] Clean • [x] Delete • [s] Sort • [?] Health info • [TAB] Next",
         Style::default().fg(GRAY),
     ));
     frame.render_widget(help, chunks[2]);
@@ -449,6 +453,59 @@ fn render_cleaning(frame: &mut Frame, area: Rect, model: &ScannerModel, tick: us
     let paragraph = Paragraph::new(lines)
         .block(Block::default().padding(Padding::new(2, 2, 2, 2)));
     frame.render_widget(paragraph, area);
+}
+
+fn render_health_help(frame: &mut Frame, area: Rect) {
+    let modal_area = center_modal(frame, area, 58, 18);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Thick)
+        .border_style(Style::default().fg(PURPLE))
+        .style(Style::default().bg(MODAL_BG));
+    let inner = block.inner(modal_area);
+    frame.render_widget(block, modal_area);
+
+    let lines = vec![
+        Line::from(Span::styled(" HEALTH SCORE ", Style::default().fg(WHITE).bg(PURPLE).bold())),
+        Line::from(""),
+        Line::from(Span::styled("  Score 0-100 based on:", Style::default().fg(GRAY))),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Recent commits  ", Style::default().fg(WHITE)),
+            Span::styled("up to -30 if >12 months old", Style::default().fg(GRAY)),
+        ]),
+        Line::from(vec![
+            Span::styled("  Has remote      ", Style::default().fg(WHITE)),
+            Span::styled("-15 if no remote configured", Style::default().fg(GRAY)),
+        ]),
+        Line::from(vec![
+            Span::styled("  Clean status    ", Style::default().fg(WHITE)),
+            Span::styled("-10 if dirty + stale", Style::default().fg(GRAY)),
+        ]),
+        Line::from(vec![
+            Span::styled("  Artifact size   ", Style::default().fg(WHITE)),
+            Span::styled("-20 if >100MB of artifacts", Style::default().fg(GRAY)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled("  Grades:", Style::default().fg(YELLOW).bold())),
+        Line::from(vec![
+            Span::styled("  A", Style::default().fg(GREEN).bold()),
+            Span::styled(" 80-100  ", Style::default().fg(GRAY)),
+            Span::styled("B", Style::default().fg(BLUE).bold()),
+            Span::styled(" 60-79   ", Style::default().fg(GRAY)),
+            Span::styled("C", Style::default().fg(YELLOW).bold()),
+            Span::styled(" 40-59", Style::default().fg(GRAY)),
+        ]),
+        Line::from(vec![
+            Span::styled("  D", Style::default().fg(Color::Rgb(255, 165, 0)).bold()),
+            Span::styled(" 20-39   ", Style::default().fg(GRAY)),
+            Span::styled("F", Style::default().fg(RED).bold()),
+            Span::styled("  0-19", Style::default().fg(GRAY)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled("  [q] Close", Style::default().fg(GRAY))),
+    ];
+    frame.render_widget(Paragraph::new(lines), inner);
 }
 
 fn render_delete_repo_confirm(frame: &mut Frame, area: Rect, model: &ScannerModel) {

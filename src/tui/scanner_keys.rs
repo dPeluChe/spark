@@ -177,6 +177,10 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 }
                 None
             }
+            KeyCode::Char('?') | KeyCode::Char('h') => {
+                s.state = ScannerState::HealthHelp;
+                None
+            }
             KeyCode::Char('s') => {
                 s.sort_by = match s.sort_by {
                     SortField::Name => SortField::Health,
@@ -260,6 +264,14 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 if s.repos.get(s.cursor).is_some() {
                     s.state = ScannerState::DeleteRepoConfirm;
                 }
+                None
+            }
+            _ => None,
+        },
+
+        ScannerState::HealthHelp => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter | KeyCode::Char('?') => {
+                s.state = ScannerState::ScanResults;
                 None
             }
             _ => None,
