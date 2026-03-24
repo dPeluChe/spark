@@ -309,11 +309,12 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
     // Build grouped display: group headers + repo rows
     let header = Row::new(vec![
         Cell::from("  Name").style(Style::default().fg(PURPLE).bold()),
-        Cell::from("Health").style(Style::default().fg(PURPLE).bold()),
+        Cell::from("Grade").style(Style::default().fg(PURPLE).bold()),
         Cell::from("Branch").style(Style::default().fg(PURPLE).bold()),
-        Cell::from("Last Commit").style(Style::default().fg(PURPLE).bold()),
-        Cell::from("Artifacts").style(Style::default().fg(PURPLE).bold()),
-        Cell::from("Dirty").style(Style::default().fg(PURPLE).bold()),
+        Cell::from("Commit").style(Style::default().fg(PURPLE).bold()),
+        Cell::from("Size").style(Style::default().fg(PURPLE).bold()),
+        Cell::from("Cleanup").style(Style::default().fg(PURPLE).bold()),
+        Cell::from("").style(Style::default().fg(PURPLE).bold()),
     ]);
 
     // Collect groups in order of appearance
@@ -337,7 +338,7 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
             Row::new(vec![
                 Cell::from(Span::styled(group_label, Style::default().fg(CYAN).bold())),
                 Cell::from(""), Cell::from(""), Cell::from(""),
-                Cell::from(""), Cell::from(""),
+                Cell::from(""), Cell::from(""), Cell::from(""),
             ])
             .style(Style::default().bg(Color::Rgb(25, 25, 35)))
         );
@@ -385,14 +386,30 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
                 Style::default()
             };
 
+            let size_display = if repo.is_container {
+                "-".into()
+            } else if repo.total_size > 0 {
+                format_size(repo.total_size)
+            } else {
+                "-".into()
+            };
+
+            let cleanup_display = if repo.artifact_size > 0 {
+                format_size(repo.artifact_size)
+            } else {
+                "-".into()
+            };
+
             rows.push(Row::new(vec![
                 Cell::from(name_display).style(name_style),
-                Cell::from(if repo.is_container { "-".into() } else { format!("{} {}", repo.health_grade, repo.health_score) })
+                Cell::from(if repo.is_container { "-".into() } else { format!("{}{}", repo.health_grade, repo.health_score) })
                     .style(if repo.is_container { Style::default().fg(GRAY) } else { grade_style }),
                 Cell::from(if repo.is_container { "container".into() } else { repo.branch.clone() })
                     .style(if repo.is_container { Style::default().fg(CYAN) } else { Style::default().fg(PURPLE) }),
                 Cell::from(if repo.is_container { "-".into() } else { last_commit }),
-                Cell::from(if repo.artifact_size > 0 { format_size(repo.artifact_size) } else { "-".into() })
+                Cell::from(size_display)
+                    .style(Style::default().fg(GRAY)),
+                Cell::from(cleanup_display)
                     .style(if repo.artifact_size > 100_000_000 { Style::default().fg(RED) }
                         else if repo.artifact_size > 10_000_000 { Style::default().fg(YELLOW) }
                         else { Style::default() }),
@@ -439,11 +456,12 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
     let table = Table::new(
         scrolled_rows,
         [
-            Constraint::Percentage(35),
-            Constraint::Length(6),
+            Constraint::Percentage(30),
+            Constraint::Length(4),
             Constraint::Length(10),
-            Constraint::Length(6),
-            Constraint::Length(10),
+            Constraint::Length(5),
+            Constraint::Length(8),
+            Constraint::Length(8),
             Constraint::Length(2),
         ],
     )

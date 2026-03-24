@@ -253,8 +253,9 @@ pub fn analyze_repo(path: &std::path::Path) -> Option<RepoInfo> {
     let artifacts = find_artifacts(path);
     let artifact_size: u64 = artifacts.iter().map(|a| a.size).sum();
 
-    // Total size: use artifact_size as approximation to avoid full walk
-    let total_size = artifact_size;
+    // Total size: .git size + artifact size (fast approximation)
+    let git_size = crate::utils::fs::dir_size(&path.join(".git"));
+    let total_size = git_size + artifact_size;
 
     // Last modified
     let last_modified = std::fs::metadata(path).ok().and_then(|m| m.modified().ok());
