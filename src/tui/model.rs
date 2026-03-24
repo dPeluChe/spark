@@ -32,6 +32,7 @@ pub enum ScannerState {
     ScanConfig,
     ScanAddPath,
     Scanning,
+    ContainerLoading,
     ScanResults,
     RepoDetail,
     CleanConfirm,
@@ -120,6 +121,11 @@ pub enum AppMessage {
         message: String,
         /// On success, the cloned repo path for summary
         clone_path: Option<String>,
+    },
+
+    // Container children
+    ContainerChildrenResult {
+        children: Vec<RepoInfo>,
     },
 
     // Discovery
@@ -279,6 +285,10 @@ pub struct ScannerModel {
     pub discovered_dirs: Vec<DiscoveredDir>,
     pub selected_scan_dirs: HashSet<usize>,
     pub path_input: String,
+    /// Cached child repos when viewing a container detail
+    pub container_children: Vec<RepoInfo>,
+    pub container_cursor: usize,
+    pub container_sort: u8,
 }
 
 impl ScannerModel {
@@ -298,6 +308,9 @@ impl ScannerModel {
             discovered_dirs: Vec::new(),
             selected_scan_dirs: HashSet::new(),
             path_input: String::new(),
+            container_children: Vec::new(),
+            container_cursor: 0,
+            container_sort: 0,
         }
     }
 

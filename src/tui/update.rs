@@ -34,6 +34,8 @@ pub enum Action {
     CloneRepo(String),
     /// Open a directory in the system file manager / terminal
     OpenDir(std::path::PathBuf),
+    /// Load container children in background
+    LoadContainerChildren(std::path::PathBuf),
 }
 
 /// Handle a key event and return optional action
@@ -59,7 +61,8 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Option<Action> {
         && app.updater.state == UpdaterState::Search;
     let in_blocking = (app.mode == AppMode::Updater && app.updater.state == UpdaterState::Updating)
         || (app.mode == AppMode::Scanner && app.scanner.state == ScannerState::Scanning)
-        || (app.mode == AppMode::Scanner && app.scanner.state == ScannerState::Cleaning);
+        || (app.mode == AppMode::Scanner && app.scanner.state == ScannerState::Cleaning)
+        || (app.mode == AppMode::Scanner && app.scanner.state == ScannerState::ContainerLoading);
 
     if key.code == KeyCode::Tab && !in_text_input && !in_search && !in_blocking {
         // Cycle: Scanner -> Repos -> Ports -> Updater -> Scanner
@@ -354,6 +357,13 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
             } else {
                 app.show_toast(format!("Clone failed: {}", message), true);
                 app.repo_manager.clone_error = Some(message);
+            }
+        }
+        AppMessage::ContainerChildrenResult { children } => {
+            app.scanner.container_children = children;
+            app.scanner.container_cursor = 0;
+            if app.scanner.state == ScannerState::ContainerLoading {
+                app.scanner.state = ScannerState::RepoDetail;
             }
         }
         AppMessage::DiscoveredDirs { dirs } => {

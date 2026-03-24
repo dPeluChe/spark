@@ -109,6 +109,14 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
             _ => None,
         },
 
+        ScannerState::ContainerLoading => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                s.state = ScannerState::ScanResults;
+                None
+            }
+            _ => None,
+        },
+
         ScannerState::Scanning => match key.code {
             KeyCode::Esc | KeyCode::Char('q') => {
                 s.state = ScannerState::ScanConfig;
@@ -140,7 +148,15 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 None
             }
             KeyCode::Enter => {
-                if !s.repos.is_empty() { s.state = ScannerState::RepoDetail; }
+                if let Some(repo) = s.repos.get(s.cursor) {
+                    if repo.is_container {
+                        s.container_children.clear();
+                        s.container_cursor = 0;
+                        s.state = ScannerState::ContainerLoading;
+                        return Some(Action::LoadContainerChildren(repo.path.clone()));
+                    }
+                    s.state = ScannerState::RepoDetail;
+                }
                 None
             }
             KeyCode::Char('c') => {
@@ -186,26 +202,47 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 s.state = ScannerState::ScanResults;
                 None
             }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if s.container_cursor > 0 { s.container_cursor -= 1; }
+                None
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if !s.container_children.is_empty()
+                    && s.container_cursor < s.container_children.len().saturating_sub(1)
+                {
+                    s.container_cursor += 1;
+                }
+                None
+            }
+            KeyCode::Char('s') => {
+                s.container_sort = (s.container_sort + 1) % 4;
+                let sort = s.container_sort;
+                s.container_children.sort_by(|a, b| match sort {
+                    0 => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                    1 => a.health_score.cmp(&b.health_score),
+                    2 => b.last_commit_date.cmp(&a.last_commit_date),
+                    _ => b.artifact_size.cmp(&a.artifact_size),
+                });
+                s.container_cursor = 0;
+                let label = match sort { 0 => "name", 1 => "health", 2 => "recent", _ => "size" };
+                app.show_toast(format!("Sorted by {}", label), false);
+                None
+            }
             KeyCode::Char('a') => {
-                // Add this repo's path as a scan directory
-                let info = s.repos.get(s.cursor).map(|r| (r.path.clone(), r.name.clone()));
-                if let Some((path, name)) = info {
-                    let repo_count = crate::scanner::repo_scanner::count_repos_in(&path);
+                // Add this repo's path as a scan directory (stay in detail)
+                let info = s.repos.get(s.cursor).map(|r| (r.path.clone(), r.name.clone(), r.child_repo_count));
+                if let Some((path, name, child_count)) = info {
                     let already = s.discovered_dirs.iter().any(|d| d.path == path);
                     if !already {
                         let idx = s.discovered_dirs.len();
                         s.discovered_dirs.push(crate::scanner::repo_scanner::DiscoveredDir {
-                            path, repo_count,
+                            path, repo_count: child_count,
                         });
                         s.selected_scan_dirs.insert(idx);
-                        s.state = ScannerState::ScanConfig;
-                        app.show_toast(format!("Added {} ({} repos inside)", name, repo_count), false);
+                        app.show_toast(format!("Added {} to scan paths ({} repos)", name, child_count), false);
                     } else {
-                        s.state = ScannerState::ScanConfig;
                         app.show_toast(format!("{} already in scan paths", name), false);
                     }
-                } else {
-                    s.state = ScannerState::ScanConfig;
                 }
                 None
             }

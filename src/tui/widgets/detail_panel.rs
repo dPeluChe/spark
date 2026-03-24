@@ -12,16 +12,18 @@ pub fn render_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) {
     let repo = &model.repos[model.cursor];
 
     if repo.is_container {
-        render_container_detail(frame, area, repo);
+        render_container_detail(frame, area, model);
     } else {
         render_repo_detail(frame, area, repo);
     }
 }
 
-fn render_container_detail(frame: &mut Frame, area: Rect, repo: &crate::scanner::repo_scanner::RepoInfo) {
+fn render_container_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) {
+    let repo = &model.repos[model.cursor];
+
     let chunks = Layout::vertical([
         Constraint::Length(3),  // header
-        Constraint::Min(5),    // child repo list
+        Constraint::Min(5),    // child repo table
         Constraint::Length(1), // help
     ])
     .split(area);
@@ -34,7 +36,8 @@ fn render_container_detail(frame: &mut Frame, area: Rect, repo: &crate::scanner:
         path_str
     };
 
-    // Header
+    let total_artifacts: u64 = model.container_children.iter().map(|r| r.artifact_size).sum();
+
     let header = Paragraph::new(vec![
         Line::from(vec![
             Span::styled(
@@ -43,63 +46,111 @@ fn render_container_detail(frame: &mut Frame, area: Rect, repo: &crate::scanner:
             ),
             Span::raw("  "),
             Span::styled(
-                format!("Container — {} repos inside", repo.child_repo_count),
-                Style::default().fg(CYAN).bold(),
+                format!("{} repos", model.container_children.len()),
+                Style::default().fg(WHITE),
             ),
+            if total_artifacts > 0 {
+                Span::styled(
+                    format!("  {} cleanable", format_size(total_artifacts)),
+                    Style::default().fg(YELLOW).bold(),
+                )
+            } else {
+                Span::raw("")
+            },
         ]),
         Line::from(Span::styled(short, Style::default().fg(GRAY))),
     ]);
     frame.render_widget(header, chunks[0]);
 
-    // List child repos by scanning child dirs that have .git
-    let mut lines = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&repo.path) {
-        let mut children: Vec<(String, bool)> = entries
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().is_dir())
-            .map(|e| {
-                let name = e.file_name().to_string_lossy().to_string();
-                let has_git = e.path().join(".git").exists();
-                (name, has_git)
-            })
-            .filter(|(name, _)| !name.starts_with('.'))
-            .collect();
-        children.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+    // Child repo table with scroll
+    let visible_height = chunks[1].height.saturating_sub(3) as usize; // borders + header
+    let scroll_offset = if model.container_cursor >= visible_height {
+        model.container_cursor - visible_height + 1
+    } else {
+        0
+    };
 
-        for (name, has_git) in &children {
-            if *has_git {
-                lines.push(Line::from(vec![
-                    Span::styled("    ", Style::default()),
-                    Span::styled(format!("{:<30}", name), Style::default().fg(WHITE)),
-                    Span::styled("repo", Style::default().fg(GREEN)),
-                ]));
-            }
-        }
+    let table_header = Row::new(vec![
+        Cell::from("  Name").style(Style::default().fg(CYAN).bold()),
+        Cell::from("Grade").style(Style::default().fg(CYAN).bold()),
+        Cell::from("Branch").style(Style::default().fg(CYAN).bold()),
+        Cell::from("Commit").style(Style::default().fg(CYAN).bold()),
+        Cell::from("Artifacts").style(Style::default().fg(CYAN).bold()),
+        Cell::from("").style(Style::default().fg(CYAN).bold()),
+    ]);
 
-        // Show non-repo dirs too but dimmed
-        let non_repo_count = children.iter().filter(|(_, g)| !g).count();
-        if non_repo_count > 0 {
-            lines.push(Line::from(""));
-            lines.push(Line::from(Span::styled(
-                format!("    + {} other folders", non_repo_count),
-                Style::default().fg(TERM_GRAY),
-            )));
-        }
-    }
+    let rows: Vec<Row> = model.container_children.iter().enumerate()
+        .skip(scroll_offset)
+        .map(|(i, child)| {
+            let is_selected = model.container_cursor == i;
+            let grade_style = health_grade_style(&child.health_grade);
 
-    let list = Paragraph::new(lines).block(
+            let last_commit = child.last_commit_date
+                .map(|d| {
+                    let days = (chrono::Utc::now() - d).num_days();
+                    if days < 1 { "today".into() }
+                    else if days < 30 { format!("{}d", days) }
+                    else if days < 365 { format!("{}mo", days / 30) }
+                    else { format!("{}y", days / 365) }
+                })
+                .unwrap_or_else(|| "-".into());
+
+            let cursor = if is_selected { ">" } else { " " };
+            let dirty = if child.is_dirty { "●" } else { "" };
+            let ws = if child.workspace != crate::scanner::repo_scanner::WorkspaceType::None {
+                format!(" [{}]", child.workspace)
+            } else {
+                String::new()
+            };
+
+            Row::new(vec![
+                Cell::from(format!("{} {}{}", cursor, child.name, ws)),
+                Cell::from(format!("{}{}", child.health_grade, child.health_score))
+                    .style(grade_style),
+                Cell::from(child.branch.clone())
+                    .style(Style::default().fg(PURPLE)),
+                Cell::from(last_commit),
+                Cell::from(if child.artifact_size > 0 { format_size(child.artifact_size) } else { "-".into() })
+                    .style(if child.artifact_size > 100_000_000 { Style::default().fg(RED) }
+                        else if child.artifact_size > 10_000_000 { Style::default().fg(YELLOW) }
+                        else { Style::default() }),
+                Cell::from(dirty).style(Style::default().fg(YELLOW)),
+            ]).style(if is_selected { Style::default().bg(DARK_BG) } else { Style::default() })
+        }).collect();
+
+    let scroll_info = format!(
+        " {}/{} ",
+        model.container_cursor + 1,
+        model.container_children.len()
+    );
+
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Min(18),
+            Constraint::Length(5),
+            Constraint::Length(10),
+            Constraint::Length(6),
+            Constraint::Length(10),
+            Constraint::Length(2),
+        ],
+    )
+    .header(table_header)
+    .block(
         Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(CYAN))
-            .title(Span::styled(" Contents ", Style::default().fg(CYAN).bold())),
+            .title(Span::styled(" Repos ", Style::default().fg(CYAN).bold()))
+            .title_bottom(Span::styled(scroll_info, Style::default().fg(GRAY))),
     );
-    frame.render_widget(list, chunks[1]);
+    frame.render_widget(table, chunks[1]);
 
-    // Help
     let help = Paragraph::new(Line::from(vec![
+        Span::styled("[s] ", Style::default().fg(PURPLE).bold()),
+        Span::styled("Sort  ", Style::default().fg(GRAY)),
         Span::styled("[a] ", Style::default().fg(GREEN).bold()),
-        Span::styled(format!("Add to scan paths ({} repos)  ", repo.child_repo_count), Style::default().fg(GRAY)),
+        Span::styled("Add to scan  ", Style::default().fg(GRAY)),
         Span::styled("[q] ", Style::default().fg(GRAY).bold()),
         Span::styled("Back", Style::default().fg(GRAY)),
     ]));
@@ -151,8 +202,9 @@ fn render_repo_detail(frame: &mut Frame, area: Rect, repo: &crate::scanner::repo
 
     let remote_info = repo.remote_url.as_deref().unwrap_or("No remote");
     let git_status_text = if repo.is_dirty { "Dirty" } else { "Clean" };
+    let ws_type = &repo.workspace;
 
-    let info = Paragraph::new(vec![
+    let mut info_lines = vec![
         Line::from(vec![
             Span::styled("  Branch:  ", Style::default().fg(PURPLE)),
             Span::styled(&repo.branch, Style::default().fg(WHITE)),
@@ -169,7 +221,16 @@ fn render_repo_detail(frame: &mut Frame, area: Rect, repo: &crate::scanner::repo
             Span::styled("  Status:  ", Style::default().fg(PURPLE)),
             Span::styled(git_status_text, Style::default().fg(if repo.is_dirty { YELLOW } else { GREEN })),
         ]),
-    ]).block(
+    ];
+
+    if *ws_type != crate::scanner::repo_scanner::WorkspaceType::None {
+        info_lines.push(Line::from(vec![
+            Span::styled("  Type:    ", Style::default().fg(PURPLE)),
+            Span::styled(format!("{}", ws_type), Style::default().fg(CYAN).bold()),
+        ]));
+    }
+
+    let info = Paragraph::new(info_lines).block(
         Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)

@@ -15,6 +15,34 @@ pub enum RepoGitStatus {
     NotARepo,
 }
 
+/// Detected workspace type
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorkspaceType {
+    None,
+    Npm,        // package.json with "workspaces"
+    Pnpm,       // pnpm-workspace.yaml
+    Turborepo,  // turbo.json
+    Nx,         // nx.json
+    Lerna,      // lerna.json
+    Cargo,      // Cargo.toml with [workspace]
+    GoWork,     // go.work
+}
+
+impl std::fmt::Display for WorkspaceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WorkspaceType::None => write!(f, ""),
+            WorkspaceType::Npm => write!(f, "npm workspace"),
+            WorkspaceType::Pnpm => write!(f, "pnpm workspace"),
+            WorkspaceType::Turborepo => write!(f, "turborepo"),
+            WorkspaceType::Nx => write!(f, "nx"),
+            WorkspaceType::Lerna => write!(f, "lerna"),
+            WorkspaceType::Cargo => write!(f, "cargo workspace"),
+            WorkspaceType::GoWork => write!(f, "go workspace"),
+        }
+    }
+}
+
 /// Full information about a discovered repository
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -24,6 +52,7 @@ pub struct RepoInfo {
     pub group: String,
     pub is_container: bool,
     pub child_repo_count: usize,
+    pub workspace: WorkspaceType,
     pub last_commit_date: Option<DateTime<Utc>>,
     pub last_modified: Option<std::time::SystemTime>,
     pub total_size: u64,
@@ -232,7 +261,10 @@ pub fn analyze_repo(path: &std::path::Path) -> Option<RepoInfo> {
 
     // Detect if this is a container (has child repos)
     let child_count = count_git_repos(path, 2);
-    let is_container = child_count > 1; // >1 because count includes itself
+    let is_container = child_count > 1;
+
+    // Detect workspace type
+    let workspace = detect_workspace(path);
 
     Some(RepoInfo {
         path: path.to_path_buf(),
@@ -240,6 +272,7 @@ pub fn analyze_repo(path: &std::path::Path) -> Option<RepoInfo> {
         group: String::new(), // set by scan_directories
         is_container,
         child_repo_count: if is_container { child_count - 1 } else { 0 },
+        workspace,
         last_commit_date,
         last_modified,
         total_size,
@@ -254,6 +287,65 @@ pub fn analyze_repo(path: &std::path::Path) -> Option<RepoInfo> {
         health_score,
         health_grade,
     })
+}
+
+/// Detect workspace type from project files
+fn detect_workspace(path: &std::path::Path) -> WorkspaceType {
+    // Turborepo
+    if path.join("turbo.json").exists() {
+        return WorkspaceType::Turborepo;
+    }
+    // Nx
+    if path.join("nx.json").exists() {
+        return WorkspaceType::Nx;
+    }
+    // Lerna
+    if path.join("lerna.json").exists() {
+        return WorkspaceType::Lerna;
+    }
+    // pnpm workspace
+    if path.join("pnpm-workspace.yaml").exists() {
+        return WorkspaceType::Pnpm;
+    }
+    // npm workspace (check package.json for "workspaces" field)
+    if let Ok(content) = std::fs::read_to_string(path.join("package.json")) {
+        if content.contains("\"workspaces\"") {
+            return WorkspaceType::Npm;
+        }
+    }
+    // Cargo workspace
+    if let Ok(content) = std::fs::read_to_string(path.join("Cargo.toml")) {
+        if content.contains("[workspace]") {
+            return WorkspaceType::Cargo;
+        }
+    }
+    // Go workspace
+    if path.join("go.work").exists() {
+        return WorkspaceType::GoWork;
+    }
+    WorkspaceType::None
+}
+
+/// Quick scan of direct child repos in a container (for detail view)
+pub fn scan_container_children(container_path: &std::path::Path) -> Vec<RepoInfo> {
+    let mut children = Vec::new();
+    let entries = match std::fs::read_dir(container_path) {
+        Ok(e) => e,
+        Err(_) => return children,
+    };
+
+    for entry in entries.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if !path.is_dir() || !path.join(".git").exists() {
+            continue;
+        }
+        if let Some(repo) = analyze_repo(&path) {
+            children.push(repo);
+        }
+    }
+
+    children.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    children
 }
 
 /// Directories to always skip when discovering project dirs

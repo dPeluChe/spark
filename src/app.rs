@@ -243,6 +243,15 @@ pub async fn run(
                                 });
                             });
                         }
+                        Action::LoadContainerChildren(path) => {
+                            let tx2 = tx.clone();
+                            tokio::spawn(async move {
+                                let children = tokio::task::spawn_blocking(move || {
+                                    crate::scanner::repo_scanner::scan_container_children(&path)
+                                }).await.unwrap_or_default();
+                                let _ = tx2.send(AppMessage::ContainerChildrenResult { children });
+                            });
+                        }
                         Action::OpenDir(path) => {
                             let cmd = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
                             let name = path.file_name()

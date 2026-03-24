@@ -13,6 +13,22 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
             render_scan_config(frame, area, model);
             render_add_path_modal(frame, area, model);
         }
+        ScannerState::ContainerLoading => {
+            let repo_name = model.repos.get(model.cursor)
+                .map(|r| r.name.as_str()).unwrap_or("...");
+            let spinner = SPINNER_FRAMES[tick % SPINNER_FRAMES.len()];
+            let loading = Paragraph::new(vec![
+                Line::from(""),
+                Line::from(""),
+                Line::from(Span::styled(
+                    format!("{} Loading repos in {}...", spinner, repo_name),
+                    Style::default().fg(CYAN).bold(),
+                )),
+                Line::from(""),
+                Line::from(Span::styled("  [ESC] Cancel", Style::default().fg(GRAY))),
+            ]).alignment(Alignment::Center);
+            frame.render_widget(loading, area);
+        }
         ScannerState::Scanning => render_scanning(frame, area, model, tick),
         ScannerState::ScanResults => render_scan_results(frame, area, model),
         ScannerState::RepoDetail => {
@@ -353,12 +369,14 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
                 Style::default()
             };
 
-            // Container repos get a special display
-            let name_display = if repo.is_container {
-                format!("{} [{}] {} ({} repos inside)", cursor, checkbox, repo.name, repo.child_repo_count)
-            } else {
-                format!("{} [{}] {}", cursor, checkbox, repo.name)
-            };
+            // Build name with workspace/container tags
+            let mut name_display = format!("{} [{}] {}", cursor, checkbox, repo.name);
+            if repo.is_container {
+                name_display.push_str(&format!(" ({} repos)", repo.child_repo_count));
+            }
+            if repo.workspace != crate::scanner::repo_scanner::WorkspaceType::None {
+                name_display.push_str(&format!(" [{}]", repo.workspace));
+            }
 
             let name_style = if repo.is_container {
                 Style::default().fg(CYAN).italic()
