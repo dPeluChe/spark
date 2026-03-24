@@ -347,6 +347,12 @@ fn cache_path() -> PathBuf {
         .join("repo_status_cache.json")
 }
 
+/// Clear the status cache (forces fresh fetch on next check)
+pub fn clear_status_cache() {
+    let path = cache_path();
+    let _ = std::fs::remove_file(path);
+}
+
 /// Load cached statuses. Returns map of repo_path -> (status_string, timestamp)
 pub fn load_status_cache() -> std::collections::HashMap<String, (String, u64)> {
     let path = cache_path();

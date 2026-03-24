@@ -1,0 +1,47 @@
+{
+  "name": "@dpeluche/spark",
+  "version": "0.8.0",
+  "description": "SPARK — Developer Operations Platform. Manage repos, scan health, clean artifacts, monitor ports, update dev tools.",
+  "bin": {
+    "spark": "bin/spark"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "keywords": [
+    "devops",
+    "tui",
+    "git",
+    "scanner",
+    "cleanup",
+    "docker",
+    "developer-tools",
+    "ghq",
+    "port-scanner",
+    "system-maintenance"
+  ],
+  "author": "dPeluChe",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dPeluChe/labs-spark"
+  },
+  "homepage": "https://github.com/dPeluChe/labs-spark#readme",
+  "engines": {
+    "node": ">=16"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "files": [
+    "bin/",
+    "install.js",
+    "README.md",
+    "LICENSE"
+  ]
+}

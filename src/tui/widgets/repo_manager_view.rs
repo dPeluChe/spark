@@ -4,6 +4,7 @@ use crate::tui::model::*;
 use crate::tui::styles::*;
 use crate::scanner::repo_manager::RepoStatus;
 use crate::utils::fs::format_size;
+use chrono;
 
 /// Render the repo manager view
 pub fn render_repo_manager(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
@@ -27,40 +28,61 @@ fn render_header(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
         .count();
 
     let dirty_count = model.repos.iter().filter(|r| r.status == RepoStatus::Dirty).count();
+    let checking_count = model.repos.iter().filter(|r| r.status == RepoStatus::Checking).count();
 
-    let header = Paragraph::new(vec![
+    // Get last check time from cache file
+    let cache_path = dirs::config_dir()
+        .unwrap_or_default()
+        .join("spark")
+        .join("repo_status_cache.json");
+    let last_check = std::fs::metadata(&cache_path)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| {
+            let ts = d.as_secs() as i64;
+            let dt = chrono::DateTime::from_timestamp(ts, 0).unwrap_or_default();
+            let local: chrono::DateTime<chrono::Local> = dt.into();
+            local.format("%b %d, %H:%M").to_string()
+        });
+
+    let home = std::env::var("HOME").unwrap_or_default();
+    let root_str = model.root.display().to_string();
+    let root_short = if root_str.starts_with(&home) {
+        format!("~{}", &root_str[home.len()..])
+    } else {
+        root_str
+    };
+
+    let header_lines = vec![
         Line::from(vec![
             Span::styled(
-                " 📦 REPO MANAGER ",
+                " REPO MANAGER ",
                 Style::default().fg(WHITE).bg(GREEN).bold(),
             ),
             Span::raw("  "),
-            Span::styled(
-                format!("{} repos", model.repos.len()),
-                Style::default().fg(GRAY),
-            ),
+            Span::styled(format!("{} repos", model.repos.len()), Style::default().fg(GRAY)),
             if behind_count > 0 {
-                Span::styled(
-                    format!("  {} need pull", behind_count),
-                    Style::default().fg(YELLOW).bold(),
-                )
-            } else {
-                Span::raw("")
-            },
+                Span::styled(format!("  {} need pull", behind_count), Style::default().fg(YELLOW).bold())
+            } else { Span::raw("") },
             if dirty_count > 0 {
-                Span::styled(
-                    format!("  {} dirty", dirty_count),
-                    Style::default().fg(RED),
-                )
+                Span::styled(format!("  {} dirty", dirty_count), Style::default().fg(RED))
+            } else { Span::raw("") },
+            if checking_count > 0 {
+                Span::styled(format!("  {} checking...", checking_count), Style::default().fg(GRAY).italic())
+            } else { Span::raw("") },
+        ]),
+        Line::from(vec![
+            Span::styled(format!("Root: {}", root_short), Style::default().fg(GRAY)),
+            if let Some(ref ts) = last_check {
+                Span::styled(format!("  Last check: {}", ts), Style::default().fg(TERM_GRAY))
             } else {
                 Span::raw("")
             },
         ]),
-        Line::from(Span::styled(
-            format!("Root: {}", model.root.display()),
-            Style::default().fg(GRAY),
-        )),
-    ]);
+    ];
+
+    let header = Paragraph::new(header_lines);
     frame.render_widget(header, area);
 }
 

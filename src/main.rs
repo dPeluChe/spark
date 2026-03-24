@@ -8,7 +8,7 @@ mod utils;
 
 use std::io;
 use std::path::PathBuf;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -75,6 +75,28 @@ enum Commands {
     Rm {
         /// Repository path, name, or owner/name
         query: String,
+    },
+    /// Search repos and print matching paths (for AI agents and scripts)
+    Search {
+        /// Search query (matches repo name, owner, or host)
+        query: String,
+        /// Print only the first match
+        #[arg(short = '1', long = "first")]
+        first: bool,
+    },
+    /// Print path to a repo (use with: cd "$(spark cd <name>)")
+    Cd {
+        /// Repo name to find
+        query: String,
+    },
+    /// Initialize spark: setup shell integration and config
+    Init,
+    /// Show agent integration tips
+    Agent,
+    /// Generate shell completions (zsh, bash, fish)
+    Completions {
+        /// Shell type
+        shell: clap_complete::Shell,
     },
     /// Show or update spark configuration
     Config {
@@ -274,6 +296,197 @@ fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_eyre
             } else {
                 println!("  Cancelled");
             }
+        }
+
+        Commands::Search { query, first } => {
+            let repos = scanner::repo_manager::list_managed_repos(&config.repos_root);
+            let q = query.to_lowercase();
+            let matches: Vec<_> = repos.iter().filter(|r| {
+                r.name.to_lowercase().contains(&q)
+                    || r.owner.to_lowercase().contains(&q)
+                    || r.host.to_lowercase().contains(&q)
+            }).collect();
+
+            if matches.is_empty() {
+                eprintln!("  No repos matching '{}'", query);
+                std::process::exit(1);
+            }
+
+            if first {
+                println!("{}", matches[0].path.display());
+            } else {
+                for repo in &matches {
+                    println!("{}", repo.path.display());
+                }
+            }
+        }
+
+        Commands::Init => {
+            println!("  Spark Init — Setting up your environment\n");
+
+            // 1. Detect shell
+            let shell = std::env::var("SHELL").unwrap_or_default();
+            let rc_file = if shell.contains("zsh") {
+                dirs::home_dir().unwrap_or_default().join(".zshrc")
+            } else if shell.contains("bash") {
+                dirs::home_dir().unwrap_or_default().join(".bashrc")
+            } else {
+                dirs::home_dir().unwrap_or_default().join(".profile")
+            };
+            println!("  Shell: {}", shell);
+            println!("  Config: {}\n", rc_file.display());
+
+            // 2. Check what's already configured
+            let rc_content = std::fs::read_to_string(&rc_file).unwrap_or_default();
+            let has_spark_cd = rc_content.contains("spark-cd");
+            let _has_spark_path = std::env::var("PATH").unwrap_or_default()
+                .contains("spark");
+
+            // 3. Build the block to add
+            let spark_block = r#"
+# --- Spark DevOps Platform ---
+# Navigate to managed repos
+spark-cd() { cd "$(spark cd "$1")" ; }
+# --- End Spark ---"#;
+
+            if has_spark_cd {
+                println!("  [✓] spark-cd already configured");
+            } else {
+                print!("  Add spark-cd to {}? (y/N): ", rc_file.display());
+                io::Write::flush(&mut io::stdout())?;
+                let mut answer = String::new();
+                io::stdin().read_line(&mut answer)?;
+
+                if answer.trim().to_lowercase() == "y" {
+                    use std::io::Write;
+                    let mut f = std::fs::OpenOptions::new()
+                        .append(true)
+                        .open(&rc_file)?;
+                    writeln!(f, "{}", spark_block)?;
+                    println!("  [✓] Added spark-cd to {}", rc_file.display());
+                } else {
+                    println!("  [—] Skipped");
+                }
+            }
+
+            // 4. Create config dir and default whitelist
+            let config_dir = dirs::config_dir().unwrap_or_default().join("spark");
+            std::fs::create_dir_all(&config_dir)?;
+
+            let whitelist_path = config_dir.join("whitelist.txt");
+            if !whitelist_path.exists() {
+                std::fs::write(&whitelist_path,
+                    "# Spark whitelist — paths listed here will be skipped during system cleanup\n\
+                     # One path per line. Use ~ for home directory.\n\
+                     # Example:\n\
+                     # ~/Library/Caches/important-app\n\
+                     # ~/.cargo/registry\n"
+                )?;
+                println!("  [✓] Created {}", whitelist_path.display());
+            } else {
+                println!("  [✓] Whitelist already exists");
+            }
+
+            // 5. Install shell completions
+            let home = dirs::home_dir().unwrap_or_default();
+            let shell_name = shell.rsplit('/').next().unwrap_or("");
+            match shell_name {
+                "zsh" => {
+                    let comp_dir = home.join(".zsh/completions");
+                    let _ = std::fs::create_dir_all(&comp_dir);
+                    let comp_file = comp_dir.join("_spark");
+                    if !comp_file.exists() {
+                        let mut buf = Vec::new();
+                        clap_complete::generate(
+                            clap_complete::Shell::Zsh,
+                            &mut Cli::command(),
+                            "spark",
+                            &mut buf,
+                        );
+                        let _ = std::fs::write(&comp_file, buf);
+                        println!("  [✓] Installed zsh completions");
+                    } else {
+                        println!("  [✓] Zsh completions already installed");
+                    }
+                }
+                "bash" => {
+                    let comp_dir = home.join(".local/share/bash-completion/completions");
+                    let _ = std::fs::create_dir_all(&comp_dir);
+                    let comp_file = comp_dir.join("spark");
+                    if !comp_file.exists() {
+                        let mut buf = Vec::new();
+                        clap_complete::generate(
+                            clap_complete::Shell::Bash,
+                            &mut Cli::command(),
+                            "spark",
+                            &mut buf,
+                        );
+                        let _ = std::fs::write(&comp_file, buf);
+                        println!("  [✓] Installed bash completions");
+                    } else {
+                        println!("  [✓] Bash completions already installed");
+                    }
+                }
+                _ => {}
+            }
+
+            // 6. Show summary
+            println!("\n  Setup complete!\n");
+            println!("  Repos root:  {}", config.repos_root.display());
+            println!("  Config:      {}", config_dir.display());
+            println!("  Whitelist:   {}", whitelist_path.display());
+            println!("\n  Run `source {}` to activate, then:", rc_file.display());
+            println!("    spark-cd <repo>    Navigate to a repo");
+            println!("    spark              Open the TUI");
+            println!("    spark clone <url>  Clone a repo");
+            println!("    spark agent        Integration tips for AI agents");
+        }
+
+        Commands::Cd { query } => {
+            let repos = scanner::repo_manager::list_managed_repos(&config.repos_root);
+            let q = query.to_lowercase();
+            // Exact name match first, then partial
+            let exact = repos.iter().find(|r| r.name.to_lowercase() == q);
+            let found = exact.or_else(|| repos.iter().find(|r|
+                r.name.to_lowercase().contains(&q)
+            ));
+
+            match found {
+                Some(repo) => println!("{}", repo.path.display()),
+                None => {
+                    eprintln!("  No repo matching '{}'", query);
+                    std::process::exit(1);
+                }
+            }
+        }
+
+        Commands::Agent => {
+            let root = config.repos_root.display();
+            println!("  Spark Repo Manager — Agent Integration\n");
+            println!("  Your repos live at: {}\n", root);
+            println!("  For AI agents (Claude Code, Cursor, Codex):\n");
+            println!("  1. Tell your agent:");
+            println!("     \"Repos managed by spark. Run `spark cd <name>` to find paths.\"\n");
+            println!("  2. Add to CLAUDE.md or .cursorrules:");
+            println!("     Repos root: {}", root);
+            println!("     Find repo: spark cd <name>\n");
+            println!("  3. Shell function (add to ~/.zshrc):");
+            println!("     spark-cd() {{ cd \"$(spark cd \"$1\")\" ; }}\n");
+            println!("  4. Commands:");
+            println!("     spark cd zed           # Print path to zed repo");
+            println!("     spark search zed       # Search all matching repos");
+            println!("     spark list -p           # All repo paths");
+            println!("     spark clone user/repo  # Clone to managed root");
+            println!("     spark root             # Show repos root path");
+        }
+
+        Commands::Completions { shell } => {
+            clap_complete::generate(
+                shell,
+                &mut Cli::command(),
+                "spark",
+                &mut io::stdout(),
+            );
         }
 
         Commands::Config { key, set } => {

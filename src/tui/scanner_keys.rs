@@ -549,6 +549,8 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                     None
                 }
                 KeyCode::Char('r') | KeyCode::Char('R') => {
+                    // Clear cache to force fresh fetch
+                    crate::scanner::repo_manager::clear_status_cache();
                     Some(Action::ListManagedRepos)
                 }
                 KeyCode::Char('c') | KeyCode::Char('C') => {

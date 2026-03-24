@@ -6,123 +6,116 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **SPARK** is a **Rust-based developer operations platform** delivered as a TUI.
 
-It evolved through four generations: Bash scripts (v0.4) -> Go/Bubble Tea TUI (v0.5-v0.6) -> Rust/Ratatui (v0.7) -> DevOps Platform (v0.8). The active codebase is 100% Rust.
+The active codebase is 100% Rust. It manages repos, scans health, cleans artifacts, monitors ports, cleans system caches, and updates dev tools.
 
-### Four Core Modules
+### Five Core Modules
 
-1. **Updater**: Manages updates for 44+ developer tools (AI tools, IDEs, Infrastructure, Runtimes)
-2. **Scanner**: Discovers, health-scores, and cleans stale git repos and build artifacts
-3. **Repo Manager**: ghq-style repository organizer -- clone, pull, track status across all repos
-4. **Port Scanner**: Discovers and kills development servers running on local ports
+1. **Scanner**: Discovers, health-scores, and cleans stale git repos and build artifacts
+2. **Repo Manager**: ghq-style repository organizer — clone, pull, track status across all repos
+3. **Port Scanner**: Discovers and kills development servers running on local ports
+4. **System Cleanup**: Docker, dev caches (brew/npm/pip/cargo), VMs, logs — with safety guards
+5. **Updater**: Manages updates for 44+ developer tools (AI tools, IDEs, Infrastructure, Runtimes)
+
+### CLI Commands
+
+```bash
+spark                      # TUI
+spark init                 # Setup shell + completions
+spark clone <url>          # Clone (ghq-compatible)
+spark cd <name>            # Find repo path
+spark search <query>       # Search repos
+spark list [-p] [query]    # List repos
+spark root [--set]         # Show/change root
+spark rm <query>           # Remove repo
+spark config               # Show/update config
+spark agent                # AI agent tips
+spark completions <shell>  # Shell completions
+```
 
 ## Architecture (Rust + Ratatui + tokio)
 
 ```
 src/
-├── main.rs                    # Entry point, terminal setup, tokio runtime
-├── app.rs                     # Event loop, background task dispatch via mpsc channels
-├── config.rs                  # SparkConfig loaded from ~/.config/spark/config.toml
+├── main.rs                    # Entry point, CLI (clap), terminal setup
+├── app.rs                     # Event loop, action dispatch via mpsc channels
+├── config.rs                  # SparkConfig + ghq root detection
 ├── core/
-│   ├── types.rs               # Tool, ToolState, Category, UpdateMethod, ToolStatus enums
-│   ├── inventory.rs           # 44+ tools catalog with auto-assigned IDs
-│   └── changelogs.rs          # Changelog URL mappings with heuristic fallbacks
+│   ├── types.rs               # Tool, ToolState, Category, UpdateMethod enums
+│   ├── inventory.rs           # 44+ tools catalog
+│   └── changelogs.rs          # Changelog URL mappings
 ├── updater/
-│   ├── detector.rs            # Version detection (brew, npm, CLI, macOS apps) with async cache
-│   ├── version.rs             # Regex-based version parsing + tool-specific parsers
-│   └── executor.rs            # Update execution (brew upgrade, npm install -g, curl|sh)
+│   ├── detector.rs            # Version detection (brew, npm, CLI, macOS apps)
+│   ├── version.rs             # Regex-based version parsing
+│   └── executor.rs            # Update execution
 ├── scanner/
-│   ├── repo_scanner.rs        # Git repo discovery via walkdir + analysis via git2
-│   ├── space_analyzer.rs      # Artifact detection (node_modules, venvs, target/, etc.)
+│   ├── repo_scanner.rs        # Git repo discovery + analysis via git2
+│   ├── space_analyzer.rs      # Artifact detection (20+ types)
 │   ├── health.rs              # Health scoring (0-100, grades A-F)
-│   ├── cleaner.rs             # Cleanup: trash, archive, delete artifacts
-│   ├── repo_manager.rs        # ghq-style clone, pull, status tracking
-│   └── port_scanner.rs        # Dev port discovery, runtime detection, process kill
+│   ├── cleaner.rs             # Artifact cleanup (trash or delete)
+│   ├── repo_manager.rs        # ghq-style clone/pull/status + cache
+│   ├── port_scanner.rs        # Port discovery (lsof macOS, /proc Linux)
+│   └── system_cleaner.rs      # Docker, caches, VMs, logs cleanup + safety
 ├── tui/
-│   ├── model.rs               # App, UpdaterModel, ScannerModel, RepoManagerModel, PortScannerModel
-│   ├── update.rs              # Key/message handling, state transitions, Action dispatch
-│   ├── scanner_keys.rs        # Scanner/RepoManager/PortScanner key bindings
-│   ├── view.rs                # Top-level render dispatcher + tab bar
-│   ├── styles.rs              # Color palette, ASCII art, spinner frames
-│   └── widgets/
-│       ├── splash.rs          # Animated splash screen with color cycling
-│       ├── dashboard.rs       # Tool update grid (2 columns, 8 categories) + preview
-│       ├── scanner_view.rs    # Repo scan results table + config + cleaning views
-│       ├── detail_panel.rs    # Single repo detail view with artifact breakdown
-│       ├── repo_manager_view.rs # Repo list, clone input modal, post-clone summary
-│       ├── port_view.rs       # Port scanner table with kill actions
-│       ├── progress.rs        # Progress bars (determinate + indeterminate) + overlays
-│       ├── modal.rs           # Danger zone + clean confirm modals
-│       └── search.rs          # Search bar (rendered inline in dashboard)
+│   ├── model.rs               # All state models + Toast notifications
+│   ├── update.rs              # Key/message handling, Action dispatch
+│   ├── scanner_keys.rs        # Scanner/Repos/Ports/System key bindings
+│   ├── view.rs                # Tab bar + render dispatcher
+│   ├── styles.rs              # Color palette, ASCII art
+│   └── widgets/               # splash, dashboard, scanner_view, detail_panel,
+│                              # repo_manager_view, port_view, system_view,
+│                              # progress, modal
 └── utils/
-    ├── shell.rs               # Async shell command execution with timeouts
-    └── fs.rs                  # Directory size calculation, git root discovery
+    ├── shell.rs               # Async commands + debug logging
+    └── fs.rs                  # dir_size, format_size
 ```
 
 ## Key Concepts
 
-### Async Architecture
-- **tokio** runtime for concurrent operations (version checks, filesystem scanning, updates)
-- Background tasks communicate with TUI via `tokio::sync::mpsc` unbounded channels
-- `AppMessage` enum carries results back to the event loop
-- `Action` enum dispatches side effects from key handlers
+### Tab Navigation
+`TAB` cycles: Scanner → Repos → Ports → System → Updater
+`q` goes back (not quit) in sub-views. Only quits at root level.
 
-### State Machines
-**Updater**: Splash -> Main -> Search/Preview/Confirm -> Updating -> Summary
-**Scanner**: ScanConfig -> Scanning -> ScanResults -> RepoDetail/CleanConfirm -> Cleaning -> CleanSummary
-**Repo Manager**: RepoManager -> RepoCloneInput -> RepoCloneSummary -> RepoManager
-**Port Scanner**: PortScanner (standalone view)
+### Safety (System Cleanup)
+- Path validation against protected system paths
+- App-aware: `pgrep` checks before cleaning app caches
+- Age-based: logs >7 days only
+- Operation log: `~/.config/spark/operations.log`
+- Whitelist: `~/.config/spark/whitelist.txt`
+- Dry-run: `spark --dry-run`
 
-### Tab Switching
-- `TAB` key switches between Updater and Scanner modes
-- Scanner mode contains sub-views: scan results, repo manager `[G]`, port scanner `[P]`
-- Tab bar always visible at top (except during splash)
+### Repo Status Cache
+- Stored in `repo_status_cache.json`
+- Expires after 4 hours
+- Sequential fetch (not parallel) to avoid network overload
+- `r` in Repos clears cache and re-fetches
 
-### Repo Manager (ghq-style)
-- Repos cloned to `{repos_root}/{host}/{owner}/{name}` (configurable in config.toml)
-- Post-clone summary shows path, alias suggestion, and AI agent integration tips
-- `CloneSummary` struct in model.rs holds summary data for the view
+## Development
 
-## Development Commands
-
-### Running Locally
 ```bash
-cargo run
+cargo run                  # Dev mode
+cargo test                 # 79 tests
+cargo build --release      # Optimized build (~2.7MB)
 ```
-
-### Building for Release
-```bash
-cargo build --release
-```
-
-### Adding a New Tool
-1. Open `src/core/inventory.rs`
-2. Add a new `Tool` struct to the vector
-3. If it requires custom version detection, update `src/updater/detector.rs`
-4. If it has a known changelog URL, add it to `src/core/changelogs.rs`
 
 ## Configuration
 
-Config file: `~/.config/spark/config.toml`
+Config: `~/.config/spark/config.toml` (macOS: `~/Library/Application Support/spark/`)
 
 Key fields:
-- `scan_directories`: Dirs to scan for git repos
-- `stale_threshold_days`: Days to consider a repo stale (default: 90)
-- `repos_root`: Root for managed repos (default: `~/repos`)
-- `use_trash`: Use OS trash for safe deletions (default: true)
-- `max_scan_depth`: Max recursion depth for scanning (default: 4)
+- `repos_root`: Root for managed repos (auto-detects ghq root)
+- `max_scan_depth`: Recursion depth for scanning (default: 6)
+- `stale_threshold_days`: Days to consider stale (default: 90)
+- `use_trash`: Use trash for deletions (default: true)
 
-See [config.example.toml](config.example.toml) for all options.
-
-## Testing
+## Distribution
 
 ```bash
-cargo test
+# npm
+npm install -g @dpeluche/spark
+
+# cargo
+cargo install --git https://github.com/dPeluChe/labs-spark
+
+# source
+./install.sh && spark init
 ```
-
-69 tests covering: version parsing, health scoring, config serialization, inventory validation, changelog mapping, artifact detection, port scanning, and TUI model logic.
-
-## Version History
-
-- **v0.8.0**: **DevOps Platform**. Repo Manager (ghq-style clone/pull/status), Port Scanner, post-clone summary with alias and AI agent tips, configurable `repos_root`.
-- **v0.7.0**: **The Rust Migration**. Complete rewrite in Rust + Ratatui. Added Repository Scanner with health scoring, artifact cleanup, and trash-based deletion. Cross-platform support.
-- **v0.6.0 and earlier**: Previous Go/Bubble Tea and Bash implementations (archived, not part of active codebase).

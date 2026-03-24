@@ -1,0 +1,11 @@
+#!/bin/sh
+# Spark binary shim — replaced by actual binary during postinstall
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BINARY="$SCRIPT_DIR/spark"
+
+if [ -f "$BINARY" ] && [ -x "$BINARY" ]; then
+    exec "$BINARY" "$@"
+else
+    echo "spark binary not found. Run: npm install @dpeluche/spark"
+    exit 1
+fi
