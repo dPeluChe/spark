@@ -106,6 +106,16 @@ enum Commands {
         #[arg(long)]
         set: Option<String>,
     },
+    /// Check which repos need updating (fetch + compare with remote)
+    Status {
+        /// Filter repos by query
+        query: Option<String>,
+    },
+    /// Pull repos that are behind remote (fast-forward only)
+    Pull {
+        /// Filter repos by query (omit to pull all behind)
+        query: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -542,6 +552,125 @@ spark-cd() { cd "$(spark cd "$1")" ; }
                 }
             }
         }
+        Commands::Status { query } => {
+            let repos = scanner::repo_manager::list_managed_repos(&config.repos_root);
+            let filtered: Vec<_> = match &query {
+                Some(q) => {
+                    let q = q.to_lowercase();
+                    repos.iter().filter(|r| {
+                        r.name.to_lowercase().contains(&q)
+                            || r.owner.to_lowercase().contains(&q)
+                            || r.host.to_lowercase().contains(&q)
+                    }).collect()
+                }
+                None => repos.iter().collect(),
+            };
+
+            if filtered.is_empty() {
+                println!("  No repos found");
+                return Ok(());
+            }
+
+            println!("  Checking {} repos...\n", filtered.len());
+
+            let cache = scanner::repo_manager::load_status_cache();
+            let mut statuses: Vec<(&scanner::repo_manager::ManagedRepo, scanner::repo_manager::RepoStatus)> = Vec::new();
+
+            for (i, repo) in filtered.iter().enumerate() {
+                eprint!("\r  [{}/{}] {}/{}", i + 1, filtered.len(), repo.owner, repo.name);
+                let key = repo.path.display().to_string();
+                let status = if let Some((cached, ts)) = cache.get(&key) {
+                    if scanner::repo_manager::is_cache_valid(*ts) {
+                        scanner::repo_manager::string_to_status(cached)
+                    } else {
+                        let s = scanner::repo_manager::check_repo_status(&repo.path);
+                        scanner::repo_manager::save_status_to_cache(&key, &scanner::repo_manager::status_to_string(&s));
+                        s
+                    }
+                } else {
+                    let s = scanner::repo_manager::check_repo_status(&repo.path);
+                    scanner::repo_manager::save_status_to_cache(&key, &scanner::repo_manager::status_to_string(&s));
+                    s
+                };
+                statuses.push((repo, status));
+            }
+            eprintln!("\r{}\r", " ".repeat(60));
+
+            print_status_tree(&statuses);
+
+            let behind = statuses.iter().filter(|(_, s)| matches!(s, scanner::repo_manager::RepoStatus::Behind(_))).count();
+            let diverged = statuses.iter().filter(|(_, s)| matches!(s, scanner::repo_manager::RepoStatus::Diverged { .. })).count();
+            if behind > 0 || diverged > 0 {
+                println!("\n  Tip: spark pull{}",
+                    query.as_ref().map(|q| format!(" {}", q)).unwrap_or_default());
+            }
+        }
+
+        Commands::Pull { query } => {
+            let repos = scanner::repo_manager::list_managed_repos(&config.repos_root);
+            let filtered: Vec<_> = match &query {
+                Some(q) => {
+                    let q = q.to_lowercase();
+                    repos.iter().filter(|r| {
+                        r.name.to_lowercase().contains(&q)
+                            || r.owner.to_lowercase().contains(&q)
+                            || r.host.to_lowercase().contains(&q)
+                    }).collect()
+                }
+                None => repos.iter().collect(),
+            };
+
+            if filtered.is_empty() {
+                println!("  No repos found");
+                return Ok(());
+            }
+
+            println!("  Checking {} repos for updates...\n", filtered.len());
+
+            let mut pulled = 0usize;
+            let mut skipped = 0usize;
+            let mut errors = Vec::new();
+
+            for (i, repo) in filtered.iter().enumerate() {
+                eprint!("\r  [{}/{}] {}/{}", i + 1, filtered.len(), repo.owner, repo.name);
+                let status = scanner::repo_manager::check_repo_status(&repo.path);
+                let key = repo.path.display().to_string();
+
+                match &status {
+                    scanner::repo_manager::RepoStatus::Behind(_)
+                    | scanner::repo_manager::RepoStatus::Diverged { .. } => {
+                        match scanner::repo_manager::pull_repo(&repo.path) {
+                            Ok(_) => {
+                                pulled += 1;
+                                scanner::repo_manager::save_status_to_cache(&key, "up_to_date");
+                            }
+                            Err(e) => {
+                                errors.push(format!("{}/{}: {}", repo.owner, repo.name, e));
+                                scanner::repo_manager::save_status_to_cache(&key, &scanner::repo_manager::status_to_string(&status));
+                            }
+                        }
+                    }
+                    _ => {
+                        skipped += 1;
+                        scanner::repo_manager::save_status_to_cache(&key, &scanner::repo_manager::status_to_string(&status));
+                    }
+                }
+            }
+            eprintln!("\r{}\r", " ".repeat(60));
+
+            if pulled > 0 {
+                println!("  {} repos pulled", pulled);
+            }
+            if skipped > 0 {
+                println!("  {} repos already up to date", skipped);
+            }
+            for e in &errors {
+                eprintln!("  Error: {}", e);
+            }
+            if pulled == 0 && errors.is_empty() {
+                println!("  All repos up to date");
+            }
+        }
     }
     Ok(())
 }
@@ -573,6 +702,56 @@ fn expand_url(input: &str, use_ssh: bool) -> String {
     }
 
     input.to_string()
+}
+
+/// Print repos grouped by host/owner with status indicators
+fn print_status_tree(statuses: &[(&scanner::repo_manager::ManagedRepo, scanner::repo_manager::RepoStatus)]) {
+    use std::collections::BTreeMap;
+
+    struct Entry<'a> {
+        name: &'a str,
+        status: &'a scanner::repo_manager::RepoStatus,
+    }
+
+    let mut tree: BTreeMap<&str, BTreeMap<&str, Vec<Entry>>> = BTreeMap::new();
+    for (r, s) in statuses {
+        tree.entry(r.host.as_str())
+            .or_default()
+            .entry(r.owner.as_str())
+            .or_default()
+            .push(Entry { name: &r.name, status: s });
+    }
+
+    for owners in tree.values_mut() {
+        for entries in owners.values_mut() {
+            entries.sort_by_key(|e| e.name.to_lowercase());
+        }
+    }
+
+    for (host, owners) in &tree {
+        println!("{}", host);
+        let owner_count = owners.len();
+        for (oi, (owner, entries)) in owners.iter().enumerate() {
+            let is_last_owner = oi == owner_count - 1;
+            let owner_branch = if is_last_owner { "└── " } else { "├── " };
+            let owner_prefix = if is_last_owner { "    " } else { "│   " };
+            println!("{}{}", owner_branch, owner);
+            for (ni, entry) in entries.iter().enumerate() {
+                let is_last = ni == entries.len() - 1;
+                let branch = if is_last { "└── " } else { "├── " };
+                let indicator = match entry.status {
+                    scanner::repo_manager::RepoStatus::UpToDate => "✓",
+                    scanner::repo_manager::RepoStatus::Behind(_) => "↓",
+                    scanner::repo_manager::RepoStatus::Ahead(_) => "↑",
+                    scanner::repo_manager::RepoStatus::Diverged { .. } => "↕",
+                    scanner::repo_manager::RepoStatus::Dirty => "●",
+                    scanner::repo_manager::RepoStatus::Error(_) => "✗",
+                    scanner::repo_manager::RepoStatus::Checking => "?",
+                };
+                println!("{}{}{} {} {}", owner_prefix, branch, indicator, entry.name, entry.status);
+            }
+        }
+    }
 }
 
 /// Print repos grouped by host/owner as a tree
