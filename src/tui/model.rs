@@ -36,6 +36,8 @@ pub enum ScannerState {
     ContainerLoading,
     ScanResults,
     RepoDetail,
+    ContainerChildDetail,
+    ContainerChildDelete,
     CleanConfirm,
     HealthHelp,
     DeleteRepoConfirm,
@@ -305,6 +307,8 @@ pub struct ScannerModel {
     pub container_children: Vec<RepoInfo>,
     pub container_cursor: usize,
     pub container_sort: u8,
+    /// Ordered list of group names (cached, rebuilt after scan/sort)
+    pub group_order: Vec<String>,
 }
 
 impl ScannerModel {
@@ -327,7 +331,20 @@ impl ScannerModel {
             container_children: Vec::new(),
             container_cursor: 0,
             container_sort: 0,
+            group_order: Vec::new(),
         }
+    }
+
+    /// Rebuild the cached group order from current repos (call after scan or sort).
+    pub fn rebuild_group_order(&mut self) {
+        let mut seen = HashSet::new();
+        let mut order = Vec::new();
+        for repo in &self.repos {
+            if seen.insert(repo.group.as_str()) {
+                order.push(repo.group.clone());
+            }
+        }
+        self.group_order = order;
     }
 
     pub fn sort_repos(&mut self) {
@@ -342,6 +359,7 @@ impl ScannerModel {
             };
             if ascending { cmp } else { cmp.reverse() }
         });
+        self.rebuild_group_order();
     }
 }
 

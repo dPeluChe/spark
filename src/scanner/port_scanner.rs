@@ -141,7 +141,8 @@ pub fn scan_ports() -> Vec<PortInfo> {
     }
 }
 
-/// macOS: use `lsof -iTCP -sTCP:LISTEN -P -n` to find listening ports
+/// macOS: use `lsof -iTCP -sTCP:LISTEN -P -n` to find listening ports.
+/// Batches all per-PID lookups into two calls (one ps, one lsof) instead of N×2.
 fn scan_ports_lsof() -> Vec<PortInfo> {
     let output = match Command::new("lsof")
         .args(["-iTCP", "-sTCP:LISTEN", "-P", "-n"])
@@ -156,99 +157,98 @@ fn scan_ports_lsof() -> Vec<PortInfo> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut results: Vec<PortInfo> = Vec::new();
+
+    struct RawEntry { port: u16, pid: u32, process_name: String }
     let mut seen_ports: HashMap<u16, usize> = HashMap::new();
+    let mut entries: Vec<RawEntry> = Vec::new();
 
     for line in stdout.lines().skip(1) {
         let fields: Vec<&str> = line.split_whitespace().collect();
-        if fields.len() < 9 {
-            continue;
-        }
+        if fields.len() < 9 { continue; }
 
         let process_name = fields[0].to_string();
-        let pid: u32 = match fields[1].parse() {
-            Ok(p) => p,
-            Err(_) => continue,
+        let pid: u32 = match fields[1].parse() { Ok(p) => p, Err(_) => continue };
+        let port: u16 = match fields[8].rsplit(':').next().and_then(|p| p.parse().ok()) {
+            Some(p) => p, None => continue,
         };
 
-        // NAME field is last, like "127.0.0.1:3000" or "*:8080"
-        let name_field = fields[8];
-        let port: u16 = match name_field.rsplit(':').next().and_then(|p| p.parse().ok()) {
-            Some(p) => p,
-            None => continue,
-        };
-
-        // Deduplicate: keep first occurrence per port, but update if we get a better match
         if let Some(&idx) = seen_ports.get(&port) {
-            // If existing entry is same PID, skip (IPv4/IPv6 duplicate)
-            if results[idx].pid == pid {
-                continue;
-            }
-        }
-
-        // Get cmdline via ps
-        let cmdline = get_cmdline_macos(pid);
-        let cwd = get_cwd_macos(pid);
-        let runtime = detect_runtime(&process_name, &cmdline);
-        let project_dir = resolve_project_dir(&cwd, &cmdline);
-
-        if let Some(&idx) = seen_ports.get(&port) {
-            // Replace if same port different PID (shouldn't happen often)
-            results[idx] = PortInfo {
-                port, pid, process_name, cmdline, cwd, runtime, project_dir,
-            };
+            if entries[idx].pid == pid { continue; } // IPv4/IPv6 dup
+            entries[idx] = RawEntry { port, pid, process_name };
         } else {
-            seen_ports.insert(port, results.len());
-            results.push(PortInfo {
-                port, pid, process_name, cmdline, cwd, runtime, project_dir,
-            });
+            seen_ports.insert(port, entries.len());
+            entries.push(RawEntry { port, pid, process_name });
         }
     }
+
+    if entries.is_empty() { return Vec::new(); }
+
+    let mut unique_pids: Vec<u32> = entries.iter().map(|e| e.pid).collect();
+    unique_pids.sort_unstable();
+    unique_pids.dedup();
+
+    let cmdlines = get_cmdlines_batch(&unique_pids);
+    let cwds = get_cwds_batch(&unique_pids);
+
+    let mut results: Vec<PortInfo> = entries.into_iter().map(|e| {
+        let cmdline = cmdlines.get(&e.pid).cloned().unwrap_or_default();
+        let cwd = cwds.get(&e.pid).cloned();
+        let runtime = detect_runtime(&e.process_name, &cmdline);
+        let project_dir = resolve_project_dir(&cwd, &cmdline);
+        PortInfo { port: e.port, pid: e.pid, process_name: e.process_name, cmdline, cwd, runtime, project_dir }
+    }).collect();
 
     results.sort_by_key(|p| p.port);
     results
 }
 
-/// Get command line for a PID on macOS
-fn get_cmdline_macos(pid: u32) -> String {
-    let output = Command::new("ps")
-        .args(["-p", &pid.to_string(), "-o", "command="])
-        .output()
-        .ok();
-
-    match output {
-        Some(o) if o.status.success() => {
-            let cmd = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if cmd.len() > 120 {
-                format!("{}...", &cmd[..117])
-            } else {
-                cmd
-            }
-        }
-        _ => String::new(),
-    }
+fn pid_list(pids: &[u32]) -> String {
+    pids.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",")
 }
 
-/// Get working directory for a PID on macOS
-fn get_cwd_macos(pid: u32) -> Option<PathBuf> {
-    let output = Command::new("lsof")
-        .args(["-a", "-p", &pid.to_string(), "-d", "cwd", "-Fn"])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        if let Some(path) = line.strip_prefix('n') {
-            if path.starts_with('/') {
-                return Some(PathBuf::from(path));
+/// Batch: get command lines for all PIDs in one `ps` call
+fn get_cmdlines_batch(pids: &[u32]) -> HashMap<u32, String> {
+    if pids.is_empty() { return HashMap::new(); }
+    let output = match Command::new("ps").args(["-p", &pid_list(pids), "-o", "pid=,command="]).output() {
+        Ok(o) if o.status.success() => o,
+        _ => return HashMap::new(),
+    };
+    let mut map = HashMap::new();
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let line = line.trim();
+        if line.is_empty() { continue; }
+        if let Some(idx) = line.find(|c: char| c.is_ascii_whitespace()) {
+            if let Ok(pid) = line[..idx].trim().parse::<u32>() {
+                let cmd = line[idx..].trim().to_string();
+                let cmd = if cmd.len() > 120 { format!("{}...", &cmd[..117]) } else { cmd };
+                map.insert(pid, cmd);
             }
         }
     }
-    None
+    map
+}
+
+/// Batch: get working directories for all PIDs in one `lsof` call
+fn get_cwds_batch(pids: &[u32]) -> HashMap<u32, PathBuf> {
+    if pids.is_empty() { return HashMap::new(); }
+    let output = match Command::new("lsof").args(["-a", "-p", &pid_list(pids), "-d", "cwd", "-Fn"]).output() {
+        Ok(o) if o.status.success() => o,
+        _ => return HashMap::new(),
+    };
+    let mut map = HashMap::new();
+    let mut current_pid: Option<u32> = None;
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        if let Some(rest) = line.strip_prefix('p') {
+            current_pid = rest.parse().ok();
+        } else if let Some(path) = line.strip_prefix('n') {
+            if path.starts_with('/') {
+                if let Some(pid) = current_pid {
+                    map.insert(pid, PathBuf::from(path));
+                }
+            }
+        }
+    }
+    map
 }
 
 /// Linux: use /proc/net/tcp to find listening sockets

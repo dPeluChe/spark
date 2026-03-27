@@ -236,6 +236,7 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
             let s = &mut app.scanner;
             s.repos = repos;
             s.total_recoverable = s.repos.iter().map(|r| r.artifact_size).sum();
+            s.rebuild_group_order();
             s.state = ScannerState::ScanResults;
             s.cursor = 0;
         }
@@ -258,15 +259,25 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
             } else {
                 app.show_toast(format!("Clean: {} ok, {} failed", ok, fail), true);
             }
-            // Refresh artifact data for cleaned repos
+            // Refresh artifact data for cleaned repos and container children
             for repo in app.scanner.repos.iter_mut() {
                 repo.artifacts.retain(|a| a.path.exists());
                 repo.artifact_size = repo.artifacts.iter().map(|a| a.size).sum();
             }
-            // Go back to results directly instead of showing a separate screen
+            for child in app.scanner.container_children.iter_mut() {
+                child.artifacts.retain(|a| a.path.exists());
+                child.artifact_size = child.artifacts.iter().map(|a| a.size).sum();
+            }
             app.scanner.checked.clear();
             app.scanner.clean_results.clear();
-            app.scanner.state = ScannerState::ScanResults;
+            // If cleaning was triggered from container child detail, return there
+            if !app.scanner.container_children.is_empty() && !app.scanner.repos.is_empty()
+                && app.scanner.repos.get(app.scanner.cursor).map(|r| r.is_container).unwrap_or(false)
+            {
+                app.scanner.state = ScannerState::ContainerChildDetail;
+            } else {
+                app.scanner.state = ScannerState::ScanResults;
+            }
         }
         AppMessage::PortScanResult { ports } => {
             app.port_scanner.ports = ports;

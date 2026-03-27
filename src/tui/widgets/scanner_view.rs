@@ -34,6 +34,13 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
         ScannerState::RepoDetail => {
             super::detail_panel::render_detail(frame, area, model);
         }
+        ScannerState::ContainerChildDetail => {
+            super::detail_panel::render_child_detail(frame, area, model);
+        }
+        ScannerState::ContainerChildDelete => {
+            super::detail_panel::render_child_detail(frame, area, model);
+            super::detail_panel::render_child_delete_confirm(frame, area, model);
+        }
         ScannerState::HealthHelp => {
             render_scan_results(frame, area, model);
             render_health_help(frame, area);
@@ -320,16 +327,10 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
         Cell::from("Status").style(Style::default().fg(PURPLE).bold()),
     ]);
 
-    // Collect groups in order of appearance
-    let mut group_order: Vec<String> = Vec::new();
-    for repo in &model.repos {
-        if !group_order.contains(&repo.group) {
-            group_order.push(repo.group.clone());
-        }
-    }
+    let group_order = &model.group_order;
 
     let mut rows: Vec<Row> = Vec::new();
-    for group in &group_order {
+    for group in group_order {
         let group_repos: Vec<(usize, &crate::scanner::repo_scanner::RepoInfo)> = model.repos.iter()
             .enumerate()
             .filter(|(_, r)| r.group == *group)
@@ -397,10 +398,12 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
                 "-".into()
             };
 
-            let cleanup_display = if repo.artifact_size > 0 {
+            let cleanup_display = if repo.is_container {
+                "-".into()
+            } else if repo.artifact_size > 0 {
                 format_size(repo.artifact_size)
             } else {
-                "-".into()
+                "clean".into()
             };
 
             rows.push(Row::new(vec![
@@ -426,7 +429,7 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
     let visible_height = chunks[1].height.saturating_sub(3) as usize;
     let mut cursor_row_pos = 0usize;
     let mut found = false;
-    for row_group in &group_order {
+    for row_group in group_order {
         cursor_row_pos += 1; // group header row
         for (i, repo) in model.repos.iter().enumerate() {
             if repo.group != *row_group { continue; }

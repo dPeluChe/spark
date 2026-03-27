@@ -224,6 +224,14 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 s.state = ScannerState::ScanResults;
                 None
             }
+            KeyCode::Enter => {
+                if s.repos.get(s.cursor).map(|r| r.is_container).unwrap_or(false)
+                    && !s.container_children.is_empty()
+                {
+                    s.state = ScannerState::ContainerChildDetail;
+                }
+                None
+            }
             KeyCode::Up | KeyCode::Char('k') => {
                 if s.container_cursor > 0 { s.container_cursor -= 1; }
                 None
@@ -298,6 +306,69 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
                 if s.repos.get(s.cursor).is_some() {
                     s.state = ScannerState::DeleteRepoConfirm;
                 }
+                None
+            }
+            _ => None,
+        },
+
+        // Viewing a single child repo's detail — q goes back to container list
+        ScannerState::ContainerChildDetail => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                s.state = ScannerState::RepoDetail;
+                None
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if s.container_cursor > 0 {
+                    s.container_cursor -= 1;
+                }
+                None
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if !s.container_children.is_empty()
+                    && s.container_cursor < s.container_children.len().saturating_sub(1)
+                {
+                    s.container_cursor += 1;
+                }
+                None
+            }
+            KeyCode::Char('c') => {
+                if let Some(child) = s.container_children.get(s.container_cursor) {
+                    let paths: Vec<std::path::PathBuf> =
+                        child.artifacts.iter().map(|a| a.path.clone()).collect();
+                    if !paths.is_empty() {
+                        s.state = ScannerState::Cleaning;
+                        return Some(Action::CleanArtifacts(paths));
+                    }
+                }
+                None
+            }
+            KeyCode::Char('x') => {
+                if s.container_children.get(s.container_cursor).is_some() {
+                    s.state = ScannerState::ContainerChildDelete;
+                }
+                None
+            }
+            _ => None,
+        },
+
+        ScannerState::ContainerChildDelete => match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                if let Some(child) = s.container_children.get(s.container_cursor) {
+                    let path = child.path.clone();
+                    let name = child.name.clone();
+                    s.container_children.remove(s.container_cursor);
+                    if s.container_cursor > 0 && s.container_cursor >= s.container_children.len() {
+                        s.container_cursor -= 1;
+                    }
+                    s.state = ScannerState::RepoDetail;
+                    app.show_toast(format!("Deleted {}", name), false);
+                    return Some(Action::TrashRepo(path));
+                }
+                s.state = ScannerState::RepoDetail;
+                None
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc | KeyCode::Char('q') => {
+                s.state = ScannerState::ContainerChildDetail;
                 None
             }
             _ => None,

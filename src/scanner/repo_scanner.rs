@@ -151,6 +151,31 @@ pub async fn scan_directories(
         }
     }
 
+    // Detect containers: a repo whose path contains other discovered repo paths.
+    // Zero extra filesystem walks — uses the already-collected path set.
+    {
+        let all_paths: Vec<PathBuf> = repos.iter().map(|r| r.path.clone()).collect();
+        for repo in &mut repos {
+            let child_count = all_paths.iter()
+                .filter(|p| *p != &repo.path && p.starts_with(&repo.path))
+                .count();
+            repo.is_container = child_count > 0;
+            repo.child_repo_count = child_count;
+        }
+    }
+
+    // Remove ALL child repos of containers — even if the child is also a container.
+    // They should only appear inside container detail view.
+    let container_paths: Vec<PathBuf> = repos.iter()
+        .filter(|r| r.is_container)
+        .map(|r| r.path.clone())
+        .collect();
+
+    repos.retain(|r| {
+        // Keep if no container is a parent of this repo
+        !container_paths.iter().any(|cp| r.path.starts_with(cp) && r.path != *cp)
+    });
+
     repos
 }
 
@@ -264,10 +289,6 @@ pub fn analyze_repo(path: &std::path::Path) -> Option<RepoInfo> {
     let (health_score, health_grade) =
         calculate_health(last_commit_date, last_modified, has_remote, is_dirty, artifact_size);
 
-    // Detect if this is a container (has child repos)
-    let child_count = count_git_repos(path, 2);
-    let is_container = child_count > 1;
-
     // Detect workspace type
     let workspace = detect_workspace(path);
 
@@ -275,8 +296,8 @@ pub fn analyze_repo(path: &std::path::Path) -> Option<RepoInfo> {
         path: path.to_path_buf(),
         name,
         group: String::new(), // set by scan_directories
-        is_container,
-        child_repo_count: if is_container { child_count - 1 } else { 0 },
+        is_container: false,
+        child_repo_count: 0,
         workspace,
         last_commit_date,
         last_modified,

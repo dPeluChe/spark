@@ -17,7 +17,7 @@ use ratatui::prelude::*;
 
 /// SPARK — Developer Operations Platform
 #[derive(Parser)]
-#[command(name = "spark", version, about, long_about = None)]
+#[command(name = "spark", version, about, long_about = None, term_width = 80)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -218,12 +218,12 @@ fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_eyre
                 None => repos.iter().collect(),
             };
 
-            for repo in &filtered {
-                if full_path {
+            if full_path {
+                for repo in &filtered {
                     println!("{}", repo.path.display());
-                } else {
-                    println!("{}/{}/{}", repo.host, repo.owner, repo.name);
                 }
+            } else {
+                print_repos_tree(&filtered);
             }
         }
 
@@ -315,9 +315,7 @@ fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_eyre
             if first {
                 println!("{}", matches[0].path.display());
             } else {
-                for repo in &matches {
-                    println!("{}", repo.path.display());
-                }
+                print_repos_tree(&matches);
             }
         }
 
@@ -575,4 +573,42 @@ fn expand_url(input: &str, use_ssh: bool) -> String {
     }
 
     input.to_string()
+}
+
+/// Print repos grouped by host/owner as a tree
+fn print_repos_tree(repos: &[&scanner::repo_manager::ManagedRepo]) {
+    use std::collections::BTreeMap;
+
+    // Group: host -> owner -> [name]
+    let mut tree: BTreeMap<&str, BTreeMap<&str, Vec<&str>>> = BTreeMap::new();
+    for r in repos {
+        tree.entry(&r.host)
+            .or_default()
+            .entry(&r.owner)
+            .or_default()
+            .push(&r.name);
+    }
+
+    // Sort names within each owner
+    for owners in tree.values_mut() {
+        for names in owners.values_mut() {
+            names.sort_unstable_by_key(|a| a.to_lowercase());
+        }
+    }
+
+    for (host, owners) in &tree {
+        println!("{}", host);
+        let owner_count = owners.len();
+        for (oi, (owner, names)) in owners.iter().enumerate() {
+            let is_last_owner = oi == owner_count - 1;
+            let owner_branch = if is_last_owner { "└── " } else { "├── " };
+            let owner_prefix = if is_last_owner { "    " } else { "│   " };
+            println!("{}{}", owner_branch, owner);
+            for (ni, name) in names.iter().enumerate() {
+                let is_last_name = ni == names.len() - 1;
+                let name_branch = if is_last_name { "└── " } else { "├── " };
+                println!("{}{}{}", owner_prefix, name_branch, name);
+            }
+        }
+    }
 }

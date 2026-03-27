@@ -147,6 +147,8 @@ fn render_container_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) 
     frame.render_widget(table, chunks[1]);
 
     let help = Paragraph::new(Line::from(vec![
+        Span::styled("[Enter] ", Style::default().fg(CYAN).bold()),
+        Span::styled("Detail  ", Style::default().fg(GRAY)),
         Span::styled("[s] ", Style::default().fg(PURPLE).bold()),
         Span::styled("Sort  ", Style::default().fg(GRAY)),
         Span::styled("[a] ", Style::default().fg(GREEN).bold()),
@@ -155,6 +157,71 @@ fn render_container_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) 
         Span::styled("Back", Style::default().fg(GRAY)),
     ]));
     frame.render_widget(help, chunks[2]);
+}
+
+/// Render the selected container child's full detail (branch, commit, artifacts, actions)
+pub fn render_child_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) {
+    if let Some(child) = model.container_children.get(model.container_cursor) {
+        render_repo_detail(frame, area, child);
+    }
+}
+
+/// Confirm modal for deleting a container child repo
+pub fn render_child_delete_confirm(frame: &mut Frame, area: Rect, model: &ScannerModel) {
+    let child = match model.container_children.get(model.container_cursor) {
+        Some(c) => c,
+        None => return,
+    };
+
+    let modal_area = center_modal(frame, area, 62, 12);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Thick)
+        .border_style(Style::default().fg(RED))
+        .style(Style::default().bg(MODAL_BG));
+
+    let inner = block.inner(modal_area);
+    frame.render_widget(block, modal_area);
+
+    let home = std::env::var("HOME").unwrap_or_default();
+    let path_str = child.path.display().to_string();
+    let short_path = if path_str.starts_with(&home) {
+        format!("~{}", &path_str[home.len()..])
+    } else {
+        path_str
+    };
+
+    let mut lines = vec![
+        Line::from(Span::styled("DELETE REPOSITORY", Style::default().fg(RED).bold())),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Repo: ", Style::default().fg(PURPLE)),
+            Span::styled(&child.name, Style::default().fg(WHITE).bold()),
+        ]),
+        Line::from(vec![
+            Span::styled("  Path: ", Style::default().fg(PURPLE)),
+            Span::styled(&short_path, Style::default().fg(GRAY)),
+        ]),
+    ];
+
+    if child.is_dirty {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  WARNING: Uncommitted changes will be lost!",
+            Style::default().fg(RED).bold(),
+        )));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  This will move the entire folder to trash.",
+        Style::default().fg(YELLOW),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled("  Delete? (y/N)", Style::default().fg(WHITE))));
+
+    frame.render_widget(Paragraph::new(lines).alignment(Alignment::Center), inner);
 }
 
 fn render_repo_detail(frame: &mut Frame, area: Rect, repo: &crate::scanner::repo_scanner::RepoInfo) {
