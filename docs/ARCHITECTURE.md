@@ -31,7 +31,8 @@ src/
 │   ├── health.rs               # Health scoring (0-100, grades A-F)
 │   ├── cleaner.rs              # Cleanup: trash, archive, delete artifacts
 │   ├── repo_manager.rs         # ghq-style clone, pull, status tracking
-│   └── port_scanner.rs         # Dev port discovery, runtime detection, process kill
+│   ├── port_scanner.rs         # Dev port discovery, runtime detection, process kill
+│   └── system_cleaner.rs       # Docker, caches, VMs, logs cleanup + safety guards
 ├── tui/
 │   ├── model.rs                # App, UpdaterModel, ScannerModel, RepoManagerModel, PortScannerModel
 │   ├── update.rs               # Key/message handling, state transitions, Action dispatch
@@ -79,8 +80,8 @@ The central orchestrator:
 - **health.rs**: Scores repos 0-100 based on commit recency, remote presence, dirty state, artifact size
 - **space_analyzer.rs**: Detects 20+ artifact types (node_modules, venvs, target/, .gradle, etc.)
 - **cleaner.rs**: Trash-based or permanent deletion of artifacts/repos
-- **repo_manager.rs**: ghq-style clone to `{root}/{host}/{owner}/{name}`, pull, status checks
-- **port_scanner.rs**: Reads `/proc/net/tcp` to find listening ports, detects runtime (Node, Python, Go, Rust, etc.)
+- **repo_manager.rs**: ghq-style clone to `{root}/{host}/{owner}/{name}`, pull, status checks, 4h cache
+- **port_scanner.rs**: Batched `lsof`/`ps` on macOS, `/proc/net/tcp` on Linux; detects runtime (Node, Python, Go, Rust, etc.)
 
 ### 6. TUI (`tui/`)
 
@@ -99,7 +100,8 @@ Splash -> Main -> Search/Preview/Confirm -> Updating -> Summary -> Main
 
 ### Scanner
 ```
-ScanConfig -> Scanning -> ScanResults -> RepoDetail/CleanConfirm -> Cleaning -> CleanSummary
+ScanConfig -> Scanning -> ScanResults -> RepoDetail -> ContainerChildDetail/ContainerChildDelete
+                                      -> CleanConfirm -> Cleaning
 ```
 
 ### Repo Manager
@@ -136,7 +138,7 @@ PortScan -> PortKillConfirm -> PortScan
 ## Testing
 
 ```bash
-cargo test    # 69 tests
+cargo test    # 79 tests
 ```
 
 Tests cover: version parsing, health scoring, config serialization/deserialization, inventory validation, changelog URL mapping, artifact detection, port detection, git URL parsing, and TUI model logic.

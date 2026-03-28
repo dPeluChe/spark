@@ -23,12 +23,15 @@ spark                      # TUI
 spark init                 # Setup shell + completions
 spark clone <url>          # Clone (ghq-compatible)
 spark cd <name>            # Find repo path
-spark search <query>       # Search repos
-spark list [-p] [query]    # List repos
+spark search <query>       # Search repos (shows status, commit age, path)
+spark list [-p] [query]    # List repos (tree view by host/owner)
+spark status [query]       # Check which repos need pull (fetch + compare)
+spark pull <query|all>     # Pull repos behind remote (ff-only)
 spark root [--set]         # Show/change root
 spark rm <query>           # Remove repo
 spark config               # Show/update config
 spark agent                # AI agent tips
+spark doctor               # Validate installation health
 spark completions <shell>  # Shell completions
 ```
 

@@ -38,9 +38,12 @@ spark                    # Open TUI
 spark init               # Setup shell + completions
 spark clone user/repo    # Clone to managed root
 spark cd <name>          # Find repo path
-spark search <query>     # Search repos
-spark list               # List managed repos
+spark search <query>     # Search repos (status, age, path)
+spark list               # List repos (tree by host/owner)
+spark status [query]     # Check which repos need pull
+spark pull <query|all>   # Pull repos behind remote
 spark root               # Show repos root
+spark doctor             # Validate installation health
 spark config             # Show/update config
 spark agent              # AI agent integration tips
 ```

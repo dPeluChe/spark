@@ -522,7 +522,8 @@ Splash -> Main -> Search/Preview/Confirm -> Updating -> Summary -> Main
 
 **Scanner Transitions**:
 ```
-ScanConfig -> Scanning -> ScanResults -> RepoDetail/CleanConfirm -> Cleaning -> CleanSummary
+ScanConfig -> Scanning -> ScanResults -> RepoDetail -> ContainerChildDetail/ContainerChildDelete
+                                      -> CleanConfirm -> Cleaning
 ```
 
 **Repo Manager Transitions**:

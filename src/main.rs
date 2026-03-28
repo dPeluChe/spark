@@ -116,6 +116,8 @@ enum Commands {
         /// Repo name/owner to pull, or "all" to pull every repo behind
         query: String,
     },
+    /// Validate installation and environment health
+    Doctor,
 }
 
 #[tokio::main]
@@ -718,8 +720,168 @@ spark-cd() { cd "$(spark cd "$1")" ; }
                 println!("  All repos up to date");
             }
         }
+
+        Commands::Doctor => {
+            run_doctor(config);
+        }
     }
     Ok(())
+}
+
+fn run_doctor(config: &config::SparkConfig) {
+    println!("\n  SPARK Doctor — Environment Health Check\n");
+
+    let mut pass = 0u32;
+    let mut fail = 0u32;
+    let mut warn = 0u32;
+
+    // Helper closures
+    let mut check = |label: &str, ok: bool, fix: &str| {
+        if ok {
+            println!("  \x1b[32m✓\x1b[0m {}", label);
+            pass += 1;
+        } else {
+            println!("  \x1b[31m✗\x1b[0m {}  \x1b[90m→ {}\x1b[0m", label, fix);
+            fail += 1;
+        }
+    };
+
+    // 1. Binary
+    let version = env!("CARGO_PKG_VERSION");
+    check("spark binary", true, "");
+    println!("    version: {}", version);
+
+    let binary_path = std::env::current_exe().unwrap_or_default();
+    println!("    path:    {}", binary_path.display());
+
+    // 2. Git
+    let git_ok = std::process::Command::new("git").arg("--version").output()
+        .map(|o| o.status.success()).unwrap_or(false);
+    check("git available", git_ok, "install git: brew install git");
+
+    // 3. Repos root
+    let root_exists = config.repos_root.exists();
+    let root_writable = root_exists && std::fs::metadata(&config.repos_root)
+        .map(|m| !m.permissions().readonly()).unwrap_or(false);
+    check(
+        &format!("repos root exists ({})", config.repos_root.display()),
+        root_exists,
+        &format!("mkdir -p {}", config.repos_root.display()),
+    );
+    if root_exists {
+        check("repos root writable", root_writable, "check permissions");
+        let repos = scanner::repo_manager::list_managed_repos(&config.repos_root);
+        println!("    repos:   {}", repos.len());
+    }
+
+    // 4. Config directory
+    let config_dir = dirs::config_dir().unwrap_or_default().join("spark");
+    let config_file = config_dir.join("config.toml");
+    check(
+        "config directory",
+        config_dir.exists(),
+        &format!("spark init  (creates {})", config_dir.display()),
+    );
+    check(
+        "config.toml",
+        config_file.exists(),
+        "spark init  (creates default config)",
+    );
+
+    // 5. Whitelist
+    let whitelist = config_dir.join("whitelist.txt");
+    check(
+        "whitelist.txt",
+        whitelist.exists(),
+        "spark init  (creates whitelist)",
+    );
+
+    // 6. Shell integration
+    let shell = std::env::var("SHELL").unwrap_or_default();
+    let rc_file = if shell.contains("zsh") {
+        dirs::home_dir().unwrap_or_default().join(".zshrc")
+    } else if shell.contains("bash") {
+        dirs::home_dir().unwrap_or_default().join(".bashrc")
+    } else {
+        dirs::home_dir().unwrap_or_default().join(".profile")
+    };
+    let rc_content = std::fs::read_to_string(&rc_file).unwrap_or_default();
+    let has_spark_cd = rc_content.contains("spark-cd");
+    check(
+        &format!("spark-cd in {}", rc_file.file_name().unwrap_or_default().to_string_lossy()),
+        has_spark_cd,
+        "spark init  (adds spark-cd function)",
+    );
+
+    // 7. Shell completions
+    let home = dirs::home_dir().unwrap_or_default();
+    let has_completions = if shell.contains("zsh") {
+        home.join(".zsh/completions/_spark").exists()
+    } else if shell.contains("bash") {
+        home.join(".local/share/bash-completion/completions/spark").exists()
+    } else {
+        false
+    };
+    check(
+        "shell completions",
+        has_completions,
+        "spark init  (installs completions)",
+    );
+
+    // 8. Platform-specific tools
+    if cfg!(target_os = "macos") {
+        let lsof_ok = std::process::Command::new("lsof").arg("-v").output()
+            .map(|_| true).unwrap_or(false);
+        check("lsof (port scanner)", lsof_ok, "should be pre-installed on macOS");
+
+        // Docker (optional)
+        let docker_ok = std::process::Command::new("docker").arg("--version").output()
+            .map(|o| o.status.success()).unwrap_or(false);
+        if docker_ok {
+            println!("  \x1b[32m✓\x1b[0m docker available (system cleanup)");
+            pass += 1;
+        } else {
+            println!("  \x1b[33m~\x1b[0m docker not found  \x1b[90m→ optional, needed for Docker cleanup\x1b[0m");
+            warn += 1;
+        }
+    }
+
+    // 9. Status cache
+    let cache_path = dirs::config_dir().unwrap_or_default()
+        .join("spark").join("repo_status_cache.json");
+    if cache_path.exists() {
+        let age = std::fs::metadata(&cache_path).ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.elapsed().ok())
+            .map(|d| d.as_secs() / 3600);
+        match age {
+            Some(h) if h < 4 => {
+                println!("  \x1b[32m✓\x1b[0m status cache ({}h old, valid)", h);
+                pass += 1;
+            }
+            Some(h) => {
+                println!("  \x1b[33m~\x1b[0m status cache ({}h old, expired)  \x1b[90m→ spark status to refresh\x1b[0m", h);
+                warn += 1;
+            }
+            None => {
+                println!("  \x1b[33m~\x1b[0m status cache (age unknown)");
+                warn += 1;
+            }
+        }
+    } else {
+        println!("  \x1b[33m~\x1b[0m no status cache  \x1b[90m→ spark status to create\x1b[0m");
+        warn += 1;
+    }
+
+    // Summary
+    println!("\n  ─────────────────────────────────");
+    println!("  {} passed   {} failed   {} warnings", pass, fail, warn);
+
+    if fail == 0 {
+        println!("\n  \x1b[32mSpark is healthy!\x1b[0m\n");
+    } else {
+        println!("\n  Run \x1b[1mspark init\x1b[0m to fix most issues.\n");
+    }
 }
 
 /// Expand shorthand URLs:

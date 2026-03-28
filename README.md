@@ -104,10 +104,13 @@ spark clone <url>          # Clone repo (ghq-compatible, owner/repo shorthand)
 spark clone <url> -p       # Clone via SSH
 spark clone <url> --shallow # Shallow clone
 spark cd <name>            # Print path to repo
-spark search <query>       # Search repos (for scripts/agents)
-spark list [-p] [query]    # List repos (optionally full paths)
+spark search <query>       # Search repos (shows status, commit age, path)
+spark list [-p] [query]    # List repos (tree by host/owner)
+spark status [query]       # Check which repos need pull (fetch + compare)
+spark pull <query|all>     # Pull repos behind remote (ff-only)
 spark root [--set <path>]  # Show/change repos root
 spark rm <query>           # Remove a repo
+spark doctor               # Validate installation + environment
 spark config [key --set v] # Show/update configuration
 spark agent                # AI agent integration tips
 spark completions <shell>  # Generate zsh/bash/fish completions
