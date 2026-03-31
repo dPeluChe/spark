@@ -40,6 +40,8 @@ pub enum Action {
     ScanSystem,
     /// Clean a specific system item by index
     CleanSystemItem(usize),
+    /// Start security audit on a path
+    StartAudit(std::path::PathBuf),
 }
 
 /// Handle a key event and return optional action
@@ -95,10 +97,22 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Option<Action> {
             app.scanner.state = ScannerState::SystemClean;
             return Some(Action::ScanSystem);
         }
-        // System -> Updater
+        // System -> Audit
         if app.mode == AppMode::Scanner && matches!(
             app.scanner.state,
             ScannerState::SystemClean
+        ) {
+            app.scanner.state = ScannerState::SecretAudit;
+            if app.audit.results.is_empty() {
+                let path = app.config.repos_root.clone();
+                return Some(Action::StartAudit(path));
+            }
+            return None;
+        }
+        // Audit -> Updater
+        if app.mode == AppMode::Scanner && matches!(
+            app.scanner.state,
+            ScannerState::SecretAudit
         ) {
             app.mode = AppMode::Updater;
             return None;
@@ -424,6 +438,15 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
             if app.scanner.state == ScannerState::ContainerLoading {
                 app.scanner.state = ScannerState::RepoDetail;
             }
+        }
+        AppMessage::AuditScanResult { results } => {
+            app.audit.total_critical = results.iter().map(|r| r.critical_count).sum();
+            app.audit.total_warning = results.iter().map(|r| r.warning_count).sum();
+            app.audit.total_info = results.iter().map(|r| r.info_count).sum();
+            app.audit.results = results;
+            app.audit.scanning = false;
+            app.audit.cursor = 0;
+            app.scanner.state = ScannerState::SecretAudit;
         }
         AppMessage::DiscoveredDirs { dirs } => {
             debug_log(&format!("DiscoveredDirs: {} dirs found", dirs.len()));

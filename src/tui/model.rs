@@ -8,6 +8,7 @@ use crate::scanner::repo_scanner::{RepoInfo, DiscoveredDir};
 use crate::scanner::port_scanner::PortInfo;
 use crate::scanner::repo_manager::ManagedRepo;
 use crate::scanner::system_cleaner::CleanableItem;
+use crate::scanner::secret_scanner::AuditResult;
 
 /// Top-level application mode
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,6 +53,9 @@ pub enum ScannerState {
     RepoAction,
     RepoCloneInput,
     RepoCloneSummary,
+    SecretAudit,
+    SecretAuditScanning,
+    SecretAuditDetail,
 }
 
 /// Sort field for scanner results
@@ -149,6 +153,11 @@ pub enum AppMessage {
     // Discovery
     DiscoveredDirs {
         dirs: Vec<DiscoveredDir>,
+    },
+
+    // Security audit
+    AuditScanResult {
+        results: Vec<AuditResult>,
     },
 }
 
@@ -447,6 +456,31 @@ impl SystemCleanerModel {
     }
 }
 
+/// Security audit model
+pub struct AuditModel {
+    pub results: Vec<AuditResult>,
+    pub cursor: usize,
+    pub detail_cursor: usize,
+    pub scanning: bool,
+    pub total_critical: usize,
+    pub total_warning: usize,
+    pub total_info: usize,
+}
+
+impl AuditModel {
+    pub fn new() -> Self {
+        Self {
+            results: Vec::new(),
+            cursor: 0,
+            detail_cursor: 0,
+            scanning: false,
+            total_critical: 0,
+            total_warning: 0,
+            total_info: 0,
+        }
+    }
+}
+
 /// A toast notification shown briefly at the bottom of the screen
 pub struct Toast {
     pub message: String,
@@ -464,6 +498,7 @@ pub struct App {
     pub port_scanner: PortScannerModel,
     pub system_cleaner: SystemCleanerModel,
     pub repo_manager: RepoManagerModel,
+    pub audit: AuditModel,
     pub config: SparkConfig,
     pub should_quit: bool,
     pub dry_run: bool,
@@ -483,6 +518,7 @@ impl App {
             port_scanner: PortScannerModel::new(),
             system_cleaner: SystemCleanerModel::new(),
             repo_manager: RepoManagerModel::new(&config.repos_root),
+            audit: AuditModel::new(),
             config,
             should_quit: false,
             dry_run: false,

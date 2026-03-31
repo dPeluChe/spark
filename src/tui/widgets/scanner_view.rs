@@ -82,6 +82,15 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
         ScannerState::SystemClean | ScannerState::SystemCleanConfirm => {
             super::system_view::render_system_cleaner(frame, area, &app.system_cleaner);
         }
+        ScannerState::SecretAuditScanning => {
+            super::audit_view::render_audit_scanning(frame, area, tick);
+        }
+        ScannerState::SecretAudit => {
+            super::audit_view::render_audit_list(frame, area, &app.audit);
+        }
+        ScannerState::SecretAuditDetail => {
+            super::audit_view::render_audit_detail(frame, area, &app.audit);
+        }
         ScannerState::PortScan => {
             super::port_view::render_ports(frame, area, &app.port_scanner);
         }

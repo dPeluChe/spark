@@ -691,6 +691,73 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
             _ => None,
         },
 
+        // Security audit
+        ScannerState::SecretAuditScanning => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                s.state = ScannerState::SecretAudit;
+                None
+            }
+            _ => None,
+        },
+
+        ScannerState::SecretAudit => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                s.state = ScannerState::ScanConfig;
+                None
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if app.audit.cursor > 0 { app.audit.cursor -= 1; }
+                None
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if app.audit.cursor < app.audit.results.len().saturating_sub(1) { app.audit.cursor += 1; }
+                None
+            }
+            KeyCode::Enter => {
+                if !app.audit.results.is_empty() {
+                    app.audit.detail_cursor = 0;
+                    s.state = ScannerState::SecretAuditDetail;
+                }
+                None
+            }
+            KeyCode::Char('r') | KeyCode::Char('R') => {
+                let path = app.config.repos_root.clone();
+                Some(Action::StartAudit(path))
+            }
+            _ => None,
+        },
+
+        ScannerState::SecretAuditDetail => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                s.state = ScannerState::SecretAudit;
+                None
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if app.audit.detail_cursor > 0 { app.audit.detail_cursor -= 1; }
+                None
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if let Some(result) = app.audit.results.get(app.audit.cursor) {
+                    if app.audit.detail_cursor < result.findings.len().saturating_sub(1) {
+                        app.audit.detail_cursor += 1;
+                    }
+                }
+                None
+            }
+            KeyCode::PageUp => {
+                app.audit.detail_cursor = app.audit.detail_cursor.saturating_sub(PAGE_JUMP);
+                None
+            }
+            KeyCode::PageDown => {
+                if let Some(result) = app.audit.results.get(app.audit.cursor) {
+                    app.audit.detail_cursor = (app.audit.detail_cursor + PAGE_JUMP)
+                        .min(result.findings.len().saturating_sub(1));
+                }
+                None
+            }
+            _ => None,
+        },
+
         ScannerState::RepoCloneInput => {
             let rm = &mut app.repo_manager;
             match key.code {

@@ -7,3 +7,6 @@ pub mod cleaner;
 pub mod port_scanner;
 pub mod repo_manager;
 pub mod system_cleaner;
+pub mod secret_scanner;
+pub mod history_scanner;
+pub mod code_patterns;

@@ -312,6 +312,17 @@ pub async fn run(
                                 });
                             }
                         }
+                        Action::StartAudit(path) => {
+                            app.audit.scanning = true;
+                            app.scanner.state = ScannerState::SecretAuditScanning;
+                            let tx2 = tx.clone();
+                            tokio::spawn(async move {
+                                let results = tokio::task::spawn_blocking(move || {
+                                    crate::scanner::secret_scanner::scan_directory(&path)
+                                }).await.unwrap_or_default();
+                                let _ = tx2.send(AppMessage::AuditScanResult { results });
+                            });
+                        }
                         Action::LoadContainerChildren(path) => {
                             let tx2 = tx.clone();
                             tokio::spawn(async move {

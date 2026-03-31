@@ -25,6 +25,16 @@ pub fn format_size(bytes: u64) -> String {
     }
 }
 
+/// Shorten a path by replacing $HOME with ~
+pub fn shorten_path(path: &str) -> String {
+    let home = std::env::var("HOME").unwrap_or_default();
+    if !home.is_empty() && path.starts_with(&home) {
+        format!("~{}", &path[home.len()..])
+    } else {
+        path.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
