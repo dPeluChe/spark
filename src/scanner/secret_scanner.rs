@@ -475,8 +475,8 @@ fn check_content(path: &Path, project_name: &str, project_path: &Path) -> Vec<Se
             }
         }
 
-        // Private key content
-        if PRIVATE_KEY_CONTENT.is_match(trimmed) {
+        // Private key content — skip if it's inside quotes (string literal / regex pattern)
+        if PRIVATE_KEY_CONTENT.is_match(trimmed) && !is_key_reference(trimmed) {
             findings.push(SecretFinding {
                 file_path: path.to_path_buf(), line_number: line_num + 1,
                 category: FindingCategory::PrivateKey, severity: adjust_severity(Severity::Critical),
@@ -512,6 +512,17 @@ fn check_content(path: &Path, project_name: &str, project_path: &Path) -> Vec<Se
     }
 
     findings
+}
+
+/// Check if a private key header is just a reference (inside quotes, regex, or comment)
+fn is_key_reference(line: &str) -> bool {
+    // Inside string literal: r"-----BEGIN", "-----BEGIN", '-----BEGIN'
+    let trimmed = line.trim();
+    trimmed.contains("r\"-----") || trimmed.contains("r#\"-----")
+        || trimmed.contains("\"-----BEGIN") || trimmed.contains("'-----BEGIN")
+        || trimmed.contains("Regex::new") || trimmed.contains("regex!")
+        || trimmed.contains("contains(") || trimmed.contains("is_match")
+        || trimmed.contains("static ") || trimmed.contains("const ")
 }
 
 /// Check if a line is test/fixture code writing fake secrets

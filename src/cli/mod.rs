@@ -84,7 +84,7 @@ pub enum Commands {
     Status { query: Option<String> },
     /// Pull repos that are behind remote (fast-forward only)
     Pull { query: String },
-    /// Scan for exposed secrets and credentials (nothing leaves your machine)
+    /// Scan for exposed secrets and credentials
     Audit {
         /// Directory to scan (defaults to current directory)
         path: Option<PathBuf>,
@@ -94,6 +94,12 @@ pub enum Commands {
         /// Create a .sparkauditignore file with defaults
         #[arg(long = "init")]
         init_ignore: bool,
+        /// Skip dependency vulnerability check (no network)
+        #[arg(long = "offline")]
+        offline: bool,
+        /// Only run dependency vulnerability check
+        #[arg(long = "deps")]
+        deps_only: bool,
     },
     /// Validate installation and environment health
     Doctor,
@@ -113,7 +119,11 @@ pub fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_
         Commands::Config { key, set } => system::cmd_config(key, set, config),
         Commands::Status { query } => { repos::cmd_status(query, config); Ok(()) }
         Commands::Pull { query } => { repos::cmd_pull(&query, config); Ok(()) }
-        Commands::Audit { path, output, init_ignore } => { audit::cmd_audit(path, output, init_ignore); Ok(()) }
+        Commands::Audit { path, output, init_ignore, offline, deps_only } => {
+            if deps_only { audit::cmd_audit_deps(path); }
+            else { audit::cmd_audit(path, output, init_ignore, offline); }
+            Ok(())
+        }
         Commands::Doctor => { system::cmd_doctor(config); Ok(()) }
     }
 }
