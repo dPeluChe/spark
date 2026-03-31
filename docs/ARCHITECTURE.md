@@ -32,14 +32,18 @@ src/
 │   ├── cleaner.rs              # Cleanup: trash, archive, delete artifacts
 │   ├── repo_manager.rs         # ghq-style clone, pull, status tracking
 │   ├── port_scanner.rs         # Dev port discovery, runtime detection, process kill
-│   └── system_cleaner.rs       # Docker, caches, VMs, logs cleanup + safety guards
+│   ├── system_cleaner.rs       # Docker, caches, VMs, logs cleanup + safety guards
+│   ├── secret_scanner.rs       # API keys, credentials, sensitive files detection
+│   ├── history_scanner.rs      # Git commit history scan via git2
+│   ├── code_patterns.rs        # OWASP Top 10:2025 pattern detection
+│   └── dep_scanner.rs          # Dependency vulnerabilities (OSV.dev + npm audit)
 ├── tui/
 │   ├── model.rs                # App, UpdaterModel, ScannerModel, RepoManagerModel, PortScannerModel
 │   ├── update.rs               # Key/message handling, state transitions, Action dispatch
 │   ├── scanner_keys.rs         # Scanner/RepoManager/PortScanner key bindings
 │   ├── view.rs                 # Top-level render dispatcher + tab bar
 │   ├── styles.rs               # Color palette, ASCII art, spinner frames
-│   └── widgets/                # UI components (splash, dashboard, scanner, modals, etc.)
+│   └── widgets/                # UI components (splash, dashboard, scanner, audit_view, modals, etc.)
 └── utils/
     ├── shell.rs                # Async shell command execution with timeouts
     └── fs.rs                   # Directory size calculation, format_size
@@ -82,6 +86,10 @@ The central orchestrator:
 - **cleaner.rs**: Trash-based or permanent deletion of artifacts/repos
 - **repo_manager.rs**: ghq-style clone to `{root}/{host}/{owner}/{name}`, pull, status checks, 4h cache
 - **port_scanner.rs**: Batched `lsof`/`ps` on macOS, `/proc/net/tcp` on Linux; detects runtime (Node, Python, Go, Rust, etc.)
+- **secret_scanner.rs**: Regex-based detection of API keys, credentials, sensitive files with context-aware severity and `.sparkauditignore` support
+- **history_scanner.rs**: Walks git commit diffs via git2 to find secrets in past commits (reuses patterns from secret_scanner)
+- **code_patterns.rs**: OWASP Top 10:2025 patterns — SQL injection, command injection, XSS, insecure crypto, deserialization, config, path traversal
+- **dep_scanner.rs**: Parses package.json/lock, requirements.txt, Cargo.toml/lock; queries OSV.dev batch API for known vulnerabilities
 
 ### 6. TUI (`tui/`)
 
@@ -138,7 +146,7 @@ PortScan -> PortKillConfirm -> PortScan
 ## Testing
 
 ```bash
-cargo test    # 79 tests
+cargo test    # 113 tests
 ```
 
 Tests cover: version parsing, health scoring, config serialization/deserialization, inventory validation, changelog URL mapping, artifact detection, port detection, git URL parsing, and TUI model logic.
@@ -158,5 +166,6 @@ Tests cover: version parsing, health scoring, config serialization/deserializati
 - `regex` / `once_cell` - Version parsing
 - `walkdir` - Filesystem traversal
 - `chrono` - Date/time for health scoring
+- `reqwest` - HTTP client (OSV.dev API queries)
 - `color-eyre` - Error reporting
 - `dirs` - Platform-specific directories

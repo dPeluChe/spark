@@ -6,15 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **SPARK** is a **Rust-based developer operations platform** delivered as a TUI.
 
-The active codebase is 100% Rust. It manages repos, scans health, cleans artifacts, monitors ports, cleans system caches, and updates dev tools.
+The active codebase is 100% Rust. It manages repos, scans health, cleans artifacts, monitors ports, cleans system caches, audits security, and updates dev tools.
 
-### Five Core Modules
+### Six Core Modules
 
 1. **Scanner**: Discovers, health-scores, and cleans stale git repos and build artifacts
 2. **Repo Manager**: ghq-style repository organizer — clone, pull, track status across all repos
 3. **Port Scanner**: Discovers and kills development servers running on local ports
 4. **System Cleanup**: Docker, dev caches (brew/npm/pip/cargo), VMs, logs — with safety guards
-5. **Updater**: Manages updates for 44+ developer tools (AI tools, IDEs, Infrastructure, Runtimes)
+5. **Security Audit**: Secrets, git history, OWASP code patterns, dependency vulnerabilities (OSV.dev + npm audit)
+6. **Updater**: Manages updates for 44+ developer tools (AI tools, IDEs, Infrastructure, Runtimes)
 
 ### CLI Commands
 
@@ -27,6 +28,11 @@ spark search <query>       # Search repos (shows status, commit age, path)
 spark list [-p] [query]    # List repos (tree view by host/owner)
 spark status [query]       # Check which repos need pull (fetch + compare)
 spark pull <query|all>     # Pull repos behind remote (ff-only)
+spark audit [path]         # Security audit (secrets + history + OWASP + deps)
+spark audit --deps         # Dependency-only scan (OSV.dev + npm audit)
+spark audit --offline      # Local-only scan (no network)
+spark audit --init         # Create .sparkauditignore
+spark audit -o report.txt  # Save audit report to file
 spark root [--set]         # Show/change root
 spark rm <query>           # Remove repo
 spark config               # Show/update config
@@ -39,9 +45,14 @@ spark completions <shell>  # Shell completions
 
 ```
 src/
-├── main.rs                    # Entry point, CLI (clap), terminal setup
+├── main.rs                    # Entry point, terminal setup
 ├── app.rs                     # Event loop, action dispatch via mpsc channels
 ├── config.rs                  # SparkConfig + ghq root detection
+├── cli/
+│   ├── mod.rs                 # CLI definitions (clap), dispatcher, shared helpers
+│   ├── repos.rs               # clone, list, search, cd, rm, status, pull
+│   ├── audit.rs               # audit command (secrets, history, OWASP, deps output)
+│   └── system.rs              # init, config, doctor, agent, completions, root
 ├── core/
 │   ├── types.rs               # Tool, ToolState, Category, UpdateMethod enums
 │   ├── inventory.rs           # 44+ tools catalog
@@ -56,27 +67,40 @@ src/
 │   ├── health.rs              # Health scoring (0-100, grades A-F)
 │   ├── cleaner.rs             # Artifact cleanup (trash or delete)
 │   ├── repo_manager.rs        # ghq-style clone/pull/status + cache
-│   ├── port_scanner.rs        # Port discovery (lsof macOS, /proc Linux)
-│   └── system_cleaner.rs      # Docker, caches, VMs, logs cleanup + safety
+│   ├── port_scanner.rs        # Port discovery (batched lsof macOS, /proc Linux)
+│   ├── system_cleaner.rs      # Docker, caches, VMs, logs cleanup + safety
+│   ├── secret_scanner.rs      # API keys, credentials, sensitive files, .env detection
+│   ├── history_scanner.rs     # Git commit history scan via git2
+│   ├── code_patterns.rs       # OWASP Top 10:2025 pattern detection
+│   └── dep_scanner.rs         # Dependency vulnerabilities (OSV.dev API + npm audit)
 ├── tui/
 │   ├── model.rs               # All state models + Toast notifications
 │   ├── update.rs              # Key/message handling, Action dispatch
-│   ├── scanner_keys.rs        # Scanner/Repos/Ports/System key bindings
+│   ├── scanner_keys.rs        # Scanner/Repos/Ports/System/Audit key bindings
 │   ├── view.rs                # Tab bar + render dispatcher
 │   ├── styles.rs              # Color palette, ASCII art
 │   └── widgets/               # splash, dashboard, scanner_view, detail_panel,
 │                              # repo_manager_view, port_view, system_view,
-│                              # progress, modal
+│                              # audit_view, progress, modal
 └── utils/
     ├── shell.rs               # Async commands + debug logging
-    └── fs.rs                  # dir_size, format_size
+    └── fs.rs                  # dir_size, format_size, shorten_path, safe_truncate
 ```
 
 ## Key Concepts
 
 ### Tab Navigation
-`TAB` cycles: Scanner → Repos → Ports → System → Updater
+`TAB` cycles: Scanner → Repos → Ports → System → Audit → Updater
 `q` goes back (not quit) in sub-views. Only quits at root level.
+
+### Security Audit (4 phases)
+1. **Secrets scan**: API keys, credentials, sensitive files, .env detection with context-aware severity
+2. **Git history scan**: Walks commit diffs via git2 for secrets in past commits
+3. **Code patterns (OWASP Top 10:2025)**: SQL injection, command injection, XSS, insecure crypto, deserialization, config, path traversal
+4. **Dependency scan**: Queries OSV.dev batch API + runs npm audit if package-lock.json exists
+
+Context-aware severity: Source Code > Config > Test > Docs (findings in tests/docs downgraded to info)
+`.sparkauditignore`: gitignore-style file to suppress reviewed findings
 
 ### Safety (System Cleanup)
 - Path validation against protected system paths
@@ -96,8 +120,8 @@ src/
 
 ```bash
 cargo run                  # Dev mode
-cargo test                 # 79 tests
-cargo build --release      # Optimized build (~2.7MB)
+cargo test                 # 113 tests
+cargo build --release      # Optimized build
 ```
 
 ## Configuration

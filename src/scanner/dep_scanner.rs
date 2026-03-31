@@ -180,7 +180,7 @@ fn parse_package_lock(path: &Path) -> Vec<Dependency> {
     // lockfileVersion 2/3 uses "packages"
     if let Some(packages) = json.get("packages").and_then(|v| v.as_object()) {
         for (key, val) in packages {
-            if key.is_empty() || key == "" { continue; } // skip root
+            if key.is_empty() { continue; } // skip root
             let name = key.strip_prefix("node_modules/").unwrap_or(key);
             if name.contains("node_modules/") { continue; } // skip nested
             if let Some(version) = val.get("version").and_then(|v| v.as_str()) {
@@ -226,15 +226,13 @@ fn parse_requirements_txt(path: &Path) -> Vec<Dependency> {
                     ecosystem: "PyPI".into(),
                     source_file: "requirements.txt".into(),
                 })
-            } else if let Some(pos) = line.find(">=") {
-                Some(Dependency {
+            } else {
+                line.find(">=").map(|pos| Dependency {
                     name: line[..pos].trim().to_string(),
                     version: line[pos+2..].split(',').next().unwrap_or("").trim().to_string(),
                     ecosystem: "PyPI".into(),
                     source_file: "requirements.txt".into(),
                 })
-            } else {
-                None // No version pinned
             }
         })
         .filter(|d| !d.version.is_empty())

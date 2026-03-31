@@ -44,11 +44,9 @@ pub fn scan_history(repo_path: &Path) -> Vec<HistoryFinding> {
 
     let mut findings = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
-    let mut count = 0;
 
-    for oid in revwalk.filter_map(|r| r.ok()) {
+    for (count, oid) in revwalk.filter_map(|r| r.ok()).enumerate() {
         if count >= MAX_COMMITS { break; }
-        count += 1;
 
         let commit = match repo.find_commit(oid) {
             Ok(c) => c,

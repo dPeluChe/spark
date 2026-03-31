@@ -29,6 +29,7 @@ spark init
 - **Repo Manager** — ghq-compatible clone/pull/status (42+ repos)
 - **Port Scanner** — Find & kill forgotten dev servers
 - **System Cleanup** — Docker, caches (brew/npm/pip/cargo), VMs, logs
+- **Security Audit** — Secrets, OWASP patterns, dependency vulnerabilities
 - **Updater** — Manage 44+ dev tools (brew, npm, macOS apps)
 
 ## CLI
@@ -42,6 +43,8 @@ spark search <query>     # Search repos (status, age, path)
 spark list               # List repos (tree by host/owner)
 spark status [query]     # Check which repos need pull
 spark pull <query|all>   # Pull repos behind remote
+spark audit [path]       # Security audit (4 phases)
+spark audit --deps       # Dependency-only scan
 spark root               # Show repos root
 spark doctor             # Validate installation health
 spark config             # Show/update config

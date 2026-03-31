@@ -14,6 +14,11 @@ Pending tasks and improvements for the SPARK DevOps platform.
 - Run in GitHub Actions CI after each release build
 - **Why**: Ensure cross-platform releases (macOS arm64/x64, Linux) actually work
 
+### Audit: TUI integration completion
+- Audit tab shows project list + detail but doesn't show dependency findings in TUI yet
+- Add dependency scan results to TUI audit detail view
+- Show npm audit results in TUI
+
 ---
 
 ## Medium Priority
@@ -35,6 +40,14 @@ Pending tasks and improvements for the SPARK DevOps platform.
 - ESC doesn't work in some terminals (only `q` works for back/close)
 - Investigate terminal-specific ESC handling (Ghostty, Zellij, iTerm2)
 
+### Audit: git history false positives
+- History scanner detects test fixtures from scanner's own test code in commit diffs
+- Could parse surrounding diff context to detect test blocks
+
+### Audit: parallel scan phases
+- Phases 1-3 (secrets, history, patterns) run sequentially
+- Could parallelize since they don't share state
+
 ---
 
 ## Low Priority
@@ -52,3 +65,7 @@ Pending tasks and improvements for the SPARK DevOps platform.
 ### TUI repo detail for non-containers
 - Pressing Enter on a non-container repo in ScanResults goes to RepoDetail
 - Could show richer info: recent commits, branch list, disk usage breakdown
+
+### Audit: more ecosystems
+- Support `go.sum` (Go modules), `Gemfile.lock` (Ruby), `composer.lock` (PHP)
+- Support `pnpm-lock.yaml`, `yarn.lock` for npm alternatives

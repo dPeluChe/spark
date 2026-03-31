@@ -73,6 +73,7 @@ impl std::fmt::Display for FindingContext {
 
 /// A single security finding
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct SecretFinding {
     pub file_path: PathBuf,
     pub line_number: usize,
@@ -400,17 +401,17 @@ fn check_filename(path: &Path, project_name: &str, project_path: &Path) -> Vec<S
     }
 
     // .env files — info level
-    if file_name == ".env" || file_name.starts_with(".env.") {
-        if !file_name.contains("example") && !file_name.contains("sample") && !file_name.contains("template") {
-            findings.push(SecretFinding {
-                file_path: path.to_path_buf(), line_number: 0,
-                category: FindingCategory::EnvFile, severity: Severity::Info,
-                context: FindingContext::Config,
-                description: "Environment file (may contain secrets)".into(),
-                redacted_match: file_name.to_string(),
-                project_name: project_name.to_string(), project_path: project_path.to_path_buf(),
-            });
-        }
+    if (file_name == ".env" || file_name.starts_with(".env."))
+        && !file_name.contains("example") && !file_name.contains("sample") && !file_name.contains("template")
+    {
+        findings.push(SecretFinding {
+            file_path: path.to_path_buf(), line_number: 0,
+            category: FindingCategory::EnvFile, severity: Severity::Info,
+            context: FindingContext::Config,
+            description: "Environment file (may contain secrets)".into(),
+            redacted_match: file_name.to_string(),
+            project_name: project_name.to_string(), project_path: project_path.to_path_buf(),
+        });
     }
 
     // Known credential config files

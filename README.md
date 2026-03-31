@@ -89,6 +89,17 @@ Clean up disk space with safety guards inspired by [tw93/mole](https://github.co
 
 **Safety**: path validation, app-aware (skips running apps), age-based filtering, operation logging, whitelist support, dry-run mode.
 
+### Security Audit — Secrets, Code Patterns, Dependencies
+
+4-phase security scanner for any project:
+
+1. **Secrets scan**: API keys (AWS, GitHub, Anthropic, OpenAI, Stripe, Slack), credentials, sensitive files, .env
+2. **Git history**: Scans commit diffs for secrets that were committed and later removed
+3. **Code patterns (OWASP Top 10:2025)**: SQL injection, command injection, XSS, insecure crypto, deserialization, path traversal
+4. **Dependencies**: Queries [OSV.dev](https://osv.dev) API + `npm audit` for known vulnerabilities
+
+Context-aware severity (source code > config > test > docs). Supports `.sparkauditignore` for suppressing reviewed findings.
+
 ### Updater — Tool Update Manager
 
 Manages updates for 44+ developer tools across 8 categories: AI tools, terminals, IDEs, productivity, infrastructure, utilities, runtimes, system.
@@ -108,6 +119,11 @@ spark search <query>       # Search repos (shows status, commit age, path)
 spark list [-p] [query]    # List repos (tree by host/owner)
 spark status [query]       # Check which repos need pull (fetch + compare)
 spark pull <query|all>     # Pull repos behind remote (ff-only)
+spark audit [path]         # Security audit (secrets + OWASP + deps)
+spark audit --deps         # Dependency-only scan (OSV.dev + npm audit)
+spark audit --offline      # Local-only scan (no network)
+spark audit --init         # Create .sparkauditignore
+spark audit -o report.txt  # Save report to file
 spark root [--set <path>]  # Show/change repos root
 spark rm <query>           # Remove a repo
 spark doctor               # Validate installation + environment
@@ -124,7 +140,7 @@ spark --dry-run            # TUI in preview mode (no destructive actions)
 ### Global
 | Key | Action |
 |-----|--------|
-| `TAB` | Cycle: Scanner → Repos → Ports → System → Updater |
+| `TAB` | Cycle: Scanner → Repos → Ports → System → Audit → Updater |
 | `q` | Back / Close modal |
 | `Ctrl+C` | Quit |
 
@@ -168,6 +184,14 @@ spark --dry-run            # TUI in preview mode (no destructive actions)
 | `SPACE` | Toggle selection |
 | `x` | Clean selected items |
 | `r` | Rescan |
+
+### Audit
+| Key | Action |
+|-----|--------|
+| `ENTER` | View project findings detail |
+| `j/k` | Navigate projects / findings |
+| `r` | Rescan |
+| `PgUp/PgDn` | Page navigation |
 
 ---
 

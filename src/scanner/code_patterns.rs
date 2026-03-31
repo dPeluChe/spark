@@ -248,6 +248,12 @@ static PATTERNS: Lazy<Vec<PatternDef>> = Lazy::new(|| vec![
 /// Directories to skip
 use super::secret_scanner::COMMON_SKIP_DIRS;
 
+fn is_safe_pattern(line: &str) -> bool {
+    line.contains("SafeLoader") || line.contains("safe_load")
+        || line.contains("JSON.parse")
+        || line.contains("innerHTML = ''") || line.contains(r#"innerHTML = """#)
+}
+
 /// Extensions to scan for code patterns
 const CODE_EXT: &[&str] = &[
     "js", "ts", "jsx", "tsx", "py", "rb", "php", "java", "go", "rs",
@@ -334,12 +340,7 @@ pub fn scan_code_patterns(path: &Path) -> Vec<PatternFinding> {
                 }
 
                 if pattern_def.regex.is_match(trimmed)
-                    // yaml.load with SafeLoader is fine
-                    && !(trimmed.contains("SafeLoader") || trimmed.contains("safe_load"))
-                    // eval(JSON.parse(...)) is fine
-                    && !(trimmed.contains("JSON.parse"))
-                    // innerHTML = '' or innerHTML = "" (clearing) is fine
-                    && !(trimmed.contains("innerHTML = ''") || trimmed.contains(r#"innerHTML = """#))
+                    && !is_safe_pattern(trimmed)
                 {
                     let severity = if is_test || is_docs || is_infra { PatternSeverity::Low } else { pattern_def.severity };
 
