@@ -214,32 +214,31 @@ fn print_summary(result: &cert_scanner::CertScanResult, loose: &[cert_scanner::L
         if keys > 0 { println!("    \x1b[31m{} key files\x1b[0m — review for unused or exposed private keys", keys); }
         if certs_count > 0 { println!("    \x1b[33m{} certificate files\x1b[0m — check expiration with spark certs", certs_count); }
 
-        // Parse loose cert files to check expiration
-        let mut expired_loose = 0usize;
-        let mut expiring_loose = 0usize;
-        let mut valid_loose = 0usize;
-        let mut unparseable = 0usize;
+        // Parse loose cert files to check expiration (per file, not per cert inside bundles)
+        let mut files_with_expired = 0usize;
+        let mut files_expiring = 0usize;
+        let mut files_valid = 0usize;
+        let mut files_unparseable = 0usize;
         for f in loose.iter().filter(|f| f.file_type == "certificate") {
             let parsed = cert_scanner::parse_cert_file(&f.path);
-            if parsed.is_empty() { unparseable += 1; continue; }
-            for c in &parsed {
-                match c.status {
-                    cert_scanner::CertStatus::Expired => expired_loose += 1,
-                    cert_scanner::CertStatus::Expiring30 | cert_scanner::CertStatus::Expiring90 => expiring_loose += 1,
-                    cert_scanner::CertStatus::Valid => valid_loose += 1,
-                }
-            }
+            if parsed.is_empty() { files_unparseable += 1; continue; }
+            // Classify file by its worst cert status
+            let has_expired = parsed.iter().any(|c| c.status == cert_scanner::CertStatus::Expired);
+            let has_expiring = parsed.iter().any(|c| matches!(c.status, cert_scanner::CertStatus::Expiring30 | cert_scanner::CertStatus::Expiring90));
+            if has_expired { files_with_expired += 1; }
+            else if has_expiring { files_expiring += 1; }
+            else { files_valid += 1; }
         }
-        let total_parsed = expired_loose + expiring_loose + valid_loose;
+        let total_parsed = files_with_expired + files_expiring + files_valid;
         if total_parsed > 0 {
-            print!("    cert status: ");
-            if expired_loose > 0 { print!("\x1b[31m{} expired\x1b[0m  ", expired_loose); }
-            if expiring_loose > 0 { print!("\x1b[33m{} expiring\x1b[0m  ", expiring_loose); }
-            if valid_loose > 0 { print!("\x1b[32m{} valid\x1b[0m", valid_loose); }
+            print!("    cert files: ");
+            if files_with_expired > 0 { print!("\x1b[31m{} contain expired certs\x1b[0m  ", files_with_expired); }
+            if files_expiring > 0 { print!("\x1b[33m{} expiring\x1b[0m  ", files_expiring); }
+            if files_valid > 0 { print!("\x1b[32m{} valid\x1b[0m", files_valid); }
             println!();
         }
-        if unparseable > 0 {
-            println!("    \x1b[90m{} files could not be parsed (DER/binary format)\x1b[0m", unparseable);
+        if files_unparseable > 0 {
+            println!("    \x1b[90m{} files could not be parsed (DER/binary format)\x1b[0m", files_unparseable);
         }
         println!();
     }
