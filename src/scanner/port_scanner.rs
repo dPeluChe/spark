@@ -220,7 +220,7 @@ fn get_cmdlines_batch(pids: &[u32]) -> HashMap<u32, String> {
         if let Some(idx) = line.find(|c: char| c.is_ascii_whitespace()) {
             if let Ok(pid) = line[..idx].trim().parse::<u32>() {
                 let cmd = line[idx..].trim().to_string();
-                let cmd = if cmd.len() > 120 { format!("{}...", super::secret_scanner::safe_truncate(&cmd, 117)) } else { cmd };
+                let cmd = if cmd.len() > 120 { format!("{}...", super::common::safe_truncate(&cmd, 117)) } else { cmd };
                 map.insert(pid, cmd);
             }
         }

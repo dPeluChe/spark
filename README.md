@@ -100,6 +100,15 @@ Clean up disk space with safety guards inspired by [tw93/mole](https://github.co
 
 Context-aware severity (source code > config > test > docs). Supports `.sparkauditignore` for suppressing reviewed findings.
 
+### Certificate Scanner — SSL/TLS Health Check
+
+Scan and audit certificates across your system:
+
+- **Keychain scan** (macOS): expired, expiring, valid — grouped by issuer
+- **Home directory scan**: finds loose `.pem`, `.key`, `.crt`, SSH keys across `~/`
+- **Recommendations by type**: Apple (safe to remove), Developer (renew), Self-signed (review and rotate)
+- **Expiration analysis**: summary by age, cert file status parsing
+
 ### Updater — Tool Update Manager
 
 Manages updates for 44+ developer tools across 8 categories: AI tools, terminals, IDEs, productivity, infrastructure, utilities, runtimes, system.
@@ -124,6 +133,9 @@ spark audit --deps         # Dependency-only scan (OSV.dev + npm audit)
 spark audit --offline      # Local-only scan (no network)
 spark audit --init         # Create .sparkauditignore
 spark audit -o report.txt  # Save report to file
+spark certs                # Scan SSL/TLS certs (Keychain + files + ~/)
+spark certs --expired      # Show only expired
+spark certs --summary      # Summary only
 spark root [--set <path>]  # Show/change repos root
 spark rm <query>           # Remove a repo
 spark doctor               # Validate installation + environment

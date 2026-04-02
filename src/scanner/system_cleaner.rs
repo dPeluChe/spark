@@ -11,7 +11,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const LOG_AGE_DAYS: u64 = 7;
+pub(crate) const LOG_AGE_DAYS: u64 = 7;
 
 /// Protected paths that must NEVER be deleted
 const PROTECTED_PATHS: &[&str] = &[
@@ -66,7 +66,7 @@ pub enum CleanCommand {
 // --- Path validation ---
 
 /// Validate a path is safe to delete
-fn is_safe_path(path: &Path) -> bool {
+pub(crate) fn is_safe_path(path: &Path) -> bool {
     let path_str = path.display().to_string();
 
     // Empty path
@@ -107,7 +107,7 @@ fn is_safe_path(path: &Path) -> bool {
 }
 
 /// Check if a process is running by name
-fn is_app_running(name: &str) -> bool {
+pub(crate) fn is_app_running(name: &str) -> bool {
     Command::new("pgrep")
         .args(["-xi", name])
         .output()
@@ -139,7 +139,7 @@ fn load_whitelist() -> Vec<PathBuf> {
 }
 
 /// Check if a path is whitelisted (should be skipped)
-fn is_whitelisted(path: &Path, whitelist: &[PathBuf]) -> bool {
+pub(crate) fn is_whitelisted(path: &Path, whitelist: &[PathBuf]) -> bool {
     whitelist.iter().any(|w| path.starts_with(w))
 }
 
@@ -269,468 +269,16 @@ pub fn execute_clean(item: &CleanableItem, dry_run: bool) -> Result<u64, String>
     }
 }
 
-// --- Docker scanning ---
+// Scan category implementations are in system_categories.rs
+use super::system_categories;
 
-fn scan_docker(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
-    let mut items = Vec::new();
-
-    let docker_ok = Command::new("docker")
-        .args(["info", "--format", "{{.ID}}"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-
-    if !docker_ok {
-        return items;
-    }
-
-    // Dangling images
-    if let Some(mut item) = scan_docker_category(
-        &["images", "-f", "dangling=true", "--format", "{{.Size}}"],
-        "Dangling images",
-        vec!["image", "prune", "-f"],
-    ) {
-        if !is_whitelisted(&PathBuf::from("/var/lib/docker"), whitelist) {
-            item.app_running = false; // Docker is running (we verified above)
-            items.push(item);
-        }
-    }
-
-    // Stopped containers
-    if let Some(mut item) = scan_docker_category(
-        &["ps", "-a", "-f", "status=exited", "--format", "{{.Size}}"],
-        "Stopped containers",
-        vec!["container", "prune", "-f"],
-    ) {
-        item.app_running = false;
-        items.push(item);
-    }
-
-    // Build cache
-    if let Some(item) = scan_docker_build_cache() {
-        items.push(item);
-    }
-
-    items
-}
-
-fn scan_docker_category(query_args: &[&str], name: &str, clean_args: Vec<&str>) -> Option<CleanableItem> {
-    let output = Command::new("docker").args(query_args).output().ok()?;
-    if !output.status.success() { return None; }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let count = stdout.lines().filter(|l| !l.is_empty()).count();
-    if count == 0 { return None; }
-
-    let total_size = parse_docker_sizes(&stdout);
-
-    Some(CleanableItem {
-        category: CleanCategory::Docker,
-        name: name.into(),
-        detail: format!("{} items", count),
-        size: total_size,
-        clean_cmd: CleanCommand::Shell(
-            "docker".into(),
-            clean_args.iter().map(|s| s.to_string()).collect(),
-        ),
-        app_running: false,
-        age_days: None,
-    })
-}
-
-fn scan_docker_build_cache() -> Option<CleanableItem> {
-    let output = Command::new("docker")
-        .args(["system", "df", "--format", "{{.Type}}\t{{.Size}}\t{{.Reclaimable}}"])
-        .output().ok()?;
-
-    if !output.status.success() { return None; }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() >= 3 && parts[0] == "Build Cache" {
-            let reclaimable = parse_size_string(parts[2].split_whitespace().next().unwrap_or("0"));
-            if reclaimable > 0 {
-                return Some(CleanableItem {
-                    category: CleanCategory::Docker,
-                    name: "Build cache".into(),
-                    detail: format!("{} reclaimable", crate::utils::fs::format_size(reclaimable)),
-                    size: reclaimable,
-                    clean_cmd: CleanCommand::Shell(
-                        "docker".into(),
-                        vec!["builder".into(), "prune".into(), "-f".into()],
-                    ),
-                    app_running: false,
-                    age_days: None,
-                });
-            }
-        }
-    }
-    None
-}
-
-// --- Cache scanning ---
-
-fn scan_caches(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
-    let mut items = Vec::new();
-    let home = dirs::home_dir().unwrap_or_default();
-
-    struct CacheTarget {
-        name: &'static str,
-        path: PathBuf,
-        cmd: &'static str,
-        args: Vec<&'static str>,
-        app_process: &'static str,
-    }
-
-    let targets = vec![
-        CacheTarget {
-            name: "Homebrew cache",
-            path: home.join("Library/Caches/Homebrew"),
-            cmd: "brew", args: vec!["cleanup", "--prune=all"],
-            app_process: "",
-        },
-        CacheTarget {
-            name: "npm cache",
-            path: home.join(".npm/_cacache"),
-            cmd: "npm", args: vec!["cache", "clean", "--force"],
-            app_process: "",
-        },
-        CacheTarget {
-            name: "pip cache",
-            path: home.join("Library/Caches/pip"),
-            cmd: "pip3", args: vec!["cache", "purge"],
-            app_process: "",
-        },
-        CacheTarget {
-            name: "Cargo registry",
-            path: home.join(".cargo/registry"),
-            cmd: "", args: vec![],
-            app_process: "",
-        },
-        CacheTarget {
-            name: "Xcode DerivedData",
-            path: home.join("Library/Developer/Xcode/DerivedData"),
-            cmd: "", args: vec![],
-            app_process: "Xcode",
-        },
-        CacheTarget {
-            name: "CocoaPods cache",
-            path: home.join("Library/Caches/CocoaPods"),
-            cmd: "pod", args: vec!["cache", "clean", "--all"],
-            app_process: "",
-        },
-        CacheTarget {
-            name: "Go module cache",
-            path: home.join("go/pkg/mod/cache"),
-            cmd: "go", args: vec!["clean", "-modcache"],
-            app_process: "",
-        },
-        CacheTarget {
-            name: "Gradle cache",
-            path: home.join(".gradle/caches"),
-            cmd: "", args: vec![],
-            app_process: "java",
-        },
-    ];
-
-    for target in &targets {
-        if !target.path.exists() {
-            continue;
-        }
-        if is_whitelisted(&target.path, whitelist) {
-            continue;
-        }
-
-        let size = crate::utils::fs::dir_size(&target.path);
-        if size < 1_048_576 { // < 1MB skip
-            continue;
-        }
-
-        let app_running = if target.app_process.is_empty() {
-            false
-        } else {
-            is_app_running(target.app_process)
-        };
-
-        let clean_cmd = if !target.cmd.is_empty() && !target.args.is_empty() {
-            let cmd_exists = Command::new("which")
-                .arg(target.cmd)
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false);
-            if cmd_exists {
-                CleanCommand::Shell(
-                    target.cmd.to_string(),
-                    target.args.iter().map(|s| s.to_string()).collect(),
-                )
-            } else {
-                CleanCommand::RemoveDir(target.path.clone())
-            }
-        } else {
-            CleanCommand::RemoveDir(target.path.clone())
-        };
-
-        let home_str = home.display().to_string();
-        let detail = {
-            let p = target.path.display().to_string();
-            if p.starts_with(&home_str) { format!("~{}", &p[home_str.len()..]) } else { p }
-        };
-
-        let mut warn = String::new();
-        if app_running {
-            warn = format!(" ({}  running)", target.app_process);
-        }
-
-        items.push(CleanableItem {
-            category: CleanCategory::Cache,
-            name: target.name.to_string(),
-            detail: format!("{}{}", detail, warn),
-            size,
-            clean_cmd,
-            app_running,
-            age_days: None,
-        });
-    }
-
-    items
-}
-
-// --- Log scanning ---
-
-fn scan_logs(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
-    let mut items = Vec::new();
-    let home = dirs::home_dir().unwrap_or_default();
-
-    let log_dirs = [
-        home.join(".context"),
-        home.join(".codex"),
-        home.join(".factory"),
-        home.join("Library/Logs"),
-    ];
-
-    let now = std::time::SystemTime::now();
-
-    for dir in &log_dirs {
-        if !dir.exists() { continue; }
-
-        for entry in walkdir::WalkDir::new(dir)
-            .max_depth(3)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
-            if !entry.file_type().is_file() { continue; }
-            let path = entry.path();
-
-            if is_whitelisted(path, whitelist) { continue; }
-
-            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-            if ext != "log" && ext != "hprof" { continue; }
-
-            let meta = match std::fs::metadata(path) {
-                Ok(m) => m,
-                Err(_) => continue,
-            };
-            let size = meta.len();
-            if size < 10_485_760 { continue; } // < 10MB skip
-
-            // Age-based: only include logs older than LOG_AGE_DAYS
-            let age_days = meta.modified().ok()
-                .and_then(|m| now.duration_since(m).ok())
-                .map(|d| d.as_secs() / 86400);
-
-            if let Some(days) = age_days {
-                if days < LOG_AGE_DAYS {
-                    continue; // Too recent, skip
-                }
-            }
-
-            let name = path.file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_default();
-
-            let home_str = home.display().to_string();
-            let display = {
-                let p = path.display().to_string();
-                if p.starts_with(&home_str) { format!("~{}", &p[home_str.len()..]) } else { p }
-            };
-
-            items.push(CleanableItem {
-                category: CleanCategory::Logs,
-                name,
-                detail: display,
-                size,
-                clean_cmd: CleanCommand::RemoveFile(path.to_path_buf()),
-                app_running: false,
-                age_days,
-            });
-        }
-    }
-
-    items
-}
-
-// --- VM scanning ---
-
-fn scan_vms(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
-    let mut items = Vec::new();
-    let home = dirs::home_dir().unwrap_or_default();
-
-    // Docker VM disk
-    let docker_raw = home.join("Library/Containers/com.docker.docker/Data/vms/0/Docker.raw");
-    if docker_raw.exists() && !is_whitelisted(&docker_raw, whitelist) {
-        let size = std::fs::metadata(&docker_raw).map(|m| m.len()).unwrap_or(0);
-        if size > 100_000_000 {
-            items.push(CleanableItem {
-                category: CleanCategory::VMs,
-                name: "Docker VM disk".into(),
-                detail: "Reset via Docker Desktop > Troubleshoot > Clean/Purge data".into(),
-                size,
-                // Don't auto-delete Docker.raw — guide user to Docker Desktop
-                clean_cmd: CleanCommand::Shell(
-                    "docker".into(),
-                    vec!["system".into(), "prune".into(), "-a".into(), "-f".into()],
-                ),
-                app_running: is_app_running("Docker"),
-                age_days: None,
-            });
-        }
-    }
-
-    // Android emulator AVDs
-    let avd_dir = home.join(".android/avd");
-    if avd_dir.exists() && !is_whitelisted(&avd_dir, whitelist) {
-        let size = crate::utils::fs::dir_size(&avd_dir);
-        if size > 100_000_000 {
-            items.push(CleanableItem {
-                category: CleanCategory::VMs,
-                name: "Android emulators".into(),
-                detail: "~/.android/avd".into(),
-                size,
-                clean_cmd: CleanCommand::RemoveDir(avd_dir),
-                app_running: is_app_running("qemu-system"),
-                age_days: None,
-            });
-        }
-    }
-
-    // Old IE VMs
-    let ievms = home.join(".ievms");
-    if ievms.exists() && !is_whitelisted(&ievms, whitelist) {
-        let size = crate::utils::fs::dir_size(&ievms);
-        if size > 1_000_000 {
-            items.push(CleanableItem {
-                category: CleanCategory::VMs,
-                name: "IE test VMs".into(),
-                detail: "~/.ievms (legacy IE testing)".into(),
-                size,
-                clean_cmd: CleanCommand::RemoveDir(ievms),
-                app_running: false,
-                age_days: None,
-            });
-        }
-    }
-
-    // boot2docker legacy
-    let b2d = home.join(".docker/machine");
-    if b2d.exists() && !is_whitelisted(&b2d, whitelist) {
-        let size = crate::utils::fs::dir_size(&b2d);
-        if size > 1_000_000 {
-            items.push(CleanableItem {
-                category: CleanCategory::VMs,
-                name: "boot2docker".into(),
-                detail: "~/.docker/machine (legacy)".into(),
-                size,
-                clean_cmd: CleanCommand::RemoveDir(b2d),
-                app_running: false,
-                age_days: None,
-            });
-        }
-    }
-
-    items
-}
-
-// --- Download scanning ---
-
-fn scan_downloads(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
-    let mut items = Vec::new();
-    let home = dirs::home_dir().unwrap_or_default();
-    let downloads = home.join("Downloads");
-
-    if !downloads.exists() { return items; }
-
-    let entries = match std::fs::read_dir(&downloads) {
-        Ok(e) => e,
-        Err(_) => return items,
-    };
-
-    for entry in entries.filter_map(|e| e.ok()) {
-        let path = entry.path();
-        if !path.is_file() { continue; }
-        if is_whitelisted(&path, whitelist) { continue; }
-
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-        if !matches!(ext.as_str(), "iso" | "dmg" | "pkg" | "ova" | "ovf" | "vmdk") {
-            continue;
-        }
-        let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
-        if size < 50_000_000 { continue; } // < 50MB skip
-
-        let name = path.file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
-
-        items.push(CleanableItem {
-            category: CleanCategory::Downloads,
-            name: name.clone(),
-            detail: format!("~/Downloads/{}", name),
-            size,
-            clean_cmd: CleanCommand::RemoveFile(path),
-            app_running: false,
-            age_days: None,
-        });
-    }
-
-    items
-}
-
-// --- Helpers ---
-
-fn parse_docker_sizes(output: &str) -> u64 {
-    output.lines()
-        .map(|line| {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            parts.last().map(|s| parse_size_string(s)).unwrap_or(0)
-        })
-        .sum()
-}
-
-fn parse_size_string(s: &str) -> u64 {
-    let s = s.trim();
-    if s.is_empty() { return 0; }
-
-    let mut num_end = 0;
-    for (i, c) in s.char_indices() {
-        if c.is_ascii_digit() || c == '.' {
-            num_end = i + c.len_utf8();
-        } else {
-            break;
-        }
-    }
-
-    let number: f64 = s[..num_end].parse().unwrap_or(0.0);
-    let unit = s[num_end..].trim().to_lowercase();
-
-    match unit.as_str() {
-        "b" | "bytes" => number as u64,
-        "kb" | "k" => (number * 1024.0) as u64,
-        "mb" | "m" => (number * 1_048_576.0) as u64,
-        "gb" | "g" => (number * 1_073_741_824.0) as u64,
-        "tb" | "t" => (number * 1_099_511_627_776.0) as u64,
-        _ => (number * 1_048_576.0) as u64,
-    }
-}
+fn scan_docker(whitelist: &[PathBuf]) -> Vec<CleanableItem> { system_categories::scan_docker(whitelist) }
+fn scan_caches(whitelist: &[PathBuf]) -> Vec<CleanableItem> { system_categories::scan_caches(whitelist) }
+fn scan_logs(whitelist: &[PathBuf]) -> Vec<CleanableItem> { system_categories::scan_logs(whitelist) }
+fn scan_vms(whitelist: &[PathBuf]) -> Vec<CleanableItem> { system_categories::scan_vms(whitelist) }
+fn scan_downloads(whitelist: &[PathBuf]) -> Vec<CleanableItem> { system_categories::scan_downloads(whitelist) }
+#[cfg(test)]
+fn parse_size_string(s: &str) -> u64 { system_categories::parse_size_string(s) }
 
 #[cfg(test)]
 mod tests {
@@ -821,3 +369,4 @@ mod tests {
         assert!(result.unwrap_err().contains("running"));
     }
 }
+

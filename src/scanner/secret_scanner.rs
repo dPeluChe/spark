@@ -6,6 +6,8 @@
 use std::path::{Path, PathBuf};
 use once_cell::sync::Lazy;
 use regex::Regex;
+use super::common;
+
 
 /// Severity of a finding
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -168,60 +170,7 @@ const CREDENTIAL_CONFIG_FILES: &[&str] = &[
     "credentials.tfrc.json",
 ];
 
-// Uses COMMON_SKIP_DIRS defined above
-
-/// URL domains that are safe (not credentials)
-const SAFE_URL_DOMAINS: &[&str] = &[
-    "fonts.googleapis.com", "fonts.google.com", "cdn.jsdelivr.net",
-    "unpkg.com", "cdnjs.cloudflare.com", "registry.npmjs.org",
-];
-
-/// Binary extensions to skip
-const BINARY_EXT: &[&str] = &[
-    "png", "jpg", "jpeg", "gif", "ico", "svg", "webp", "bmp", "tiff",
-    "mp3", "mp4", "avi", "mov", "mkv", "wav", "flac",
-    "zip", "tar", "gz", "bz2", "xz", "7z", "rar",
-    "exe", "dll", "so", "dylib", "o", "a", "lib",
-    "wasm", "class", "pyc", "pyo",
-    "ttf", "otf", "woff", "woff2", "eot",
-    "pdf", "doc", "docx", "xls", "xlsx",
-    "lock", "sum",
-];
-
-const MAX_FILE_SIZE: u64 = 1_048_576; // 1MB
-
-/// Shared skip directories (used by secret_scanner and code_patterns)
-pub const COMMON_SKIP_DIRS: &[&str] = &[
-    ".git", "node_modules", "vendor", ".next", "target", "dist", "build",
-    "__pycache__", ".venv", "venv", ".tox", ".eggs", ".mypy_cache",
-    ".pytest_cache", ".cargo", "Pods", ".gradle",
-    ".claude", ".cursor", ".agents", ".gemini", ".copilot",
-    ".vscode", ".idea", ".fleet",
-    "dist-web", "dist-server", "dist-electron", ".output", ".nuxt", ".vercel",
-    ".parcel-cache", ".turbo", "out", "coverage",
-];
-
-/// Load ignore patterns from .sparkauditignore file.
-/// Each line is a path prefix or filename to skip (relative to project root).
-/// Lines starting with # are comments.
-pub(crate) fn load_ignore_patterns(scan_root: &Path) -> Vec<String> {
-    let ignore_file = scan_root.join(".sparkauditignore");
-    if !ignore_file.exists() { return Vec::new(); }
-    std::fs::read_to_string(&ignore_file).unwrap_or_default()
-        .lines()
-        .filter(|l| !l.trim().is_empty() && !l.trim().starts_with('#'))
-        .map(|l| l.trim().to_string())
-        .collect()
-}
-
-/// Check if a file should be ignored based on .sparkauditignore patterns
-fn is_ignored(file_path: &Path, scan_root: &Path, patterns: &[String]) -> bool {
-    if patterns.is_empty() { return false; }
-    let rel = file_path.strip_prefix(scan_root)
-        .unwrap_or(file_path)
-        .display().to_string();
-    patterns.iter().any(|p| rel.starts_with(p) || rel.contains(p))
-}
+// Constants and shared utilities are in scanner::common
 
 /// Scan a directory for secrets, returning results grouped by project.
 pub fn scan_directory(path: &Path) -> Vec<AuditResult> {
@@ -235,7 +184,7 @@ pub fn scan_directory_with_progress(
 ) -> Vec<AuditResult> {
     let mut findings: Vec<SecretFinding> = Vec::new();
     let mut files_scanned = 0usize;
-    let ignore_patterns = load_ignore_patterns(path);
+    let ignore_patterns = common::load_ignore_patterns(path);
 
     for entry in walkdir::WalkDir::new(path)
         .max_depth(8)
@@ -251,16 +200,16 @@ pub fn scan_directory_with_progress(
         let file_path = entry.path();
 
         // Skip ignored files
-        if is_ignored(file_path, path, &ignore_patterns) { continue; }
+        if common::is_ignored(file_path, path, &ignore_patterns) { continue; }
 
         // Skip binary files by extension
-        if is_binary_ext(file_path) {
+        if common::BINARY_EXT.contains(&file_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase().as_str()) {
             continue;
         }
 
         // Skip large files
         if let Ok(meta) = std::fs::metadata(file_path) {
-            if meta.len() > MAX_FILE_SIZE {
+            if meta.len() > common::MAX_FILE_SIZE {
                 continue;
             }
         }
@@ -283,7 +232,7 @@ fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
         return false;
     }
     let name = entry.file_name().to_string_lossy();
-    COMMON_SKIP_DIRS.contains(&name.as_ref())
+    common::SKIP_DIRS.contains(&name.as_ref())
 }
 
 /// Determine context from file path
@@ -335,14 +284,7 @@ fn detect_context(path: &Path) -> FindingContext {
 /// Check if a URL contains a safe domain (not credentials)
 fn is_safe_url(url: &str) -> bool {
     let lower = url.to_lowercase();
-    SAFE_URL_DOMAINS.iter().any(|domain| lower.contains(domain))
-}
-
-fn is_binary_ext(path: &Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .map(|e| BINARY_EXT.contains(&e.to_lowercase().as_str()))
-        .unwrap_or(false)
+    common::SAFE_URL_DOMAINS.iter().any(|domain| lower.contains(domain))
 }
 
 /// Find the project (nearest .git parent) for a file
@@ -461,7 +403,7 @@ fn check_content(path: &Path, project_name: &str, project_path: &Path) -> Vec<Se
 
         if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with("//") { continue; }
         if is_test_code(trimmed) { continue; }
-        if is_likely_false_positive(trimmed) { continue; }
+        if common::is_likely_false_positive(trimmed) { continue; }
 
         // API key patterns
         for (pattern, desc) in API_KEY_PATTERNS.iter() {
@@ -470,7 +412,7 @@ fn check_content(path: &Path, project_name: &str, project_path: &Path) -> Vec<Se
                     file_path: path.to_path_buf(), line_number: line_num + 1,
                     category: FindingCategory::ApiKey, severity: adjust_severity(Severity::Critical),
                     context: ctx.clone(), description: desc.to_string(),
-                    redacted_match: redact(m.as_str()),
+                    redacted_match: common::redact(m.as_str()),
                     project_name: project_name.to_string(), project_path: project_path.to_path_buf(),
                 });
             }
@@ -536,38 +478,7 @@ fn is_test_code(line: &str) -> bool {
         || lower.contains("fn test_")
 }
 
-/// Check if a line is likely a false positive (shared with history_scanner)
-pub fn is_likely_false_positive(line: &str) -> bool {
-    let lower = line.to_lowercase();
-    // Test/example/placeholder values
-    lower.contains("example") || lower.contains("placeholder")
-        || lower.contains("your_") || lower.contains("your-")
-        || lower.contains("<your") || lower.contains("xxx")
-        || lower.contains("changeme") || lower.contains("todo")
-        || lower.contains("fixme") || lower.contains("replace_me")
-        || lower.contains("dummy") || lower.contains("fake")
-        || lower.contains("test_key") || lower.contains("test-key")
-        || lower.contains("sample")
-}
-
-/// Safely truncate a string at a char boundary
-pub fn safe_truncate(s: &str, max: usize) -> &str {
-    if s.len() <= max { return s; }
-    match s.char_indices().take_while(|(i, _)| *i <= max).last() {
-        Some((i, c)) => &s[..i + c.len_utf8()],
-        None => &s[..0],
-    }
-}
-
-/// Redact a secret value, showing only first 4 and last 4 chars
-pub fn redact(value: &str) -> String {
-    if value.len() <= 8 {
-        return format!("{}****", &value[..value.len().min(4)]);
-    }
-    let start = &value[..4];
-    let end = &value[value.len() - 4..];
-    format!("{}****{}", start, end)
-}
+// is_likely_false_positive, safe_truncate, redact are in scanner::common (re-exported above)
 
 /// Redact a URL with credentials
 fn redact_url(url: &str) -> String {
@@ -578,14 +489,14 @@ fn redact_url(url: &str) -> String {
             return format!("{}****:****{}", scheme, host);
         }
     }
-    redact(url)
+    common::redact(url)
 }
 
 /// Redact a generic key=value line
 fn redact_generic(line: &str) -> String {
     let trimmed = line.trim();
     if trimmed.len() > 60 {
-        format!("{}...", safe_truncate(trimmed, 57))
+        format!("{}...", common::safe_truncate(trimmed, 57))
     } else {
         trimmed.to_string()
     }
@@ -689,16 +600,16 @@ mod tests {
 
     #[test]
     fn test_false_positive_filter() {
-        assert!(is_likely_false_positive("api_key = 'your_api_key_here'"));
-        assert!(is_likely_false_positive("password = 'changeme'"));
-        assert!(is_likely_false_positive("# example: token = sk-xxx"));
-        assert!(!is_likely_false_positive("AWS_SECRET=wJalrXUtnFEMI/K7MDENG/bPxRfi"));
+        assert!(common::is_likely_false_positive("api_key = 'your_api_key_here'"));
+        assert!(common::is_likely_false_positive("password = 'changeme'"));
+        assert!(common::is_likely_false_positive("# example: token = sk-xxx"));
+        assert!(!common::is_likely_false_positive("AWS_SECRET=wJalrXUtnFEMI/K7MDENG/bPxRfi"));
     }
 
     #[test]
     fn test_redact() {
-        assert_eq!(redact("AKIAIOSFODNN7EXAMPLE"), "AKIA****MPLE");
-        assert_eq!(redact("short"), "shor****");
+        assert_eq!(common::redact("AKIAIOSFODNN7EXAMPLE"), "AKIA****MPLE");
+        assert_eq!(common::redact("short"), "shor****");
     }
 
     #[test]
@@ -711,10 +622,10 @@ mod tests {
 
     #[test]
     fn test_skip_binary_ext() {
-        assert!(is_binary_ext(Path::new("image.png")));
-        assert!(is_binary_ext(Path::new("archive.tar.gz")));
-        assert!(!is_binary_ext(Path::new("config.json")));
-        assert!(!is_binary_ext(Path::new("script.sh")));
+        assert!(common::BINARY_EXT.contains(&"png"));
+        assert!(common::BINARY_EXT.contains(&"gz"));
+        assert!(!common::BINARY_EXT.contains(&"json"));
+        assert!(!common::BINARY_EXT.contains(&"sh"));
     }
 
     #[test]

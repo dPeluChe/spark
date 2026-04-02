@@ -6,6 +6,23 @@ Pending tasks and improvements for the SPARK DevOps platform.
 
 ## High Priority
 
+### System Cleanup: risk indicators per item
+- Each cleanable item should show a risk level (safe / caution / danger)
+- Safe: caches (npm, pip, brew) — can be rebuilt
+- Caution: Docker VM disk, DerivedData — may need rebuild time
+- Danger: items where app is running
+- Show a brief explanation of what happens if deleted
+
+### Audit TUI: let user choose scan path
+- Currently scans repos_root automatically (all cloned repos)
+- Should default to current directory or let user pick the path
+- Similar to Scanner tab's directory picker
+
+### Updater: review tool inventory
+- Remove tools the user doesn't have/need (bat, httpie, tldr, helm, terraform)
+- Consider making the inventory configurable or auto-detecting installed tools
+- Section "Productivity" needs cleanup — some tools are too niche
+
 ### `spark smoke-test` / CI validation script
 - Create `scripts/smoke-test.sh` for portable post-install validation
 - Test: `spark --version`, `spark --help`, `spark list`, `spark config`

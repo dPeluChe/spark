@@ -159,7 +159,7 @@ pub(crate) fn filter_repo(r: &crate::scanner::repo_manager::ManagedRepo, q: &str
 }
 
 pub(crate) fn shorten_path(path: &str) -> String {
-    crate::utils::fs::shorten_path(path)
+    crate::scanner::common::shorten_path(path)
 }
 
 pub(crate) fn expand_url(input: &str, use_ssh: bool) -> String {

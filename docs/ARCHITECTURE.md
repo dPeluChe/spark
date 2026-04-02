@@ -90,6 +90,7 @@ The central orchestrator:
 - **history_scanner.rs**: Walks git commit diffs via git2 to find secrets in past commits (reuses patterns from secret_scanner)
 - **code_patterns.rs**: OWASP Top 10:2025 patterns — SQL injection, command injection, XSS, insecure crypto, deserialization, config, path traversal
 - **dep_scanner.rs**: Parses package.json/lock, requirements.txt, Cargo.toml/lock; queries OSV.dev batch API for known vulnerabilities
+- **cert_scanner.rs**: SSL/TLS certificate parsing with x509-parser, macOS Keychain scan, home directory key/cert file discovery
 
 ### 6. TUI (`tui/`)
 
@@ -146,7 +147,7 @@ PortScan -> PortKillConfirm -> PortScan
 ## Testing
 
 ```bash
-cargo test    # 113 tests
+cargo test    # 118 tests
 ```
 
 Tests cover: version parsing, health scoring, config serialization/deserialization, inventory validation, changelog URL mapping, artifact detection, port detection, git URL parsing, and TUI model logic.
@@ -167,5 +168,6 @@ Tests cover: version parsing, health scoring, config serialization/deserializati
 - `walkdir` - Filesystem traversal
 - `chrono` - Date/time for health scoring
 - `reqwest` - HTTP client (OSV.dev API queries)
+- `x509-parser` - Certificate parsing (pure Rust)
 - `color-eyre` - Error reporting
 - `dirs` - Platform-specific directories

@@ -33,6 +33,10 @@ spark audit --deps         # Dependency-only scan (OSV.dev + npm audit)
 spark audit --offline      # Local-only scan (no network)
 spark audit --init         # Create .sparkauditignore
 spark audit -o report.txt  # Save audit report to file
+spark certs                # Scan certificates (Keychain + files + ~/home)
+spark certs --keychain     # Keychain only
+spark certs --expired      # Show only expired
+spark certs --summary      # Summary without details
 spark root [--set]         # Show/change root
 spark rm <query>           # Remove repo
 spark config               # Show/update config
@@ -72,20 +76,41 @@ src/
 │   ├── secret_scanner.rs      # API keys, credentials, sensitive files, .env detection
 │   ├── history_scanner.rs     # Git commit history scan via git2
 │   ├── code_patterns.rs       # OWASP Top 10:2025 pattern detection
-│   └── dep_scanner.rs         # Dependency vulnerabilities (OSV.dev API + npm audit)
+│   ├── dep_scanner.rs         # Dependency vulnerabilities (OSV.dev API + npm audit)
+│   └── cert_scanner.rs        # SSL/TLS certificate scanning (x509-parser + macOS Keychain)
 ├── tui/
 │   ├── model.rs               # All state models + Toast notifications
 │   ├── update.rs              # Key/message handling, Action dispatch
-│   ├── scanner_keys.rs        # Scanner/Repos/Ports/System/Audit key bindings
+│   ├── scanner_keys/           # Key bindings split by tab
+│   │   ├── mod.rs             # Dispatcher
+│   │   ├── scanner_tab.rs     # Scanner/container/clean/delete keys
+│   │   ├── repo_tab.rs        # Repo manager keys
+│   │   ├── port_tab.rs        # Port scanner keys
+│   │   ├── system_tab.rs      # System cleanup keys
+│   │   └── audit_tab.rs       # Security audit keys
 │   ├── view.rs                # Tab bar + render dispatcher
 │   ├── styles.rs              # Color palette, ASCII art
 │   └── widgets/               # splash, dashboard, scanner_view, detail_panel,
 │                              # repo_manager_view, port_view, system_view,
 │                              # audit_view, progress, modal
+├── cli/
+│   ├── mod.rs                 # CLI definitions (clap), dispatcher, shared helpers
+│   ├── repos.rs               # clone, list, search, cd, rm, status, pull
+│   ├── audit.rs               # audit command output (4 phases)
+│   ├── certs.rs               # certificate scanner CLI
+│   └── system.rs              # init, config, doctor, agent, completions, root
 └── utils/
     ├── shell.rs               # Async commands + debug logging
     └── fs.rs                  # dir_size, format_size, shorten_path, safe_truncate
 ```
+
+### Certificate Scanner (`spark certs`)
+- Parses `.pem`, `.crt`, `.cer` files with `x509-parser` (pure Rust, no openssl dependency)
+- macOS Keychain scan via `security find-certificate`
+- Home directory scan for loose key/cert files (SSH keys, private keys, stale certs)
+- Grouped by issuer with oldest/newest range for large groups
+- Context-aware recommendations: Apple (safe to remove), Developer (renew in Xcode), Self-signed (review and rotate)
+- Sections: Expired → Expiring → Valid (all shown by default)
 
 ## Key Concepts
 
@@ -120,7 +145,7 @@ Context-aware severity: Source Code > Config > Test > Docs (findings in tests/do
 
 ```bash
 cargo run                  # Dev mode
-cargo test                 # 113 tests
+cargo test                 # 118 tests
 cargo build --release      # Optimized build
 ```
 

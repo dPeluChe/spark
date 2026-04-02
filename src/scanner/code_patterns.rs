@@ -246,7 +246,7 @@ static PATTERNS: Lazy<Vec<PatternDef>> = Lazy::new(|| vec![
 ]);
 
 /// Directories to skip
-use super::secret_scanner::COMMON_SKIP_DIRS;
+use super::common;
 
 fn is_safe_pattern(line: &str) -> bool {
     line.contains("SafeLoader") || line.contains("safe_load")
@@ -265,7 +265,7 @@ const MAX_FILE_SIZE: u64 = 512_000; // 512KB
 /// Scan a directory for OWASP code patterns.
 pub fn scan_code_patterns(path: &Path) -> Vec<PatternFinding> {
     let mut findings = Vec::new();
-    let ignore_patterns = super::secret_scanner::load_ignore_patterns(path);
+    let ignore_patterns = common::load_ignore_patterns(path);
 
     for entry in walkdir::WalkDir::new(path)
         .max_depth(8)
@@ -273,7 +273,7 @@ pub fn scan_code_patterns(path: &Path) -> Vec<PatternFinding> {
         .filter_entry(|e| {
             if !e.file_type().is_dir() { return true; }
             let name = e.file_name().to_string_lossy();
-            !COMMON_SKIP_DIRS.contains(&name.as_ref())
+            !common::SKIP_DIRS.contains(&name.as_ref())
         })
         .filter_map(|e| e.ok())
     {
@@ -345,7 +345,7 @@ pub fn scan_code_patterns(path: &Path) -> Vec<PatternFinding> {
                     let severity = if is_test || is_docs || is_infra { PatternSeverity::Low } else { pattern_def.severity };
 
                     let matched_text = if trimmed.len() > 80 {
-                        format!("{}...", super::secret_scanner::safe_truncate(trimmed, 77))
+                        format!("{}...", common::safe_truncate(trimmed, 77))
                     } else {
                         trimmed.to_string()
                     };

@@ -30,6 +30,7 @@ spark init
 - **Port Scanner** — Find & kill forgotten dev servers
 - **System Cleanup** — Docker, caches (brew/npm/pip/cargo), VMs, logs
 - **Security Audit** — Secrets, OWASP patterns, dependency vulnerabilities
+- **Certificate Scanner** — SSL/TLS certs, Keychain, loose keys in ~/
 - **Updater** — Manage 44+ dev tools (brew, npm, macOS apps)
 
 ## CLI
@@ -45,6 +46,7 @@ spark status [query]     # Check which repos need pull
 spark pull <query|all>   # Pull repos behind remote
 spark audit [path]       # Security audit (4 phases)
 spark audit --deps       # Dependency-only scan
+spark certs              # SSL/TLS certificate health
 spark root               # Show repos root
 spark doctor             # Validate installation health
 spark config             # Show/update config

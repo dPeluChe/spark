@@ -128,16 +128,17 @@ pub fn scan_history(repo_path: &Path) -> Vec<HistoryFinding> {
 
 /// Check a single line against secret patterns (reuses patterns from secret_scanner).
 fn check_line_patterns(line: &str) -> Vec<(FindingCategory, Severity, String, String)> {
-    use super::secret_scanner::{API_KEY_PATTERNS, PRIVATE_KEY_CONTENT, is_likely_false_positive, redact};
+    use super::secret_scanner::{API_KEY_PATTERNS, PRIVATE_KEY_CONTENT};
+    use super::common;
 
-    if is_likely_false_positive(line) {
+    if common::is_likely_false_positive(line) {
         return Vec::new();
     }
 
     let mut results = Vec::new();
     for (pattern, desc) in API_KEY_PATTERNS.iter() {
         if let Some(m) = pattern.find(line) {
-            results.push((FindingCategory::ApiKey, Severity::Critical, redact(m.as_str()), desc.to_string()));
+            results.push((FindingCategory::ApiKey, Severity::Critical, common::redact(m.as_str()), desc.to_string()));
         }
     }
     if PRIVATE_KEY_CONTENT.is_match(line) {
