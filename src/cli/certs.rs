@@ -71,11 +71,11 @@ pub fn cmd_certs(path: Option<PathBuf>, keychain_only: bool, expired_only: bool,
 
     print_summary(&result, &loose);
 
-    // Tip for cleanup
-    if result.expired_count > 0 {
-        println!("  \x1b[90mTo remove expired certs from Keychain:\x1b[0m");
-        println!("  \x1b[90m  open /Applications/Utilities/Keychain\\ Access.app\x1b[0m");
-        println!("  \x1b[90m  or: security delete-certificate -c \"cert-name\" login.keychain\x1b[0m\n");
+    // Context-aware recommendations
+    if result.expired_count > 0 || !loose.is_empty() {
+        println!("  \x1b[1mRecommendations\x1b[0m\n");
+        print_recommendations(&result);
+        println!();
     }
 }
 
@@ -242,4 +242,39 @@ fn print_summary(result: &cert_scanner::CertScanResult, loose: &[cert_scanner::L
         }
         println!();
     }
+}
+
+fn print_recommendations(result: &cert_scanner::CertScanResult) {
+    let expired: Vec<_> = result.certs.iter().filter(|c| c.status == CertStatus::Expired).collect();
+    if expired.is_empty() { return; }
+
+    let apple_count = expired.iter().filter(|c| c.issuer.contains("Apple")).count();
+    let self_signed = expired.iter().filter(|c| c.is_self_signed).count();
+    let dev_certs = expired.iter().filter(|c|
+        c.subject.contains("Developer") || c.subject.contains("iPhone")
+        || c.subject.contains("Distribution")
+    ).count();
+    let other = expired.len().saturating_sub(apple_count.max(dev_certs)).saturating_sub(self_signed);
+
+    if apple_count > 0 {
+        println!("    \x1b[90mApple certs ({} expired): safe to remove when expired.\x1b[0m", apple_count);
+        println!("    \x1b[90m  Managed by Apple, auto-renewed on active devices.\x1b[0m");
+    }
+    if dev_certs > 0 {
+        println!("    \x1b[90mDeveloper certs ({} expired): remove old provisioning profiles.\x1b[0m", dev_certs);
+        println!("    \x1b[90m  Renew active ones at developer.apple.com or Xcode.\x1b[0m");
+    }
+    if self_signed > 0 {
+        println!("    \x1b[33mSelf-signed certs ({} expired): review and rotate.\x1b[0m", self_signed);
+        println!("    \x1b[90m  Created manually for dev servers, VPNs, or internal tools.\x1b[0m");
+        println!("    \x1b[90m  If still in use, regenerate. If not, remove from Keychain.\x1b[0m");
+    }
+    if other > 0 {
+        println!("    \x1b[90mOther expired certs ({}): review issuer and remove if unused.\x1b[0m", other);
+    }
+
+    println!();
+    println!("    \x1b[90mTo clean up Keychain:\x1b[0m");
+    println!("    \x1b[90m  open /Applications/Utilities/Keychain\\ Access.app\x1b[0m");
+    println!("    \x1b[90m  or: security delete-certificate -c \"name\" login.keychain\x1b[0m");
 }
