@@ -148,7 +148,7 @@ pub fn scan_keychain() -> Vec<CertInfo> {
 }
 
 /// Parse a certificate file (may contain multiple PEM blocks)
-fn parse_cert_file(path: &Path) -> Vec<CertInfo> {
+pub fn parse_cert_file(path: &Path) -> Vec<CertInfo> {
     let content = match std::fs::read(path) {
         Ok(c) => c,
         Err(_) => return Vec::new(),

@@ -35,17 +35,17 @@ pub fn cmd_certs(path: Option<PathBuf>, keychain_only: bool, expired_only: bool,
     }
 
     // Home scan for loose key/cert files
-    {
+    let loose = {
         eprint!("  Scanning ~/ for loose key/cert files");
-        let loose = cert_scanner::scan_home_for_keys();
-        eprintln!(".. {} found\n", loose.len());
+        let found = cert_scanner::scan_home_for_keys();
+        eprintln!(".. {} found\n", found.len());
 
-        if !loose.is_empty() {
+        if !found.is_empty() {
             println!("  \x1b[33m--- Loose Key/Cert Files in ~/ ---\x1b[0m\n");
 
             // Group by type
             let mut by_type: std::collections::BTreeMap<&str, Vec<&cert_scanner::LooseKeyFile>> = std::collections::BTreeMap::new();
-            for f in &loose {
+            for f in &found {
                 by_type.entry(&f.file_type).or_default().push(f);
             }
 
@@ -66,9 +66,10 @@ pub fn cmd_certs(path: Option<PathBuf>, keychain_only: bool, expired_only: bool,
 
             println!("  \x1b[90mReview these files — private keys outside of ~/.ssh/ may be accidental.\x1b[0m\n");
         }
-    }
+        found
+    };
 
-    print_summary(&result);
+    print_summary(&result, &loose);
 
     // Tip for cleanup
     if result.expired_count > 0 {
@@ -167,7 +168,7 @@ fn format_days(days: i64) -> String {
     }
 }
 
-fn print_summary(result: &cert_scanner::CertScanResult) {
+fn print_summary(result: &cert_scanner::CertScanResult, loose: &[cert_scanner::LooseKeyFile]) {
     // Group expired by age buckets
     let mut by_year: std::collections::BTreeMap<i32, (usize, usize, usize)> = std::collections::BTreeMap::new();
     for cert in &result.certs {
@@ -202,6 +203,43 @@ fn print_summary(result: &cert_scanner::CertScanResult) {
             } else {
                 println!("    \x1b[90m{}-{} years:  {} certs\x1b[0m", age - 1, age, expired);
             }
+        }
+        println!();
+    }
+
+    if !loose.is_empty() {
+        let keys = loose.iter().filter(|f| f.file_type == "private key" || f.file_type == "SSH key").count();
+        let certs_count = loose.iter().filter(|f| f.file_type == "certificate").count();
+        println!("  \x1b[1mLoose files found in ~/\x1b[0m");
+        if keys > 0 { println!("    \x1b[31m{} key files\x1b[0m — review for unused or exposed private keys", keys); }
+        if certs_count > 0 { println!("    \x1b[33m{} certificate files\x1b[0m — check expiration with spark certs", certs_count); }
+
+        // Parse loose cert files to check expiration
+        let mut expired_loose = 0usize;
+        let mut expiring_loose = 0usize;
+        let mut valid_loose = 0usize;
+        let mut unparseable = 0usize;
+        for f in loose.iter().filter(|f| f.file_type == "certificate") {
+            let parsed = cert_scanner::parse_cert_file(&f.path);
+            if parsed.is_empty() { unparseable += 1; continue; }
+            for c in &parsed {
+                match c.status {
+                    cert_scanner::CertStatus::Expired => expired_loose += 1,
+                    cert_scanner::CertStatus::Expiring30 | cert_scanner::CertStatus::Expiring90 => expiring_loose += 1,
+                    cert_scanner::CertStatus::Valid => valid_loose += 1,
+                }
+            }
+        }
+        let total_parsed = expired_loose + expiring_loose + valid_loose;
+        if total_parsed > 0 {
+            print!("    cert status: ");
+            if expired_loose > 0 { print!("\x1b[31m{} expired\x1b[0m  ", expired_loose); }
+            if expiring_loose > 0 { print!("\x1b[33m{} expiring\x1b[0m  ", expiring_loose); }
+            if valid_loose > 0 { print!("\x1b[32m{} valid\x1b[0m", valid_loose); }
+            println!();
+        }
+        if unparseable > 0 {
+            println!("    \x1b[90m{} files could not be parsed (DER/binary format)\x1b[0m", unparseable);
         }
         println!();
     }

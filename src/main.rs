@@ -18,6 +18,9 @@ use ratatui::prelude::*;
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
+    // Enable ANSI escape codes on Windows Terminal
+    #[cfg(windows)]
+    let _ = crossterm::ansi_support::supports_ansi();
     utils::shell::init_log();
     let cli = cli::Cli::parse();
 
