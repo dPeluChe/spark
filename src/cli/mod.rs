@@ -3,6 +3,7 @@
 mod repos;
 mod system;
 mod audit;
+mod certs;
 
 use std::path::PathBuf;
 use clap::{Parser, Subcommand};
@@ -101,6 +102,23 @@ pub enum Commands {
         #[arg(long = "deps")]
         deps_only: bool,
     },
+    /// Scan SSL/TLS certificates (files + macOS Keychain)
+    Certs {
+        /// Directory to scan for cert files (defaults to current directory)
+        path: Option<PathBuf>,
+        /// Only scan macOS Keychain (skip file scan)
+        #[arg(long = "keychain")]
+        keychain_only: bool,
+        /// (default shows all — this flag is kept for compatibility)
+        #[arg(long = "all", hide = true)]
+        show_all: bool,
+        /// Show only expired certificates
+        #[arg(long = "expired")]
+        expired_only: bool,
+        /// Show summary table only (no details)
+        #[arg(long = "summary")]
+        summary_only: bool,
+    },
     /// Validate installation and environment health
     Doctor,
 }
@@ -123,6 +141,9 @@ pub fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_
             if deps_only { audit::cmd_audit_deps(path); }
             else { audit::cmd_audit(path, output, init_ignore, offline); }
             Ok(())
+        }
+        Commands::Certs { path, keychain_only, show_all: _, expired_only, summary_only } => {
+            certs::cmd_certs(path, keychain_only, expired_only, summary_only); Ok(())
         }
         Commands::Doctor => { system::cmd_doctor(config); Ok(()) }
     }
