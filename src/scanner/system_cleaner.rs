@@ -33,6 +33,25 @@ pub struct CleanableItem {
     pub app_running: bool,
     /// Age of the item in days (for logs)
     pub age_days: Option<u64>,
+    /// Risk level of cleaning this item
+    pub risk: CleanRisk,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CleanRisk {
+    Safe,    // Caches — can be rebuilt automatically
+    Caution, // Large items — may need rebuild time
+    Danger,  // Running apps or system-level
+}
+
+impl std::fmt::Display for CleanRisk {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CleanRisk::Safe => write!(f, "safe"),
+            CleanRisk::Caution => write!(f, "caution"),
+            CleanRisk::Danger => write!(f, "danger"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -331,6 +350,7 @@ mod tests {
             clean_cmd: CleanCommand::RemoveDir(PathBuf::from("/System")),
             app_running: false,
             age_days: None,
+            risk: CleanRisk::Danger,
         };
         let result = execute_clean(&item, false);
         assert!(result.is_err());
@@ -347,6 +367,7 @@ mod tests {
             clean_cmd: CleanCommand::RemoveDir(PathBuf::from("/tmp/nonexistent_spark_test")),
             app_running: false,
             age_days: None,
+            risk: CleanRisk::Safe,
         };
         let result = execute_clean(&item, true);
         assert!(result.is_ok());
@@ -363,6 +384,7 @@ mod tests {
             clean_cmd: CleanCommand::RemoveDir(PathBuf::from("/tmp/test")),
             app_running: true,
             age_days: None,
+            risk: CleanRisk::Danger,
         };
         let result = execute_clean(&item, false);
         assert!(result.is_err());

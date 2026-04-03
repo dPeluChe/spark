@@ -79,8 +79,12 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
         ScannerState::RepoCloneSummary => {
             super::repo_manager_view::render_clone_summary(frame, area, &app.repo_manager);
         }
-        ScannerState::SystemClean | ScannerState::SystemCleanConfirm => {
+        ScannerState::SystemClean => {
             super::system_view::render_system_cleaner(frame, area, &app.system_cleaner);
+        }
+        ScannerState::SystemCleanConfirm => {
+            super::system_view::render_system_cleaner(frame, area, &app.system_cleaner);
+            super::system_view::render_risk_confirm(frame, area, &app.system_cleaner);
         }
         ScannerState::SecretAuditScanning => {
             super::audit_view::render_audit_scanning(frame, area, tick);

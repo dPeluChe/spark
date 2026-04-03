@@ -28,7 +28,7 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Option<Action> {
                 } None
             }
             KeyCode::Char('r') | KeyCode::Char('R') => {
-                let path = app.config.repos_root.clone();
+                let path = std::env::current_dir().unwrap_or_else(|_| app.config.repos_root.clone());
                 Some(Action::StartAudit(path))
             }
             _ => None,

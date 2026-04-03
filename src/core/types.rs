@@ -52,6 +52,7 @@ impl Category {
         }
     }
 
+    #[allow(dead_code)]
     pub fn short_key(&self) -> &'static str {
         match self {
             Category::Code => "C",
@@ -67,14 +68,14 @@ impl Category {
 
     pub fn all() -> &'static [Category] {
         &[
+            Category::Sys,
             Category::Code,
-            Category::Term,
             Category::Ide,
+            Category::Term,
             Category::Prod,
             Category::Infra,
-            Category::Utils,
             Category::Runtime,
-            Category::Sys,
+            Category::Utils,
         ]
     }
 }

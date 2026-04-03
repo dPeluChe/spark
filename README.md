@@ -109,9 +109,21 @@ Scan and audit certificates across your system:
 - **Recommendations by type**: Apple (safe to remove), Developer (renew), Self-signed (review and rotate)
 - **Expiration analysis**: summary by age, cert file status parsing
 
+### System Cleanup — Docker, Caches, VMs, Logs
+
+Clean up disk space with safety guards inspired by [tw93/mole](https://github.com/tw93/mole).
+
+- Risk indicators per item: **safe** (green), **caution** (yellow), **danger** (red)
+- Confirmation popup with explanation before cleaning any item
+- **Docker**: dangling images, stopped containers, build cache
+- **Caches**: Homebrew, npm, pip, Cargo, Xcode, CocoaPods, Go, Gradle
+- **Logs**: dev logs >10MB older than 7 days
+- **VMs**: Docker VM disk, Android emulators, legacy VMs
+- **Downloads**: ISOs, DMGs, PKGs >50MB
+
 ### Updater — Tool Update Manager
 
-Manages updates for 44+ developer tools across 8 categories: AI tools, terminals, IDEs, productivity, infrastructure, utilities, runtimes, system.
+Manages updates for 55 developer tools across 8 categories: AI tools, terminals, IDEs, productivity, infrastructure, utilities, runtimes, system. Table view with version comparison and status indicators.
 
 ---
 

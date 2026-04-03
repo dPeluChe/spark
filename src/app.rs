@@ -313,6 +313,7 @@ pub async fn run(
                             }
                         }
                         Action::StartAudit(path) => {
+                            app.audit.scan_path = Some(path.clone());
                             app.audit.scanning = true;
                             app.scanner.state = ScannerState::SecretAuditScanning;
                             let tx2 = tx.clone();

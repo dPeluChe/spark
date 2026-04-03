@@ -6,22 +6,18 @@ Pending tasks and improvements for the SPARK DevOps platform.
 
 ## High Priority
 
-### System Cleanup: risk indicators per item
-- Each cleanable item should show a risk level (safe / caution / danger)
-- Safe: caches (npm, pip, brew) — can be rebuilt
-- Caution: Docker VM disk, DerivedData — may need rebuild time
-- Danger: items where app is running
-- Show a brief explanation of what happens if deleted
+### AI CLI integration — Skills for Claude Code, Codex, Gemini, Droid
+- Create a spark skill (.md file) that teaches AI agents when/how to use spark CLI
+- Skill covers: spark audit (security), spark status/pull (repos), spark certs, spark doctor
+- `spark init` auto-installs the skill in ~/.claude/skills/, ~/.codex/, ~/.gemini/
+- Each AI agent invokes spark via Bash (no MCP needed — spark is a standard CLI)
+- Skill should be context-aware: suggest audit before commits, status before deployments
+- **Why**: Make spark discoverable and usable by AI coding agents automatically
 
-### Audit TUI: let user choose scan path
-- Currently scans repos_root automatically (all cloned repos)
-- Should default to current directory or let user pick the path
-- Similar to Scanner tab's directory picker
-
-### Updater: review tool inventory
-- Remove tools the user doesn't have/need (bat, httpie, tldr, helm, terraform)
-- Consider making the inventory configurable or auto-detecting installed tools
-- Section "Productivity" needs cleanup — some tools are too niche
+### Updater: runtime version manager sub-panel
+- Show installed versions per runtime (nvm ls, pyenv versions, rvm list, rustup toolchain list)
+- Accessible via Enter on a runtime tool in the updater table
+- Display as detail panel similar to repo detail in Scanner
 
 ### `spark smoke-test` / CI validation script
 - Create `scripts/smoke-test.sh` for portable post-install validation

@@ -116,8 +116,8 @@ fn render_table(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
         Cell::from("  Item").style(Style::default().fg(Color::Rgb(180, 80, 40)).bold()),
         Cell::from("Type").style(Style::default().fg(Color::Rgb(180, 80, 40)).bold()),
         Cell::from("Size").style(Style::default().fg(Color::Rgb(180, 80, 40)).bold()),
+        Cell::from("Risk").style(Style::default().fg(Color::Rgb(180, 80, 40)).bold()),
         Cell::from("Detail").style(Style::default().fg(Color::Rgb(180, 80, 40)).bold()),
-        Cell::from("").style(Style::default().fg(Color::Rgb(180, 80, 40)).bold()),
     ]);
 
     let mut rows: Vec<Row> = Vec::new();
@@ -157,11 +157,16 @@ fn render_table(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
                 Style::default()
             };
 
-            // Safety indicator
-            let safety = if item.app_running {
-                "running"
+            // Risk + status indicator
+            use crate::scanner::system_cleaner::CleanRisk;
+            let (risk_label, risk_style) = if item.app_running {
+                ("RUNNING", Style::default().fg(RED).bold())
             } else {
-                ""
+                match item.risk {
+                    CleanRisk::Safe => ("safe", Style::default().fg(GREEN)),
+                    CleanRisk::Caution => ("caution", Style::default().fg(YELLOW)),
+                    CleanRisk::Danger => ("danger", Style::default().fg(RED)),
+                }
             };
 
             rows.push(Row::new(vec![
@@ -172,10 +177,9 @@ fn render_table(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
                     .style(if item.size > 1_073_741_824 { Style::default().fg(RED).bold() }
                         else if item.size > 100_000_000 { Style::default().fg(YELLOW) }
                         else { Style::default() }),
+                Cell::from(risk_label).style(risk_style),
                 Cell::from(item.detail.clone())
                     .style(Style::default().fg(GRAY)),
-                Cell::from(safety)
-                    .style(Style::default().fg(RED)),
             ]).style(row_style));
         }
     }
@@ -205,11 +209,11 @@ fn render_table(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
     let table = Table::new(
         scrolled_rows,
         [
-            Constraint::Percentage(22),
-            Constraint::Length(10),
-            Constraint::Length(10),
-            Constraint::Min(20),
-            Constraint::Length(8),
+            Constraint::Min(18),      // Item
+            Constraint::Length(10),    // Type
+            Constraint::Length(10),    // Size
+            Constraint::Length(8),     // Risk
+            Constraint::Percentage(40), // Detail
         ],
     )
     .header(header)
@@ -235,6 +239,114 @@ fn render_help(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
         Paragraph::new(Span::styled(help_text, Style::default().fg(GRAY))),
         area,
     );
+}
+
+pub fn render_risk_confirm(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
+    use crate::scanner::system_cleaner::CleanRisk;
+
+    let item = match model.items.get(model.cursor) {
+        Some(i) => i,
+        None => return,
+    };
+
+    let modal_area = center_modal(frame, area, 65, 16);
+    let border_color = match item.risk {
+        CleanRisk::Safe => GREEN,
+        CleanRisk::Caution => YELLOW,
+        CleanRisk::Danger => RED,
+    };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Thick)
+        .border_style(Style::default().fg(border_color))
+        .style(Style::default().bg(MODAL_BG));
+    let inner = block.inner(modal_area);
+    frame.render_widget(block, modal_area);
+
+    let risk_label = match item.risk {
+        CleanRisk::Safe => "SAFE TO CLEAN",
+        CleanRisk::Caution => "CAUTION",
+        CleanRisk::Danger => "DANGER",
+    };
+
+    let explanation = match (item.risk, item.category.clone()) {
+        (CleanRisk::Danger, _) => vec![
+            "This app is currently running.",
+            "Cleaning while running may cause crashes or data loss.",
+            "Close the app first, then retry.",
+        ],
+        (CleanRisk::Caution, CleanCategory::Docker) => vec![
+            "Docker images/containers will need to be re-pulled.",
+            "Build cache will be rebuilt on next docker build.",
+            "This may take significant time on slow connections.",
+        ],
+        (CleanRisk::Caution, CleanCategory::VMs) => vec![
+            "Virtual machine data may be permanently deleted.",
+            "Emulator AVDs will need to be recreated.",
+            "Docker VM disk will be rebuilt on restart.",
+        ],
+        (CleanRisk::Caution, CleanCategory::Cache) => vec![
+            "Cache will be rebuilt automatically on next use.",
+            "First build after cleaning may be slower.",
+            "No permanent data will be lost.",
+        ],
+        (CleanRisk::Safe, CleanCategory::Cache) => vec![
+            "This cache is rebuilt automatically on next use.",
+            "No projects or data will be affected.",
+            "Disk space will be freed immediately.",
+        ],
+        (CleanRisk::Safe, CleanCategory::Logs) => vec![
+            "Old log files older than 7 days.",
+            "These are regenerated by their apps automatically.",
+            "No data or functionality will be lost.",
+        ],
+        (CleanRisk::Safe, CleanCategory::Downloads) => vec![
+            "Large installer files (ISO, DMG, PKG).",
+            "These are typically no longer needed after installation.",
+            "Re-download from the original source if needed.",
+        ],
+        (CleanRisk::Safe, CleanCategory::VMs) => vec![
+            "Legacy VM data no longer in active use.",
+            "Safe to remove if you no longer use this tool.",
+        ],
+        _ => vec![
+            "This item can be safely removed.",
+            "It will be rebuilt automatically if needed.",
+        ],
+    };
+
+    let mut lines = vec![
+        Line::from(Span::styled(
+            format!(" {} ", risk_label),
+            Style::default().fg(WHITE).bg(border_color).bold(),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Item: ", Style::default().fg(PURPLE)),
+            Span::styled(&item.name, Style::default().fg(WHITE).bold()),
+        ]),
+        Line::from(vec![
+            Span::styled("  Size: ", Style::default().fg(PURPLE)),
+            Span::styled(format_size(item.size), Style::default().fg(YELLOW)),
+        ]),
+        Line::from(""),
+    ];
+
+    for exp in &explanation {
+        lines.push(Line::from(Span::styled(
+            format!("  {}", exp),
+            Style::default().fg(GRAY),
+        )));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  Proceed? (y/N)",
+        Style::default().fg(WHITE),
+    )));
+
+    frame.render_widget(Paragraph::new(lines).alignment(Alignment::Left), inner);
 }
 
 fn cat_color(cat: &CleanCategory) -> Color {

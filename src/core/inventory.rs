@@ -3,6 +3,16 @@ use super::types::*;
 /// Returns the master list of all supported tools
 pub fn get_inventory() -> Vec<Tool> {
     let mut tools = vec![
+        // System — package managers, shell, version control
+        Tool { id: String::new(), name: "Homebrew".into(), binary: "brew".into(), package: "homebrew".into(), category: Category::Sys, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "NPM".into(), binary: "npm".into(), package: "npm".into(), category: Category::Sys, method: UpdateMethod::NpmSys},
+        Tool { id: String::new(), name: "pnpm".into(), binary: "pnpm".into(), package: "pnpm".into(), category: Category::Sys, method: UpdateMethod::NpmPkg},
+        Tool { id: String::new(), name: "Yarn".into(), binary: "yarn".into(), package: "yarn".into(), category: Category::Sys, method: UpdateMethod::NpmPkg},
+        Tool { id: String::new(), name: "Git".into(), binary: "git".into(), package: "git".into(), category: Category::Sys, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "GitHub CLI".into(), binary: "gh".into(), package: "gh".into(), category: Category::Sys, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "Oh My Zsh".into(), binary: "omz".into(), package: "oh-my-zsh".into(), category: Category::Sys, method: UpdateMethod::Omz},
+        Tool { id: String::new(), name: "Bash".into(), binary: "bash".into(), package: "bash".into(), category: Category::Sys, method: UpdateMethod::BrewPkg},
+
         // AI Development
         Tool { id: String::new(), name: "Claude CLI".into(), binary: "claude".into(), package: "@anthropic-ai/claude-code".into(), category: Category::Code, method: UpdateMethod::Claude},
         Tool { id: String::new(), name: "Droid CLI".into(), binary: "droid".into(), package: "factory-cli".into(), category: Category::Code, method: UpdateMethod::Droid},
@@ -13,57 +23,63 @@ pub fn get_inventory() -> Vec<Tool> {
         Tool { id: String::new(), name: "Toad CLI".into(), binary: "toad".into(), package: "batrachian-toad".into(), category: Category::Code, method: UpdateMethod::Toad},
         Tool { id: String::new(), name: "Ollama".into(), binary: "ollama".into(), package: "ollama".into(), category: Category::Code, method: UpdateMethod::Manual},
 
-        // Terminal Emulators
-        Tool { id: String::new(), name: "iTerm2".into(), binary: "iterm".into(), package: "iterm2".into(), category: Category::Term, method: UpdateMethod::MacApp},
-        Tool { id: String::new(), name: "Ghostty".into(), binary: "ghostty".into(), package: "ghostty".into(), category: Category::Term, method: UpdateMethod::MacApp},
-        Tool { id: String::new(), name: "Warp Terminal".into(), binary: "warp".into(), package: "warp".into(), category: Category::Term, method: UpdateMethod::MacApp},
-
-        // IDEs
+        // IDEs & Editors
         Tool { id: String::new(), name: "VS Code".into(), binary: "code".into(), package: "visual-studio-code".into(), category: Category::Ide, method: UpdateMethod::MacApp},
         Tool { id: String::new(), name: "Cursor IDE".into(), binary: "cursor".into(), package: "cursor".into(), category: Category::Ide, method: UpdateMethod::MacApp},
         Tool { id: String::new(), name: "Zed Editor".into(), binary: "zed".into(), package: "zed".into(), category: Category::Ide, method: UpdateMethod::MacApp},
         Tool { id: String::new(), name: "Windsurf".into(), binary: "windsurf".into(), package: "windsurf".into(), category: Category::Ide, method: UpdateMethod::MacApp},
         Tool { id: String::new(), name: "Antigravity".into(), binary: "antigravity".into(), package: "antigravity".into(), category: Category::Ide, method: UpdateMethod::Manual},
 
-        // Productivity
+        // Terminals
+        Tool { id: String::new(), name: "iTerm2".into(), binary: "iterm".into(), package: "iterm2".into(), category: Category::Term, method: UpdateMethod::MacApp},
+        Tool { id: String::new(), name: "Ghostty".into(), binary: "ghostty".into(), package: "ghostty".into(), category: Category::Term, method: UpdateMethod::MacApp},
+        Tool { id: String::new(), name: "Warp Terminal".into(), binary: "warp".into(), package: "warp".into(), category: Category::Term, method: UpdateMethod::MacApp},
+
+        // Productivity — dev workflow tools
+        Tool { id: String::new(), name: "FFmpeg".into(), binary: "ffmpeg".into(), package: "ffmpeg".into(), category: Category::Prod, method: UpdateMethod::BrewPkg},
         Tool { id: String::new(), name: "JQ".into(), binary: "jq".into(), package: "jq".into(), category: Category::Prod, method: UpdateMethod::BrewPkg},
         Tool { id: String::new(), name: "FZF".into(), binary: "fzf".into(), package: "fzf".into(), category: Category::Prod, method: UpdateMethod::BrewPkg},
         Tool { id: String::new(), name: "Ripgrep".into(), binary: "rg".into(), package: "ripgrep".into(), category: Category::Prod, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "Bat".into(), binary: "bat".into(), package: "bat".into(), category: Category::Prod, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "HTTPie".into(), binary: "http".into(), package: "httpie".into(), category: Category::Prod, method: UpdateMethod::BrewPkg},
         Tool { id: String::new(), name: "LazyGit".into(), binary: "lazygit".into(), package: "lazygit".into(), category: Category::Prod, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "TLDR".into(), binary: "tldr".into(), package: "tldr".into(), category: Category::Prod, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "Delta".into(), binary: "delta".into(), package: "git-delta".into(), category: Category::Prod, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "Starship".into(), binary: "starship".into(), package: "starship".into(), category: Category::Prod, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "Pre-commit".into(), binary: "pre-commit".into(), package: "pre-commit".into(), category: Category::Prod, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "Ruff".into(), binary: "ruff".into(), package: "ruff".into(), category: Category::Prod, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "Direnv".into(), binary: "direnv".into(), package: "direnv".into(), category: Category::Prod, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "Watchman".into(), binary: "watchman".into(), package: "watchman".into(), category: Category::Prod, method: UpdateMethod::BrewPkg},
 
-        // Infrastructure
+        // Infrastructure — cloud, containers, databases, SDKs
+        Tool { id: String::new(), name: "Flutter SDK".into(), binary: "flutter".into(), package: "flutter".into(), category: Category::Infra, method: UpdateMethod::BrewPkg},
         Tool { id: String::new(), name: "Docker Desktop".into(), binary: "docker".into(), package: "docker".into(), category: Category::Infra, method: UpdateMethod::MacApp},
-        Tool { id: String::new(), name: "Kubernetes CLI".into(), binary: "kubectl".into(), package: "kubernetes-cli".into(), category: Category::Infra, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "Helm".into(), binary: "helm".into(), package: "helm".into(), category: Category::Infra, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "Terraform".into(), binary: "terraform".into(), package: "terraform".into(), category: Category::Infra, method: UpdateMethod::BrewPkg},
         Tool { id: String::new(), name: "AWS CLI".into(), binary: "aws".into(), package: "awscli".into(), category: Category::Infra, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "Google Cloud".into(), binary: "gcloud".into(), package: "google-cloud-sdk".into(), category: Category::Infra, method: UpdateMethod::MacApp},
+        Tool { id: String::new(), name: "Heroku CLI".into(), binary: "heroku".into(), package: "heroku".into(), category: Category::Infra, method: UpdateMethod::BrewPkg},
         Tool { id: String::new(), name: "Ngrok".into(), binary: "ngrok".into(), package: "ngrok".into(), category: Category::Infra, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "Convex".into(), binary: "convex".into(), package: "convex".into(), category: Category::Infra, method: UpdateMethod::NpmPkg},
+        Tool { id: String::new(), name: "PostgreSQL 16".into(), binary: "psql".into(), package: "postgresql@16".into(), category: Category::Infra, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "SQLite".into(), binary: "sqlite3".into(), package: "sqlite".into(), category: Category::Infra, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "Redis".into(), binary: "redis-cli".into(), package: "redis".into(), category: Category::Infra, method: UpdateMethod::BrewPkg},
 
-        // Utilities
-        Tool { id: String::new(), name: "Oh My Zsh".into(), binary: "omz".into(), package: "oh-my-zsh".into(), category: Category::Utils, method: UpdateMethod::Omz},
+        // Runtimes — grouped by ecosystem
+        // JavaScript/TypeScript
+        Tool { id: String::new(), name: "Node.js".into(), binary: "node".into(), package: "node".into(), category: Category::Runtime, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "Bun".into(), binary: "bun".into(), package: "bun".into(), category: Category::Runtime, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "Deno".into(), binary: "deno".into(), package: "deno".into(), category: Category::Runtime, method: UpdateMethod::BrewPkg},
+        // Python
+        Tool { id: String::new(), name: "Python 3".into(), binary: "python3".into(), package: "python@3.13".into(), category: Category::Runtime, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "pyenv".into(), binary: "pyenv".into(), package: "pyenv".into(), category: Category::Runtime, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "uv".into(), binary: "uv".into(), package: "uv".into(), category: Category::Runtime, method: UpdateMethod::BrewPkg},
+        // Ruby
+        Tool { id: String::new(), name: "Ruby".into(), binary: "ruby".into(), package: "ruby".into(), category: Category::Runtime, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "rbenv".into(), binary: "rbenv".into(), package: "rbenv".into(), category: Category::Runtime, method: UpdateMethod::BrewPkg},
+        // Go / Rust
+        Tool { id: String::new(), name: "Go".into(), binary: "go".into(), package: "go".into(), category: Category::Runtime, method: UpdateMethod::BrewPkg},
+        Tool { id: String::new(), name: "Rust (rustup)".into(), binary: "rustup".into(), package: "rustup".into(), category: Category::Runtime, method: UpdateMethod::BrewPkg},
+
+        // Utilities — terminal multiplexers, system tools
         Tool { id: String::new(), name: "Zellij".into(), binary: "zellij".into(), package: "zellij".into(), category: Category::Utils, method: UpdateMethod::BrewPkg},
         Tool { id: String::new(), name: "Tmux".into(), binary: "tmux".into(), package: "tmux".into(), category: Category::Utils, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "Git".into(), binary: "git".into(), package: "git".into(), category: Category::Utils, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "Bash".into(), binary: "bash".into(), package: "bash".into(), category: Category::Utils, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "SQLite".into(), binary: "sqlite3".into(), package: "sqlite".into(), category: Category::Utils, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "Watchman".into(), binary: "watchman".into(), package: "watchman".into(), category: Category::Utils, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "Direnv".into(), binary: "direnv".into(), package: "direnv".into(), category: Category::Utils, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "Heroku CLI".into(), binary: "heroku".into(), package: "heroku".into(), category: Category::Utils, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "Pre-commit".into(), binary: "pre-commit".into(), package: "pre-commit".into(), category: Category::Utils, method: UpdateMethod::BrewPkg},
-
-        // Runtimes (High Risk)
-        Tool { id: String::new(), name: "Node.js".into(), binary: "node".into(), package: "node".into(), category: Category::Runtime, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "Python 3.13".into(), binary: "python3".into(), package: "python@3.13".into(), category: Category::Runtime, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "Go Lang".into(), binary: "go".into(), package: "go".into(), category: Category::Runtime, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "Ruby".into(), binary: "ruby".into(), package: "ruby".into(), category: Category::Runtime, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "PostgreSQL 16".into(), binary: "psql".into(), package: "postgresql@16".into(), category: Category::Runtime, method: UpdateMethod::BrewPkg},
-
-        // System
-        Tool { id: String::new(), name: "Homebrew Core".into(), binary: "brew".into(), package: "homebrew".into(), category: Category::Sys, method: UpdateMethod::BrewPkg},
-        Tool { id: String::new(), name: "NPM Globals".into(), binary: "npm".into(), package: "npm".into(), category: Category::Sys, method: UpdateMethod::NpmSys},
+        Tool { id: String::new(), name: "Mole".into(), binary: "mole".into(), package: "mole".into(), category: Category::Utils, method: UpdateMethod::BrewPkg},
     ];
 
     // Auto-assign IDs: S-01, S-02, etc.
@@ -117,8 +133,8 @@ mod tests {
     }
 
     #[test]
-    fn test_inventory_first_tool_is_code_category() {
+    fn test_inventory_first_tool_is_sys_category() {
         let inv = get_inventory();
-        assert_eq!(inv[0].category, Category::Code);
+        assert_eq!(inv[0].category, Category::Sys);
     }
 }

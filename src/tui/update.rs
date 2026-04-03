@@ -104,7 +104,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Option<Action> {
         ) {
             app.scanner.state = ScannerState::SecretAudit;
             if app.audit.results.is_empty() {
-                let path = app.config.repos_root.clone();
+                let path = std::env::current_dir().unwrap_or_else(|_| app.config.repos_root.clone());
                 return Some(Action::StartAudit(path));
             }
             return None;

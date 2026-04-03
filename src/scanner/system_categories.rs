@@ -44,7 +44,7 @@ fn scan_docker_category(query_args: &[&str], name: &str, clean_args: Vec<&str>) 
         category: CleanCategory::Docker, name: name.into(),
         detail: format!("{} items", count), size: parse_docker_sizes(&stdout),
         clean_cmd: CleanCommand::Shell("docker".into(), clean_args.iter().map(|s| s.to_string()).collect()),
-        app_running: false, age_days: None,
+        app_running: false, age_days: None, risk: CleanRisk::Caution,
     })
 }
 
@@ -63,7 +63,7 @@ fn scan_docker_build_cache() -> Option<CleanableItem> {
                     detail: format!("{} reclaimable", crate::utils::fs::format_size(reclaimable)),
                     size: reclaimable,
                     clean_cmd: CleanCommand::Shell("docker".into(), vec!["builder".into(), "prune".into(), "-f".into()]),
-                    app_running: false, age_days: None,
+                    app_running: false, age_days: None, risk: CleanRisk::Caution,
                 });
             }
         }
@@ -107,6 +107,7 @@ pub fn scan_caches(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
         items.push(CleanableItem {
             category: CleanCategory::Cache, name: t.name.to_string(),
             detail: format!("{}{}", detail, warn), size, clean_cmd, app_running, age_days: None,
+            risk: if app_running { CleanRisk::Danger } else { CleanRisk::Safe },
         });
     }
     items
@@ -140,6 +141,7 @@ pub fn scan_logs(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
             items.push(CleanableItem {
                 category: CleanCategory::Logs, name, detail: display, size,
                 clean_cmd: CleanCommand::RemoveFile(path.to_path_buf()), app_running: false, age_days,
+                risk: CleanRisk::Safe,
             });
         }
     }
@@ -161,6 +163,7 @@ pub fn scan_vms(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
                 detail: "Reset via Docker Desktop > Troubleshoot > Clean/Purge data".into(), size,
                 clean_cmd: CleanCommand::Shell("docker".into(), vec!["system".into(), "prune".into(), "-a".into(), "-f".into()]),
                 app_running: is_app_running("Docker"), age_days: None,
+                risk: CleanRisk::Caution,
             });
         }
     }
@@ -171,6 +174,7 @@ pub fn scan_vms(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
             items.push(CleanableItem {
                 category: CleanCategory::VMs, name: "Android emulators".into(), detail: "~/.android/avd".into(),
                 size, clean_cmd: CleanCommand::RemoveDir(avd_dir), app_running: is_app_running("qemu-system"), age_days: None,
+                risk: CleanRisk::Caution,
             });
         }
     }
@@ -181,6 +185,7 @@ pub fn scan_vms(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
             items.push(CleanableItem {
                 category: CleanCategory::VMs, name: "IE test VMs".into(), detail: "~/.ievms (legacy IE testing)".into(),
                 size, clean_cmd: CleanCommand::RemoveDir(ievms), app_running: false, age_days: None,
+                risk: CleanRisk::Safe,
             });
         }
     }
@@ -191,6 +196,7 @@ pub fn scan_vms(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
             items.push(CleanableItem {
                 category: CleanCategory::VMs, name: "boot2docker".into(), detail: "~/.docker/machine (legacy)".into(),
                 size, clean_cmd: CleanCommand::RemoveDir(b2d), app_running: false, age_days: None,
+                risk: CleanRisk::Safe,
             });
         }
     }
@@ -215,6 +221,7 @@ pub fn scan_downloads(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
         items.push(CleanableItem {
             category: CleanCategory::Downloads, name: name.clone(), detail: format!("~/Downloads/{}", name),
             size, clean_cmd: CleanCommand::RemoveFile(path), app_running: false, age_days: None,
+            risk: CleanRisk::Safe,
         });
     }
     items

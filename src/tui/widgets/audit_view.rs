@@ -31,7 +31,13 @@ pub fn render_audit_list(frame: &mut Frame, area: Rect, model: &AuditModel) {
         Constraint::Length(2), // help
     ]).split(area);
 
-    // Header
+    // Header with scanned path
+    let scan_path_display = model.scan_path.as_ref().map(|p| {
+        let s = p.display().to_string();
+        let home = std::env::var("HOME").unwrap_or_default();
+        if s.starts_with(&home) { format!("~{}", &s[home.len()..]) } else { s }
+    }).unwrap_or_else(|| "not configured".into());
+
     let header = Paragraph::new(vec![
         Line::from(vec![
             Span::styled(" SECURITY AUDIT ", Style::default().fg(WHITE).bg(RED).bold()),
@@ -49,7 +55,7 @@ pub fn render_audit_list(frame: &mut Frame, area: Rect, model: &AuditModel) {
             Span::styled(format!("{} info", model.total_info), Style::default().fg(GRAY)),
         ]),
         Line::from(Span::styled(
-            format!("{} projects scanned", model.results.len()),
+            format!("{} projects scanned — {}", model.results.len(), scan_path_display),
             Style::default().fg(GRAY),
         )),
     ]);
@@ -142,10 +148,18 @@ pub fn render_audit_list(frame: &mut Frame, area: Rect, model: &AuditModel) {
         frame.render_widget(table, chunks[1]);
     }
 
-    let help = Paragraph::new(Span::styled(
-        "[ENTER] Detail  [r] Rescan  [TAB] Next  [q] Back",
-        Style::default().fg(GRAY),
-    ));
+    let help_text = if model.results.is_empty() && !model.scanning {
+        "[r] Scan current directory  [TAB] Next  [q] Back"
+    } else {
+        "[ENTER] Detail  [r] Rescan  [TAB] Next  [q] Back"
+    };
+    let help = Paragraph::new(vec![
+        Line::from(Span::styled(
+            format!("  Scanning: {}  (run spark from the project you want to audit)", scan_path_display),
+            Style::default().fg(TERM_GRAY),
+        )),
+        Line::from(Span::styled(help_text, Style::default().fg(GRAY))),
+    ]);
     frame.render_widget(help, chunks[2]);
 }
 

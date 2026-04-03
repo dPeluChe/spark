@@ -465,6 +465,7 @@ pub struct AuditModel {
     pub total_critical: usize,
     pub total_warning: usize,
     pub total_info: usize,
+    pub scan_path: Option<std::path::PathBuf>,
 }
 
 impl AuditModel {
@@ -477,6 +478,7 @@ impl AuditModel {
             total_critical: 0,
             total_warning: 0,
             total_info: 0,
+            scan_path: None,
         }
     }
 }

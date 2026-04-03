@@ -206,8 +206,22 @@ async fn get_antigravity_version() -> String {
 }
 
 async fn get_cli_tool_version(tool: &Tool) -> String {
-    // Try standard --version
-    let output = run_command_lossy(&tool.binary, &["--version"], Duration::from_secs(5)).await;
+    // Tools without version flags — just check if binary exists
+    if tool.binary == "toad" {
+        let exists = std::process::Command::new("which").arg(&tool.binary)
+            .output().map(|o| o.status.success()).unwrap_or(false);
+        return if exists { "Installed".into() } else { "MISSING".into() };
+    }
+
+    // Tools that use non-standard version flags
+    let version_args: &[&str] = match tool.binary.as_str() {
+        "go" => &["version"],
+        "rustup" => &["--version"],
+        "gcloud" => &["version"],
+        _ => &["--version"],
+    };
+
+    let output = run_command_lossy(&tool.binary, version_args, Duration::from_secs(5)).await;
     if !output.is_empty() {
         return parse_tool_version(&tool.binary, &output);
     }

@@ -19,16 +19,9 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Option<Action> {
                     else { sc.checked.insert(sc.cursor); }
                     None
                 }
-                KeyCode::Enter => {
-                    if sc.items.get(sc.cursor).is_some() { return Some(Action::CleanSystemItem(sc.cursor)); }
-                    None
-                }
-                KeyCode::Char('x') => {
-                    if sc.checked.is_empty() {
-                        if sc.items.get(sc.cursor).is_some() { return Some(Action::CleanSystemItem(sc.cursor)); }
-                    } else {
-                        let indices: Vec<usize> = sc.checked.iter().copied().collect();
-                        if let Some(&first) = indices.first() { return Some(Action::CleanSystemItem(first)); }
+                KeyCode::Enter | KeyCode::Char('x') => {
+                    if sc.items.get(sc.cursor).is_some() {
+                        app.scanner.state = ScannerState::SystemCleanConfirm;
                     }
                     None
                 }
@@ -38,7 +31,12 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Option<Action> {
         }
 
         ScannerState::SystemCleanConfirm => match key.code {
-            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('n') => {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                let idx = app.system_cleaner.cursor;
+                app.scanner.state = ScannerState::SystemClean;
+                Some(Action::CleanSystemItem(idx))
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc | KeyCode::Char('q') => {
                 app.scanner.state = ScannerState::SystemClean; None
             }
             _ => None,

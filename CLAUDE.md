@@ -15,7 +15,7 @@ The active codebase is 100% Rust. It manages repos, scans health, cleans artifac
 3. **Port Scanner**: Discovers and kills development servers running on local ports
 4. **System Cleanup**: Docker, dev caches (brew/npm/pip/cargo), VMs, logs — with safety guards
 5. **Security Audit**: Secrets, git history, OWASP code patterns, dependency vulnerabilities (OSV.dev + npm audit)
-6. **Updater**: Manages updates for 44+ developer tools (AI tools, IDEs, Infrastructure, Runtimes)
+6. **Updater**: Manages updates for 55 developer tools (AI tools, IDEs, Infrastructure, Runtimes)
 
 ### CLI Commands
 

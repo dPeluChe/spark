@@ -128,14 +128,26 @@ pub fn render_preview(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
 }
 
 fn render_header(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
+    let checked = model.checked.len();
+    let installed = model.items.iter().filter(|i| i.status == ToolStatus::Installed).count();
+    let outdated = model.items.iter().filter(|i| i.status == ToolStatus::Outdated).count();
+    let missing = model.items.iter().filter(|i| i.status == ToolStatus::Missing).count();
+
     let text = match model.state {
         UpdaterState::Updating => format!(" UPDATING ({} remaining)... ", model.updating_remaining),
         UpdaterState::Summary => " UPDATE SUMMARY ".into(),
         _ => {
             if model.loading_count > 0 {
-                format!(" SPARK DASHBOARD (Scanning {}...)", model.loading_count)
+                format!(" TOOL UPDATER  Scanning {}...", model.loading_count)
             } else {
-                " SPARK DASHBOARD ".into()
+                let mut status = format!(" TOOL UPDATER  {} tools", model.items.len());
+                if outdated > 0 { status.push_str(&format!("  {} outdated", outdated)); }
+                if missing > 0 { status.push_str(&format!("  {} missing", missing)); }
+                if checked > 0 { status.push_str(&format!("  {} selected", checked)); }
+                if outdated == 0 && missing == 0 && installed > 0 {
+                    status.push_str("  all up to date");
+                }
+                status
             }
         }
     };
@@ -173,172 +185,133 @@ fn render_search_bar(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
 }
 
 fn render_grid(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
-    let columns = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(area);
-
-    let left_cats = [Category::Code, Category::Term, Category::Ide, Category::Prod];
-    let right_cats = [
-        Category::Infra,
-        Category::Utils,
-        Category::Runtime,
-        Category::Sys,
+    let categories = [
+        Category::Sys, Category::Code, Category::Ide, Category::Term,
+        Category::Prod, Category::Infra, Category::Runtime, Category::Utils,
     ];
 
-    render_column(frame, columns[0], model, &left_cats);
-    render_column(frame, columns[1], model, &right_cats);
-}
+    let header = Row::new(vec![
+        Cell::from("  Tool").style(Style::default().fg(BLUE).bold()),
+        Cell::from("Installed").style(Style::default().fg(BLUE).bold()),
+        Cell::from("Latest").style(Style::default().fg(BLUE).bold()),
+        Cell::from("Status").style(Style::default().fg(BLUE).bold()),
+    ]);
 
-fn render_column(frame: &mut Frame, area: Rect, model: &UpdaterModel, categories: &[Category]) {
-    // Count visible items per category to allocate space
-    let mut cat_heights: Vec<u16> = Vec::new();
-    for cat in categories {
-        let count = model
-            .items
-            .iter()
-            .enumerate()
+    let mut rows: Vec<Row> = Vec::new();
+
+    for cat in &categories {
+        let cat_items: Vec<(usize, &ToolState)> = model.items.iter().enumerate()
             .filter(|(i, item)| item.tool.category == *cat && model.is_item_visible(*i))
-            .count();
-        if count > 0 {
-            cat_heights.push(count as u16 + 3); // +3 for border and title
-        } else {
-            cat_heights.push(0);
-        }
-    }
+            .collect();
+        if cat_items.is_empty() { continue; }
 
-    let constraints: Vec<Constraint> = cat_heights
-        .iter()
-        .map(|&h| {
-            if h > 0 {
-                Constraint::Length(h)
+        // Category header row
+        rows.push(
+            Row::new(vec![
+                Cell::from(format!("  {} ({})", cat.label(), cat_items.len()))
+                    .style(Style::default().fg(PURPLE).bold()),
+                Cell::from(""), Cell::from(""), Cell::from(""),
+            ]).style(Style::default().bg(Color::Rgb(25, 25, 35)))
+        );
+
+        for (i, item) in cat_items {
+            let is_selected = model.cursor == i && model.state == UpdaterState::Main;
+            let is_checked = model.checked.contains(&i);
+            let cursor = if is_selected { ">" } else { " " };
+            let checkbox = if is_checked { "x" } else { " " };
+
+            let row_style = if is_selected { Style::default().bg(DARK_BG) } else { Style::default() };
+
+            let name_style = if is_selected {
+                Style::default().fg(WHITE).bold()
             } else {
-                Constraint::Length(0)
-            }
-        })
-        .collect();
+                Style::default().fg(GRAY)
+            };
 
-    let chunks = Layout::vertical(constraints).split(area);
+            let (status_text, status_style): (String, Style) = match &item.status {
+                ToolStatus::Checking => ("checking...".into(), Style::default().fg(YELLOW)),
+                ToolStatus::Missing => ("not installed".into(), Style::default().fg(RED)),
+                ToolStatus::Outdated => ("outdated".into(), Style::default().fg(YELLOW).bold()),
+                ToolStatus::Installed => ("up to date".into(), Style::default().fg(GREEN)),
+                ToolStatus::Updated => ("updated".into(), Style::default().fg(GREEN).bold()),
+                ToolStatus::Failed => ("failed".into(), Style::default().fg(RED)),
+                ToolStatus::Updating => ("updating...".into(), Style::default().fg(BLUE)),
+            };
 
-    for (chunk_idx, cat) in categories.iter().enumerate() {
-        if cat_heights[chunk_idx] > 0 {
-            render_category_card(frame, chunks[chunk_idx], model, *cat);
-        }
-    }
-}
-
-fn render_category_card(frame: &mut Frame, area: Rect, model: &UpdaterModel, cat: Category) {
-    let title = format!("[{}] {}", cat.short_key(), cat.label());
-
-    let mut lines = Vec::new();
-    for (i, item) in model.items.iter().enumerate() {
-        if item.tool.category != cat || !model.is_item_visible(i) {
-            continue;
-        }
-        lines.push(render_tool_line(i, item, model));
-    }
-
-    let block = Block::default()
-        .title(Span::styled(title, Style::default().fg(PURPLE).bold()))
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(PURPLE));
-
-    let paragraph = Paragraph::new(lines).block(block);
-    frame.render_widget(paragraph, area);
-}
-
-fn render_tool_line<'a>(index: usize, item: &'a ToolState, model: &UpdaterModel) -> Line<'a> {
-    let is_selected = model.cursor == index && model.state == UpdaterState::Main;
-
-    // Cursor indicator
-    let cursor = if is_selected {
-        Span::styled("❯ ", Style::default().fg(GREEN).bold())
-    } else {
-        Span::raw("  ")
-    };
-
-    // Checkbox
-    let checkbox = render_checkbox(model.checked.contains(&index));
-
-    // Tool name (truncated to 18 chars)
-    let name = if item.tool.name.len() > 18 {
-        format!("{:<18}", format!("{}…", &item.tool.name[..17]))
-    } else {
-        format!("{:<18}", item.tool.name)
-    };
-
-    let name_span = if is_selected {
-        Span::styled(name, Style::default().fg(WHITE).bold())
-    } else {
-        Span::styled(name, Style::default().fg(GRAY))
-    };
-
-    // Status
-    let status = render_status(index, item, model);
-
-    Line::from(vec![cursor, checkbox, name_span, status])
-}
-
-fn render_status<'a>(index: usize, item: &'a ToolState, model: &UpdaterModel) -> Span<'a> {
-    // During update/summary phase
-    if model.state == UpdaterState::Updating || model.state == UpdaterState::Summary {
-        return match item.status {
-            ToolStatus::Updating => {
-                let frame = SPINNER_FRAMES[model.splash_frame % SPINNER_FRAMES.len()];
-                Span::styled(
-                    format!("{} Updating...", frame),
-                    Style::default().fg(BLUE),
-                )
-            }
-            ToolStatus::Updated => Span::styled(
-                format!("✔ {}", item.local_version),
-                Style::default().fg(GREEN),
-            ),
-            ToolStatus::Failed => Span::styled("✘ Failed", Style::default().fg(RED)),
-            _ if model.checked.contains(&index) => {
-                Span::styled("⏳ Pending...", Style::default().fg(GRAY))
-            }
-            _ => Span::styled(
-                item.local_version.clone(),
-                Style::default().fg(DARK),
-            ),
-        };
-    }
-
-    // Normal state
-    match item.status {
-        ToolStatus::Checking => Span::styled("⟳ Checking...", Style::default().fg(YELLOW)),
-        ToolStatus::Missing => Span::styled("○ Not Installed", Style::default().fg(RED)),
-        ToolStatus::Outdated => {
-            // Show version path: local → remote
-            if item.remote_version != "..."
-                && item.remote_version != "Checking..."
-                && item.remote_version != "Unknown"
-            {
-                Span::styled(
-                    format!("{} → {}", item.local_version, item.remote_version),
-                    Style::default().fg(YELLOW),
-                )
+            let local_ver = if item.local_version == "MISSING" || item.local_version == "..." {
+                "-".into()
             } else {
-                Span::styled(
-                    item.local_version.clone(),
-                    Style::default().fg(YELLOW),
-                )
-            }
-        }
-        ToolStatus::Installed => {
-            if item.local_version == "MISSING" {
-                Span::styled("MISSING", Style::default().fg(YELLOW))
-            } else if item.remote_version == item.local_version && item.local_version != "..." {
-                Span::styled(
-                    format!("{} ✓", item.local_version),
-                    Style::default().fg(GRAY),
-                )
+                item.local_version.clone()
+            };
+
+            let remote_ver = if item.remote_version == "..." || item.remote_version == "Checking..." || item.remote_version == "Unknown" {
+                "-".into()
             } else {
-                Span::styled(item.local_version.clone(), Style::default().fg(GRAY))
-            }
+                item.remote_version.clone()
+            };
+
+            rows.push(Row::new(vec![
+                Cell::from(format!("{} [{}] {}", cursor, checkbox, item.tool.name)).style(name_style),
+                Cell::from(local_ver).style(Style::default().fg(GRAY)),
+                Cell::from(remote_ver).style(
+                    if item.status == ToolStatus::Outdated { Style::default().fg(YELLOW) }
+                    else { Style::default().fg(GRAY) }
+                ),
+                Cell::from(status_text).style(status_style),
+            ]).style(row_style));
         }
-        _ => Span::styled(item.local_version.clone(), Style::default().fg(GRAY)),
     }
+
+    // Scroll
+    let visible_height = area.height.saturating_sub(3) as usize;
+    let mut cursor_pos = 0usize;
+    let mut found = false;
+    for (ri, _) in rows.iter().enumerate() {
+        if found { break; }
+        // Count actual tool rows to match cursor
+        cursor_pos = ri;
+    }
+    // Simple scroll: find cursor position in rows
+    let mut row_idx = 0usize;
+    for cat in &categories {
+        let cat_items: Vec<(usize, &ToolState)> = model.items.iter().enumerate()
+            .filter(|(i, item)| item.tool.category == *cat && model.is_item_visible(*i))
+            .collect();
+        if cat_items.is_empty() { continue; }
+        row_idx += 1; // header
+        for (i, _) in &cat_items {
+            if *i == model.cursor { found = true; cursor_pos = row_idx; break; }
+            row_idx += 1;
+        }
+        if found { break; }
+    }
+
+    let scroll_offset = if cursor_pos >= visible_height {
+        cursor_pos - visible_height + 1
+    } else { 0 };
+
+    let scrolled: Vec<Row> = rows.into_iter().skip(scroll_offset).collect();
+    let scroll_info = format!(" {}/{} ", model.cursor + 1, model.items.len());
+
+    let table = Table::new(
+        scrolled,
+        [
+            Constraint::Min(15),       // Tool name
+            Constraint::Length(21),    // Installed version
+            Constraint::Length(21),    // Latest version
+            Constraint::Length(14),    // Status
+        ],
+    )
+    .header(header)
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(BLUE))
+            .title(Span::styled(" Tools ", Style::default().fg(BLUE).bold()))
+            .title_bottom(Span::styled(scroll_info, Style::default().fg(GRAY))),
+    );
+    frame.render_widget(table, area);
 }
 
 fn render_help_bar(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
