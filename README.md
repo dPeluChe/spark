@@ -65,7 +65,9 @@ Clone, track, and maintain all your repositories from one place.
 
 - Clone with auto-organization by host/owner/name
 - Status tracking: ahead/behind/dirty (cached for 4 hours)
-- Pull all behind repos at once
+- **Tagging system**: organize repos into groups (`spark tag add repo learning`)
+- Pull by tag: `spark pull all --tag learning`
+- Status by tag: `spark status --tag ai-tools`
 - Size column, last commit, branch info
 
 ### Port Scanner — Dev Server Monitor
@@ -137,9 +139,13 @@ spark clone <url> -p       # Clone via SSH
 spark clone <url> --shallow # Shallow clone
 spark cd <name>            # Print path to repo
 spark search <query>       # Search repos (shows status, commit age, path)
-spark list [-p] [query]    # List repos (tree by host/owner)
+spark list [-p] [query]    # List repos (tree with branch + age + tags)
+spark tag add <repo> <tag> # Tag a repo for group management
+spark tag list [tag]       # List tags or repos in a tag
 spark status [query]       # Check which repos need pull (fetch + compare)
+spark status --tag <tag>   # Status filtered by tag
 spark pull <query|all>     # Pull repos behind remote (ff-only)
+spark pull all --tag <tag> # Pull all repos with a tag
 spark audit [path]         # Security audit (secrets + OWASP + deps)
 spark audit --deps         # Dependency-only scan (OSV.dev + npm audit)
 spark audit --offline      # Local-only scan (no network)

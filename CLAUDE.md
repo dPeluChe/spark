@@ -27,7 +27,14 @@ spark cd <name>            # Find repo path
 spark search <query>       # Search repos (shows status, commit age, path)
 spark list [-p] [query]    # List repos (tree view by host/owner)
 spark status [query]       # Check which repos need pull (fetch + compare)
+spark status --tag <tag>   # Check status of repos with a specific tag
 spark pull <query|all>     # Pull repos behind remote (ff-only)
+spark pull all --tag <t>   # Pull all repos with a specific tag
+spark tag add <repo> <tag> # Tag a repo (repos can have multiple tags)
+spark tag remove <repo> <t># Remove tag from repo
+spark tag list [tag]       # List all tags or repos in a tag
+spark tag delete <tag>     # Delete entire tag
+spark tag rename <old> <n> # Rename a tag
 spark audit [path]         # Security audit (secrets + history + OWASP + deps)
 spark audit --deps         # Dependency-only scan (OSV.dev + npm audit)
 spark audit --offline      # Local-only scan (no network)
@@ -77,7 +84,8 @@ src/
 │   ├── history_scanner.rs     # Git commit history scan via git2
 │   ├── code_patterns.rs       # OWASP Top 10:2025 pattern detection
 │   ├── dep_scanner.rs         # Dependency vulnerabilities (OSV.dev API + npm audit)
-│   └── cert_scanner.rs        # SSL/TLS certificate scanning (x509-parser + macOS Keychain)
+│   ├── cert_scanner.rs        # SSL/TLS certificate scanning (x509-parser + macOS Keychain)
+│   └── repo_tags.rs           # Repository tagging/grouping system
 ├── tui/
 │   ├── model.rs               # All state models + Toast notifications
 │   ├── update.rs              # Key/message handling, Action dispatch
@@ -98,6 +106,7 @@ src/
 │   ├── repos.rs               # clone, list, search, cd, rm, status, pull
 │   ├── audit.rs               # audit command output (4 phases)
 │   ├── certs.rs               # certificate scanner CLI
+│   ├── tags.rs                # tag management CLI (add, remove, list, delete, rename)
 │   └── system.rs              # init, config, doctor, agent, completions, root
 └── utils/
     ├── shell.rs               # Async commands + debug logging

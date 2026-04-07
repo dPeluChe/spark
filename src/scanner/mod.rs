@@ -14,3 +14,4 @@ pub mod history_scanner;
 pub mod code_patterns;
 pub mod dep_scanner;
 pub mod cert_scanner;
+pub mod repo_tags;

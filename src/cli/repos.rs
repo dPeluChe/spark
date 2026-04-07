@@ -50,6 +50,13 @@ pub fn cmd_list(full_path: bool, query: Option<String>, config: &config::SparkCo
         for repo in &filtered { println!("{}", repo.path.display()); }
     } else {
         print_repos_tree(&filtered);
+        let tags = scanner::repo_tags::load_tags();
+        let tag_count = tags.all_tags().len();
+        if tag_count > 0 {
+            println!("\n  \x1b[90m{} tags — spark status --tag <name> | spark pull all --tag <name>\x1b[0m", tag_count);
+        }
+        println!("  \x1b[90mspark tag add <repo> <tag>    add tag to a repo\x1b[0m");
+        println!("  \x1b[90mspark tag list               see all tags\x1b[0m");
     }
     Ok(())
 }
@@ -144,12 +151,29 @@ pub fn cmd_cd(query: &str, config: &config::SparkConfig) -> color_eyre::Result<(
     Ok(())
 }
 
-pub fn cmd_status(query: Option<String>, config: &config::SparkConfig) {
+pub fn cmd_status(query: Option<String>, tag: Option<String>, config: &config::SparkConfig) {
     let repos = scanner::repo_manager::list_managed_repos(&config.repos_root);
-    let filtered: Vec<_> = match &query {
-        Some(q) => { let q = q.to_lowercase(); repos.iter().filter(|r| filter_repo(r, &q)).collect() }
-        None => repos.iter().collect(),
+    let tag_filter = tag.as_ref().map(|t| {
+        let tags = scanner::repo_tags::load_tags();
+        tags.repos_for_tag(t)
+    });
+
+    let filtered: Vec<_> = if let Some(ref tag_repos) = tag_filter {
+        repos.iter().filter(|r| {
+            let key = scanner::repo_tags::repo_key(&r.host, &r.owner, &r.name);
+            tag_repos.contains(&key)
+        }).collect()
+    } else {
+        match &query {
+            Some(q) => { let q = q.to_lowercase(); repos.iter().filter(|r| filter_repo(r, &q)).collect() }
+            None => repos.iter().collect(),
+        }
     };
+
+    if let Some(t) = &tag {
+        if filtered.is_empty() { println!("  No repos with tag '{}'", t); return; }
+        println!("  Tag: {}", t);
+    }
 
     if filtered.is_empty() { println!("  No repos found"); return; }
     println!("  Checking {} repos...\n", filtered.len());
@@ -177,29 +201,62 @@ pub fn cmd_status(query: Option<String>, config: &config::SparkConfig) {
     }
     eprintln!("\r{}\r", " ".repeat(60));
 
+    // Sort: up-to-date first (alphabetic), then outdated (alphabetic)
+    statuses.sort_by(|a, b| {
+        let a_ok = matches!(a.1, scanner::repo_manager::RepoStatus::UpToDate);
+        let b_ok = matches!(b.1, scanner::repo_manager::RepoStatus::UpToDate);
+        b_ok.cmp(&a_ok)
+            .then(a.0.owner.to_lowercase().cmp(&b.0.owner.to_lowercase()))
+            .then(a.0.name.to_lowercase().cmp(&b.0.name.to_lowercase()))
+    });
+
     print_status_table(&statuses);
 
-    let behind = statuses.iter().filter(|(_, s)| matches!(s, scanner::repo_manager::RepoStatus::Behind(_))).count();
-    let diverged = statuses.iter().filter(|(_, s)| matches!(s, scanner::repo_manager::RepoStatus::Diverged { .. })).count();
-    if behind > 0 || diverged > 0 {
-        println!("\n  {} repos need pull", behind + diverged);
-        println!("  spark pull <name>   pull a specific repo");
-        println!("  spark pull all      pull all behind repos");
+    let needs = statuses.iter().filter(|(_, s)| !matches!(s, scanner::repo_manager::RepoStatus::UpToDate)).count();
+    let updated = statuses.iter().filter(|(_, s)| matches!(s, scanner::repo_manager::RepoStatus::UpToDate)).count();
+    println!("\n  {} total — {} need pull, {} up to date", statuses.len(), needs, updated);
+    if needs > 0 {
+        println!("  spark pull <name>          pull a specific repo");
+        println!("  spark pull all             pull all behind repos");
+        println!("  spark pull all --tag <t>   pull repos by tag");
     }
+    let all_tags = scanner::repo_tags::load_tags().all_tags();
+    if !all_tags.is_empty() {
+        println!("\n  \x1b[90mTags: {}\x1b[0m", all_tags.join(", "));
+    }
+    println!("  \x1b[90mspark tag add <repo> <tag>    add tag to a repo\x1b[0m");
+    println!("  \x1b[90mspark tag list               see all tags\x1b[0m");
 }
 
-pub fn cmd_pull(query: &str, config: &config::SparkConfig) {
+pub fn cmd_pull(query: &str, tag: Option<String>, config: &config::SparkConfig) {
     let repos = scanner::repo_manager::list_managed_repos(&config.repos_root);
-    let is_all = query.to_lowercase() == "all";
-    let filtered: Vec<_> = if is_all {
-        repos.iter().collect()
+
+    // If --tag is provided, use it instead of query
+    let filtered: Vec<_> = if let Some(ref tag_name) = tag {
+        let tags = scanner::repo_tags::load_tags();
+        let tag_repos = tags.repos_for_tag(tag_name);
+        if tag_repos.is_empty() {
+            eprintln!("  No repos with tag '{}'", tag_name);
+            std::process::exit(1);
+        }
+        println!("  Tag: {}", tag_name);
+        repos.iter().filter(|r| {
+            let key = scanner::repo_tags::repo_key(&r.host, &r.owner, &r.name);
+            tag_repos.contains(&key)
+        }).collect()
     } else {
-        let q = query.to_lowercase();
-        let exact: Vec<_> = repos.iter().filter(|r| {
-            format!("{}/{}", r.owner, r.name).to_lowercase() == q || r.name.to_lowercase() == q
-        }).collect();
-        if !exact.is_empty() { exact } else { repos.iter().filter(|r| filter_repo(r, &q)).collect() }
+        let is_all = query.to_lowercase() == "all";
+        if is_all {
+            repos.iter().collect()
+        } else {
+            let q = query.to_lowercase();
+            let exact: Vec<_> = repos.iter().filter(|r| {
+                format!("{}/{}", r.owner, r.name).to_lowercase() == q || r.name.to_lowercase() == q
+            }).collect();
+            if !exact.is_empty() { exact } else { repos.iter().filter(|r| filter_repo(r, &q)).collect() }
+        }
     };
+    let is_all = tag.is_some() || query.to_lowercase() == "all";
 
     if filtered.is_empty() { eprintln!("  No repos matching '{}'", query); std::process::exit(1); }
     if !is_all && filtered.len() > 1 {
@@ -239,51 +296,103 @@ pub fn cmd_pull(query: &str, config: &config::SparkConfig) {
 // ─── Display helpers ───
 
 fn print_repos_tree(repos: &[&scanner::repo_manager::ManagedRepo]) {
-    let mut tree: BTreeMap<&str, BTreeMap<&str, Vec<&str>>> = BTreeMap::new();
+    let tags = scanner::repo_tags::load_tags();
+
+    struct RepoEntry<'a> { name: &'a str, branch: &'a str, age: &'a str, tags: Vec<String> }
+
+    let mut tree: BTreeMap<&str, BTreeMap<&str, Vec<RepoEntry>>> = BTreeMap::new();
     for r in repos {
-        tree.entry(&r.host).or_default().entry(&r.owner).or_default().push(&r.name);
+        let age = r.last_commit.as_deref().unwrap_or("-");
+        let key = scanner::repo_tags::repo_key(&r.host, &r.owner, &r.name);
+        let repo_tags = tags.tags_for_repo(&key);
+        tree.entry(&r.host).or_default().entry(&r.owner).or_default()
+            .push(RepoEntry { name: &r.name, branch: &r.branch, age, tags: repo_tags });
     }
     for owners in tree.values_mut() {
-        for names in owners.values_mut() { names.sort_unstable_by_key(|a| a.to_lowercase()); }
+        for entries in owners.values_mut() { entries.sort_by_key(|e| e.name.to_lowercase()); }
     }
+
+    // Fixed column at 50, but ensure longest name fits with at least 2 spaces
+    let longest = tree.values().flat_map(|owners| {
+        owners.iter().flat_map(|(_, entries)| {
+            entries.iter().map(|e| 8 + e.name.len())
+        })
+    }).max().unwrap_or(30);
+    let info_col = longest.max(50) + 2;
+
     for (host, owners) in &tree {
         println!("{}", host);
         let oc = owners.len();
-        for (oi, (owner, names)) in owners.iter().enumerate() {
+        for (oi, (owner, entries)) in owners.iter().enumerate() {
             let lo = oi == oc - 1;
             println!("{}{}", if lo { "└── " } else { "├── " }, owner);
             let pf = if lo { "    " } else { "│   " };
-            for (ni, name) in names.iter().enumerate() {
-                println!("{}{}{}", pf, if ni == names.len() - 1 { "└── " } else { "├── " }, name);
+            for (ni, e) in entries.iter().enumerate() {
+                let connector = if ni == entries.len() - 1 { "└── " } else { "├── " };
+                let name_part = format!("{}{}{}", pf, connector, e.name);
+                let padding = if name_part.len() < info_col {
+                    " ".repeat(info_col - name_part.len())
+                } else {
+                    "  ".to_string()
+                };
+                let tag_str = if e.tags.is_empty() { String::new() }
+                    else { format!("  \x1b[36m[{}]\x1b[0m", e.tags.join(",")) };
+                println!("{}{}\x1b[35m{}\x1b[0m  \x1b[90m{}\x1b[0m{}",
+                    name_part, padding, e.branch, e.age, tag_str);
             }
         }
     }
 }
 
 fn print_status_table(statuses: &[(&scanner::repo_manager::ManagedRepo, scanner::repo_manager::RepoStatus)]) {
-    struct Entry<'a> { owner: &'a str, name: &'a str, status: &'a scanner::repo_manager::RepoStatus, last_commit: &'a Option<String> }
-    let mut by_host: BTreeMap<&str, Vec<Entry>> = BTreeMap::new();
-    for (r, s) in statuses {
-        by_host.entry(r.host.as_str()).or_default().push(Entry { owner: &r.owner, name: &r.name, status: s, last_commit: &r.last_commit });
+    let tags = scanner::repo_tags::load_tags();
+    let max_name = statuses.iter()
+        .map(|(r, _)| r.owner.len() + 1 + r.name.len())
+        .max().unwrap_or(20) + 2;
+
+    let needs_attention: Vec<_> = statuses.iter()
+        .filter(|(_, s)| !matches!(s, scanner::repo_manager::RepoStatus::UpToDate))
+        .collect();
+    let up_to_date: Vec<_> = statuses.iter()
+        .filter(|(_, s)| matches!(s, scanner::repo_manager::RepoStatus::UpToDate))
+        .collect();
+
+    if !needs_attention.is_empty() {
+        println!("  \x1b[33mNeeds attention ({})\x1b[0m\n", needs_attention.len());
+        for (repo, status) in &needs_attention {
+            let key = scanner::repo_tags::repo_key(&repo.host, &repo.owner, &repo.name);
+            let repo_tags_list = tags.tags_for_repo(&key);
+            print_status_row(repo, status, max_name, &repo_tags_list);
+        }
+        println!();
     }
-    for (host, mut entries) in by_host {
-        entries.sort_by(|a, b| a.owner.to_lowercase().cmp(&b.owner.to_lowercase()).then(a.name.to_lowercase().cmp(&b.name.to_lowercase())));
-        let max_name = entries.iter().map(|e| e.owner.len() + 1 + e.name.len()).max().unwrap_or(20) + 2;
-        println!("  {} — {} repos\n", host, entries.len());
-        for entry in &entries {
-            let indicator = match entry.status {
-                scanner::repo_manager::RepoStatus::UpToDate => "+",
-                scanner::repo_manager::RepoStatus::Behind(_) => "v",
-                scanner::repo_manager::RepoStatus::Ahead(_) => "^",
-                scanner::repo_manager::RepoStatus::Diverged { .. } => "~",
-                scanner::repo_manager::RepoStatus::Dirty => "*",
-                scanner::repo_manager::RepoStatus::Error(_) => "x",
-                scanner::repo_manager::RepoStatus::Checking => "?",
-            };
-            let repo_name = format!("{}/{}", entry.owner, entry.name);
-            let age = entry.last_commit.as_deref().unwrap_or("-");
-            let status_str = format!("{}", entry.status);
-            println!("  {:<width$}   {}   {:<14}  {}", repo_name, indicator, status_str, age, width = max_name);
+
+    if !up_to_date.is_empty() {
+        println!("  \x1b[32mUp to date ({})\x1b[0m\n", up_to_date.len());
+        for (repo, status) in &up_to_date {
+            let key = scanner::repo_tags::repo_key(&repo.host, &repo.owner, &repo.name);
+            let repo_tags_list = tags.tags_for_repo(&key);
+            print_status_row(repo, status, max_name, &repo_tags_list);
         }
     }
+}
+
+fn print_status_row(repo: &scanner::repo_manager::ManagedRepo, status: &scanner::repo_manager::RepoStatus, max_name: usize, repo_tags: &[String]) {
+    let indicator = match status {
+        scanner::repo_manager::RepoStatus::UpToDate => "+",
+        scanner::repo_manager::RepoStatus::Behind(_) => "v",
+        scanner::repo_manager::RepoStatus::Ahead(_) => "^",
+        scanner::repo_manager::RepoStatus::Diverged { .. } => "~",
+        scanner::repo_manager::RepoStatus::Dirty => "*",
+        scanner::repo_manager::RepoStatus::Error(_) => "x",
+        scanner::repo_manager::RepoStatus::Checking => "?",
+    };
+    let repo_name = format!("{}/{}", repo.owner, repo.name);
+    let age = repo.last_commit.as_deref().unwrap_or("-");
+    let status_str = format!("{}", status);
+    let tag_str = if repo_tags.is_empty() { String::new() }
+        else { format!("  \x1b[36m[{}]\x1b[0m", repo_tags.join(",")) };
+
+    println!("  {:<width$}   {}   {:<14}  {}{}",
+        repo_name, indicator, status_str, age, tag_str, width = max_name);
 }

@@ -44,6 +44,8 @@ spark search <query>     # Search repos (status, age, path)
 spark list               # List repos (tree by host/owner)
 spark status [query]     # Check which repos need pull
 spark pull <query|all>   # Pull repos behind remote
+spark tag add <r> <tag>  # Tag repos for group management
+spark pull all --tag <t> # Pull repos by tag
 spark audit [path]       # Security audit (4 phases)
 spark audit --deps       # Dependency-only scan
 spark certs              # SSL/TLS certificate health
