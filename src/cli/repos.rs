@@ -294,12 +294,13 @@ fn print_repos_tree(repos: &[&scanner::repo_manager::ManagedRepo]) {
         for entries in owners.values_mut() { entries.sort_by_key(|e| e.name.to_lowercase()); }
     }
 
-    // Calculate max name width for alignment (prefix + connector + name)
-    let max_width = tree.values().flat_map(|owners| {
+    // Fixed column at 50, but ensure longest name fits with at least 2 spaces
+    let longest = tree.values().flat_map(|owners| {
         owners.iter().flat_map(|(_, entries)| {
-            entries.iter().map(|e| 8 + e.name.len()) // "    └── " = 8 chars
+            entries.iter().map(|e| 8 + e.name.len())
         })
-    }).max().unwrap_or(40) + 2;
+    }).max().unwrap_or(30);
+    let info_col = longest.max(50) + 2;
 
     for (host, owners) in &tree {
         println!("{}", host);
@@ -311,8 +312,8 @@ fn print_repos_tree(repos: &[&scanner::repo_manager::ManagedRepo]) {
             for (ni, e) in entries.iter().enumerate() {
                 let connector = if ni == entries.len() - 1 { "└── " } else { "├── " };
                 let name_part = format!("{}{}{}", pf, connector, e.name);
-                let padding = if name_part.len() < max_width {
-                    " ".repeat(max_width - name_part.len())
+                let padding = if name_part.len() < info_col {
+                    " ".repeat(info_col - name_part.len())
                 } else {
                     "  ".to_string()
                 };
