@@ -194,6 +194,15 @@ pub fn cmd_status(query: Option<String>, tag: Option<String>, config: &config::S
     }
     eprintln!("\r{}\r", " ".repeat(60));
 
+    // Sort: up-to-date first (alphabetic), then outdated (alphabetic)
+    statuses.sort_by(|a, b| {
+        let a_ok = matches!(a.1, scanner::repo_manager::RepoStatus::UpToDate);
+        let b_ok = matches!(b.1, scanner::repo_manager::RepoStatus::UpToDate);
+        b_ok.cmp(&a_ok)
+            .then(a.0.owner.to_lowercase().cmp(&b.0.owner.to_lowercase()))
+            .then(a.0.name.to_lowercase().cmp(&b.0.name.to_lowercase()))
+    });
+
     print_status_table(&statuses);
 
     let behind = statuses.iter().filter(|(_, s)| matches!(s, scanner::repo_manager::RepoStatus::Behind(_))).count();
@@ -273,51 +282,77 @@ pub fn cmd_pull(query: &str, tag: Option<String>, config: &config::SparkConfig) 
 // ─── Display helpers ───
 
 fn print_repos_tree(repos: &[&scanner::repo_manager::ManagedRepo]) {
-    let mut tree: BTreeMap<&str, BTreeMap<&str, Vec<&str>>> = BTreeMap::new();
+    struct RepoEntry<'a> { name: &'a str, branch: &'a str, age: &'a str }
+
+    let mut tree: BTreeMap<&str, BTreeMap<&str, Vec<RepoEntry>>> = BTreeMap::new();
     for r in repos {
-        tree.entry(&r.host).or_default().entry(&r.owner).or_default().push(&r.name);
+        let age = r.last_commit.as_deref().unwrap_or("-");
+        tree.entry(&r.host).or_default().entry(&r.owner).or_default()
+            .push(RepoEntry { name: &r.name, branch: &r.branch, age });
     }
     for owners in tree.values_mut() {
-        for names in owners.values_mut() { names.sort_unstable_by_key(|a| a.to_lowercase()); }
+        for entries in owners.values_mut() { entries.sort_by_key(|e| e.name.to_lowercase()); }
     }
     for (host, owners) in &tree {
         println!("{}", host);
         let oc = owners.len();
-        for (oi, (owner, names)) in owners.iter().enumerate() {
+        for (oi, (owner, entries)) in owners.iter().enumerate() {
             let lo = oi == oc - 1;
             println!("{}{}", if lo { "└── " } else { "├── " }, owner);
             let pf = if lo { "    " } else { "│   " };
-            for (ni, name) in names.iter().enumerate() {
-                println!("{}{}{}", pf, if ni == names.len() - 1 { "└── " } else { "├── " }, name);
+            for (ni, e) in entries.iter().enumerate() {
+                let branch_info = if e.branch != "main" && e.branch != "master" {
+                    format!(" \x1b[35m{}\x1b[0m", e.branch)
+                } else { String::new() };
+                println!("{}{}{}{} \x1b[90m{}\x1b[0m", pf,
+                    if ni == entries.len() - 1 { "└── " } else { "├── " },
+                    e.name, branch_info, e.age);
             }
         }
     }
 }
 
 fn print_status_table(statuses: &[(&scanner::repo_manager::ManagedRepo, scanner::repo_manager::RepoStatus)]) {
-    struct Entry<'a> { owner: &'a str, name: &'a str, status: &'a scanner::repo_manager::RepoStatus, last_commit: &'a Option<String> }
-    let mut by_host: BTreeMap<&str, Vec<Entry>> = BTreeMap::new();
-    for (r, s) in statuses {
-        by_host.entry(r.host.as_str()).or_default().push(Entry { owner: &r.owner, name: &r.name, status: s, last_commit: &r.last_commit });
+    let max_name = statuses.iter()
+        .map(|(r, _)| r.owner.len() + 1 + r.name.len())
+        .max().unwrap_or(20) + 2;
+
+    // Split into two groups
+    let needs_attention: Vec<_> = statuses.iter()
+        .filter(|(_, s)| !matches!(s, scanner::repo_manager::RepoStatus::UpToDate))
+        .collect();
+    let up_to_date: Vec<_> = statuses.iter()
+        .filter(|(_, s)| matches!(s, scanner::repo_manager::RepoStatus::UpToDate))
+        .collect();
+
+    if !needs_attention.is_empty() {
+        println!("  \x1b[33mNeeds attention ({})\x1b[0m\n", needs_attention.len());
+        for (repo, status) in &needs_attention {
+            print_status_row(repo, status, max_name);
+        }
+        println!();
     }
-    for (host, mut entries) in by_host {
-        entries.sort_by(|a, b| a.owner.to_lowercase().cmp(&b.owner.to_lowercase()).then(a.name.to_lowercase().cmp(&b.name.to_lowercase())));
-        let max_name = entries.iter().map(|e| e.owner.len() + 1 + e.name.len()).max().unwrap_or(20) + 2;
-        println!("  {} — {} repos\n", host, entries.len());
-        for entry in &entries {
-            let indicator = match entry.status {
-                scanner::repo_manager::RepoStatus::UpToDate => "+",
-                scanner::repo_manager::RepoStatus::Behind(_) => "v",
-                scanner::repo_manager::RepoStatus::Ahead(_) => "^",
-                scanner::repo_manager::RepoStatus::Diverged { .. } => "~",
-                scanner::repo_manager::RepoStatus::Dirty => "*",
-                scanner::repo_manager::RepoStatus::Error(_) => "x",
-                scanner::repo_manager::RepoStatus::Checking => "?",
-            };
-            let repo_name = format!("{}/{}", entry.owner, entry.name);
-            let age = entry.last_commit.as_deref().unwrap_or("-");
-            let status_str = format!("{}", entry.status);
-            println!("  {:<width$}   {}   {:<14}  {}", repo_name, indicator, status_str, age, width = max_name);
+
+    if !up_to_date.is_empty() {
+        println!("  \x1b[32mUp to date ({})\x1b[0m\n", up_to_date.len());
+        for (repo, status) in &up_to_date {
+            print_status_row(repo, status, max_name);
         }
     }
+}
+
+fn print_status_row(repo: &scanner::repo_manager::ManagedRepo, status: &scanner::repo_manager::RepoStatus, max_name: usize) {
+    let indicator = match status {
+        scanner::repo_manager::RepoStatus::UpToDate => "+",
+        scanner::repo_manager::RepoStatus::Behind(_) => "v",
+        scanner::repo_manager::RepoStatus::Ahead(_) => "^",
+        scanner::repo_manager::RepoStatus::Diverged { .. } => "~",
+        scanner::repo_manager::RepoStatus::Dirty => "*",
+        scanner::repo_manager::RepoStatus::Error(_) => "x",
+        scanner::repo_manager::RepoStatus::Checking => "?",
+    };
+    let repo_name = format!("{}/{}", repo.owner, repo.name);
+    let age = repo.last_commit.as_deref().unwrap_or("-");
+    let status_str = format!("{}", status);
+    println!("  {:<width$}   {}   {:<14}  {}", repo_name, indicator, status_str, age, width = max_name);
 }
