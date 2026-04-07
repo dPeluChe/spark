@@ -50,6 +50,13 @@ pub fn cmd_list(full_path: bool, query: Option<String>, config: &config::SparkCo
         for repo in &filtered { println!("{}", repo.path.display()); }
     } else {
         print_repos_tree(&filtered);
+        let tags = scanner::repo_tags::load_tags();
+        let tag_count = tags.all_tags().len();
+        if tag_count > 0 {
+            println!("\n  \x1b[90m{} tags defined — spark status --tag <name> | spark pull all --tag <name>\x1b[0m", tag_count);
+        } else {
+            println!("\n  \x1b[90mTip: spark tag add <repo> <tag> to organize repos into groups\x1b[0m");
+        }
     }
     Ok(())
 }
@@ -209,8 +216,15 @@ pub fn cmd_status(query: Option<String>, tag: Option<String>, config: &config::S
     let updated = statuses.iter().filter(|(_, s)| matches!(s, scanner::repo_manager::RepoStatus::UpToDate)).count();
     println!("\n  {} total — {} need pull, {} up to date", statuses.len(), needs, updated);
     if needs > 0 {
-        println!("  spark pull <name>   pull a specific repo");
-        println!("  spark pull all      pull all behind repos");
+        println!("  spark pull <name>          pull a specific repo");
+        println!("  spark pull all             pull all behind repos");
+        println!("  spark pull all --tag <t>   pull repos by tag");
+    }
+    let all_tags = scanner::repo_tags::load_tags().all_tags();
+    if !all_tags.is_empty() {
+        println!("\n  \x1b[90mTags: {}\x1b[0m", all_tags.join(", "));
+    } else {
+        println!("\n  \x1b[90mTip: spark tag add <repo> <tag> to organize repos into groups\x1b[0m");
     }
 }
 
@@ -282,13 +296,17 @@ pub fn cmd_pull(query: &str, tag: Option<String>, config: &config::SparkConfig) 
 // ─── Display helpers ───
 
 fn print_repos_tree(repos: &[&scanner::repo_manager::ManagedRepo]) {
-    struct RepoEntry<'a> { name: &'a str, branch: &'a str, age: &'a str }
+    let tags = scanner::repo_tags::load_tags();
+
+    struct RepoEntry<'a> { name: &'a str, branch: &'a str, age: &'a str, tags: Vec<String> }
 
     let mut tree: BTreeMap<&str, BTreeMap<&str, Vec<RepoEntry>>> = BTreeMap::new();
     for r in repos {
         let age = r.last_commit.as_deref().unwrap_or("-");
+        let key = scanner::repo_tags::repo_key(&r.host, &r.owner, &r.name);
+        let repo_tags = tags.tags_for_repo(&key);
         tree.entry(&r.host).or_default().entry(&r.owner).or_default()
-            .push(RepoEntry { name: &r.name, branch: &r.branch, age });
+            .push(RepoEntry { name: &r.name, branch: &r.branch, age, tags: repo_tags });
     }
     for owners in tree.values_mut() {
         for entries in owners.values_mut() { entries.sort_by_key(|e| e.name.to_lowercase()); }
@@ -317,8 +335,10 @@ fn print_repos_tree(repos: &[&scanner::repo_manager::ManagedRepo]) {
                 } else {
                     "  ".to_string()
                 };
-                println!("{}{}\x1b[35m{}\x1b[0m  \x1b[90m{}\x1b[0m",
-                    name_part, padding, e.branch, e.age);
+                let tag_str = if e.tags.is_empty() { String::new() }
+                    else { format!("  \x1b[36m[{}]\x1b[0m", e.tags.join(",")) };
+                println!("{}{}\x1b[35m{}\x1b[0m  \x1b[90m{}\x1b[0m{}",
+                    name_part, padding, e.branch, e.age, tag_str);
             }
         }
     }
