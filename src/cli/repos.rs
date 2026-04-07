@@ -205,10 +205,10 @@ pub fn cmd_status(query: Option<String>, tag: Option<String>, config: &config::S
 
     print_status_table(&statuses);
 
-    let behind = statuses.iter().filter(|(_, s)| matches!(s, scanner::repo_manager::RepoStatus::Behind(_))).count();
-    let diverged = statuses.iter().filter(|(_, s)| matches!(s, scanner::repo_manager::RepoStatus::Diverged { .. })).count();
-    if behind > 0 || diverged > 0 {
-        println!("\n  {} repos need pull", behind + diverged);
+    let needs = statuses.iter().filter(|(_, s)| !matches!(s, scanner::repo_manager::RepoStatus::UpToDate)).count();
+    let updated = statuses.iter().filter(|(_, s)| matches!(s, scanner::repo_manager::RepoStatus::UpToDate)).count();
+    println!("\n  {} total — {} need pull, {} up to date", statuses.len(), needs, updated);
+    if needs > 0 {
         println!("  spark pull <name>   pull a specific repo");
         println!("  spark pull all      pull all behind repos");
     }
@@ -325,11 +325,11 @@ fn print_repos_tree(repos: &[&scanner::repo_manager::ManagedRepo]) {
 }
 
 fn print_status_table(statuses: &[(&scanner::repo_manager::ManagedRepo, scanner::repo_manager::RepoStatus)]) {
+    let tags = scanner::repo_tags::load_tags();
     let max_name = statuses.iter()
         .map(|(r, _)| r.owner.len() + 1 + r.name.len())
         .max().unwrap_or(20) + 2;
 
-    // Split into two groups
     let needs_attention: Vec<_> = statuses.iter()
         .filter(|(_, s)| !matches!(s, scanner::repo_manager::RepoStatus::UpToDate))
         .collect();
@@ -340,7 +340,11 @@ fn print_status_table(statuses: &[(&scanner::repo_manager::ManagedRepo, scanner:
     if !needs_attention.is_empty() {
         println!("  \x1b[33mNeeds attention ({})\x1b[0m\n", needs_attention.len());
         for (repo, status) in &needs_attention {
-            print_status_row(repo, status, max_name);
+            let key = scanner::repo_tags::repo_key(&repo.host, &repo.owner, &repo.name);
+            let repo_tags = tags.tags_for_repo(&key);
+            let tag_str = if repo_tags.is_empty() { String::new() }
+                else { format!(" \x1b[36m[{}]\x1b[0m", repo_tags.join(",")) };
+            print_status_row(repo, status, max_name, &tag_str, false);
         }
         println!();
     }
@@ -348,12 +352,16 @@ fn print_status_table(statuses: &[(&scanner::repo_manager::ManagedRepo, scanner:
     if !up_to_date.is_empty() {
         println!("  \x1b[32mUp to date ({})\x1b[0m\n", up_to_date.len());
         for (repo, status) in &up_to_date {
-            print_status_row(repo, status, max_name);
+            let key = scanner::repo_tags::repo_key(&repo.host, &repo.owner, &repo.name);
+            let repo_tags = tags.tags_for_repo(&key);
+            let tag_str = if repo_tags.is_empty() { String::new() }
+                else { format!("\x1b[36m[{}]\x1b[0m  ", repo_tags.join(",")) };
+            print_status_row(repo, status, max_name, &tag_str, true);
         }
     }
 }
 
-fn print_status_row(repo: &scanner::repo_manager::ManagedRepo, status: &scanner::repo_manager::RepoStatus, max_name: usize) {
+fn print_status_row(repo: &scanner::repo_manager::ManagedRepo, status: &scanner::repo_manager::RepoStatus, max_name: usize, tag_str: &str, tags_after_indicator: bool) {
     let indicator = match status {
         scanner::repo_manager::RepoStatus::UpToDate => "+",
         scanner::repo_manager::RepoStatus::Behind(_) => "v",
@@ -363,8 +371,16 @@ fn print_status_row(repo: &scanner::repo_manager::ManagedRepo, status: &scanner:
         scanner::repo_manager::RepoStatus::Error(_) => "x",
         scanner::repo_manager::RepoStatus::Checking => "?",
     };
-    let repo_name = format!("{}/{}", repo.owner, repo.name);
     let age = repo.last_commit.as_deref().unwrap_or("-");
     let status_str = format!("{}", status);
-    println!("  {:<width$}   {}   {:<14}  {}", repo_name, indicator, status_str, age, width = max_name);
+
+    if tags_after_indicator {
+        // Up to date: name   +  [tags]  age
+        let repo_name = format!("{}/{}", repo.owner, repo.name);
+        println!("  {:<width$}   {}   {}{}", repo_name, indicator, tag_str, age, width = max_name);
+    } else {
+        // Needs attention: name [tags]   v   status  age
+        let repo_name = format!("{}/{}{}", repo.owner, repo.name, tag_str);
+        println!("  {:<width$}   {}   {:<14}  {}", repo_name, indicator, status_str, age, width = max_name + 20);
+    }
 }
