@@ -284,8 +284,6 @@ pub fn cmd_pull(query: &str, tag: Option<String>, config: &config::SparkConfig) 
 fn print_repos_tree(repos: &[&scanner::repo_manager::ManagedRepo]) {
     struct RepoEntry<'a> { name: &'a str, branch: &'a str, age: &'a str }
 
-    const INFO_COL: usize = 50; // column where branch + age start
-
     let mut tree: BTreeMap<&str, BTreeMap<&str, Vec<RepoEntry>>> = BTreeMap::new();
     for r in repos {
         let age = r.last_commit.as_deref().unwrap_or("-");
@@ -295,6 +293,14 @@ fn print_repos_tree(repos: &[&scanner::repo_manager::ManagedRepo]) {
     for owners in tree.values_mut() {
         for entries in owners.values_mut() { entries.sort_by_key(|e| e.name.to_lowercase()); }
     }
+
+    // Calculate max name width for alignment (prefix + connector + name)
+    let max_width = tree.values().flat_map(|owners| {
+        owners.iter().flat_map(|(_, entries)| {
+            entries.iter().map(|e| 8 + e.name.len()) // "    └── " = 8 chars
+        })
+    }).max().unwrap_or(40) + 2;
+
     for (host, owners) in &tree {
         println!("{}", host);
         let oc = owners.len();
@@ -305,8 +311,8 @@ fn print_repos_tree(repos: &[&scanner::repo_manager::ManagedRepo]) {
             for (ni, e) in entries.iter().enumerate() {
                 let connector = if ni == entries.len() - 1 { "└── " } else { "├── " };
                 let name_part = format!("{}{}{}", pf, connector, e.name);
-                let padding = if name_part.len() < INFO_COL {
-                    " ".repeat(INFO_COL - name_part.len())
+                let padding = if name_part.len() < max_width {
+                    " ".repeat(max_width - name_part.len())
                 } else {
                     "  ".to_string()
                 };
