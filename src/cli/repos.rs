@@ -284,6 +284,8 @@ pub fn cmd_pull(query: &str, tag: Option<String>, config: &config::SparkConfig) 
 fn print_repos_tree(repos: &[&scanner::repo_manager::ManagedRepo]) {
     struct RepoEntry<'a> { name: &'a str, branch: &'a str, age: &'a str }
 
+    const INFO_COL: usize = 50; // column where branch + age start
+
     let mut tree: BTreeMap<&str, BTreeMap<&str, Vec<RepoEntry>>> = BTreeMap::new();
     for r in repos {
         let age = r.last_commit.as_deref().unwrap_or("-");
@@ -301,12 +303,15 @@ fn print_repos_tree(repos: &[&scanner::repo_manager::ManagedRepo]) {
             println!("{}{}", if lo { "└── " } else { "├── " }, owner);
             let pf = if lo { "    " } else { "│   " };
             for (ni, e) in entries.iter().enumerate() {
-                let branch_info = if e.branch != "main" && e.branch != "master" {
-                    format!(" \x1b[35m{}\x1b[0m", e.branch)
-                } else { String::new() };
-                println!("{}{}{}{} \x1b[90m{}\x1b[0m", pf,
-                    if ni == entries.len() - 1 { "└── " } else { "├── " },
-                    e.name, branch_info, e.age);
+                let connector = if ni == entries.len() - 1 { "└── " } else { "├── " };
+                let name_part = format!("{}{}{}", pf, connector, e.name);
+                let padding = if name_part.len() < INFO_COL {
+                    " ".repeat(INFO_COL - name_part.len())
+                } else {
+                    "  ".to_string()
+                };
+                println!("{}{}\x1b[35m{}\x1b[0m  \x1b[90m{}\x1b[0m",
+                    name_part, padding, e.branch, e.age);
             }
         }
     }
