@@ -53,10 +53,10 @@ pub fn cmd_list(full_path: bool, query: Option<String>, config: &config::SparkCo
         let tags = scanner::repo_tags::load_tags();
         let tag_count = tags.all_tags().len();
         if tag_count > 0 {
-            println!("\n  \x1b[90m{} tags defined — spark status --tag <name> | spark pull all --tag <name>\x1b[0m", tag_count);
-        } else {
-            println!("\n  \x1b[90mTip: spark tag add <repo> <tag> to organize repos into groups\x1b[0m");
+            println!("\n  \x1b[90m{} tags — spark status --tag <name> | spark pull all --tag <name>\x1b[0m", tag_count);
         }
+        println!("  \x1b[90mspark tag add <repo> <tag>    add tag to a repo\x1b[0m");
+        println!("  \x1b[90mspark tag list               see all tags\x1b[0m");
     }
     Ok(())
 }
@@ -223,9 +223,9 @@ pub fn cmd_status(query: Option<String>, tag: Option<String>, config: &config::S
     let all_tags = scanner::repo_tags::load_tags().all_tags();
     if !all_tags.is_empty() {
         println!("\n  \x1b[90mTags: {}\x1b[0m", all_tags.join(", "));
-    } else {
-        println!("\n  \x1b[90mTip: spark tag add <repo> <tag> to organize repos into groups\x1b[0m");
     }
+    println!("  \x1b[90mspark tag add <repo> <tag>    add tag to a repo\x1b[0m");
+    println!("  \x1b[90mspark tag list               see all tags\x1b[0m");
 }
 
 pub fn cmd_pull(query: &str, tag: Option<String>, config: &config::SparkConfig) {
