@@ -144,12 +144,29 @@ pub fn cmd_cd(query: &str, config: &config::SparkConfig) -> color_eyre::Result<(
     Ok(())
 }
 
-pub fn cmd_status(query: Option<String>, config: &config::SparkConfig) {
+pub fn cmd_status(query: Option<String>, tag: Option<String>, config: &config::SparkConfig) {
     let repos = scanner::repo_manager::list_managed_repos(&config.repos_root);
-    let filtered: Vec<_> = match &query {
-        Some(q) => { let q = q.to_lowercase(); repos.iter().filter(|r| filter_repo(r, &q)).collect() }
-        None => repos.iter().collect(),
+    let tag_filter = tag.as_ref().map(|t| {
+        let tags = scanner::repo_tags::load_tags();
+        tags.repos_for_tag(t)
+    });
+
+    let filtered: Vec<_> = if let Some(ref tag_repos) = tag_filter {
+        repos.iter().filter(|r| {
+            let key = scanner::repo_tags::repo_key(&r.host, &r.owner, &r.name);
+            tag_repos.contains(&key)
+        }).collect()
+    } else {
+        match &query {
+            Some(q) => { let q = q.to_lowercase(); repos.iter().filter(|r| filter_repo(r, &q)).collect() }
+            None => repos.iter().collect(),
+        }
     };
+
+    if let Some(t) = &tag {
+        if filtered.is_empty() { println!("  No repos with tag '{}'", t); return; }
+        println!("  Tag: {}", t);
+    }
 
     if filtered.is_empty() { println!("  No repos found"); return; }
     println!("  Checking {} repos...\n", filtered.len());
@@ -188,18 +205,35 @@ pub fn cmd_status(query: Option<String>, config: &config::SparkConfig) {
     }
 }
 
-pub fn cmd_pull(query: &str, config: &config::SparkConfig) {
+pub fn cmd_pull(query: &str, tag: Option<String>, config: &config::SparkConfig) {
     let repos = scanner::repo_manager::list_managed_repos(&config.repos_root);
-    let is_all = query.to_lowercase() == "all";
-    let filtered: Vec<_> = if is_all {
-        repos.iter().collect()
+
+    // If --tag is provided, use it instead of query
+    let filtered: Vec<_> = if let Some(ref tag_name) = tag {
+        let tags = scanner::repo_tags::load_tags();
+        let tag_repos = tags.repos_for_tag(tag_name);
+        if tag_repos.is_empty() {
+            eprintln!("  No repos with tag '{}'", tag_name);
+            std::process::exit(1);
+        }
+        println!("  Tag: {}", tag_name);
+        repos.iter().filter(|r| {
+            let key = scanner::repo_tags::repo_key(&r.host, &r.owner, &r.name);
+            tag_repos.contains(&key)
+        }).collect()
     } else {
-        let q = query.to_lowercase();
-        let exact: Vec<_> = repos.iter().filter(|r| {
-            format!("{}/{}", r.owner, r.name).to_lowercase() == q || r.name.to_lowercase() == q
-        }).collect();
-        if !exact.is_empty() { exact } else { repos.iter().filter(|r| filter_repo(r, &q)).collect() }
+        let is_all = query.to_lowercase() == "all";
+        if is_all {
+            repos.iter().collect()
+        } else {
+            let q = query.to_lowercase();
+            let exact: Vec<_> = repos.iter().filter(|r| {
+                format!("{}/{}", r.owner, r.name).to_lowercase() == q || r.name.to_lowercase() == q
+            }).collect();
+            if !exact.is_empty() { exact } else { repos.iter().filter(|r| filter_repo(r, &q)).collect() }
+        }
     };
+    let is_all = tag.is_some() || query.to_lowercase() == "all";
 
     if filtered.is_empty() { eprintln!("  No repos matching '{}'", query); std::process::exit(1); }
     if !is_all && filtered.len() > 1 {

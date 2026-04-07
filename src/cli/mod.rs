@@ -4,6 +4,7 @@ mod repos;
 mod system;
 mod audit;
 mod certs;
+mod tags;
 
 use std::path::PathBuf;
 use clap::{Parser, Subcommand};
@@ -82,9 +83,19 @@ pub enum Commands {
         set: Option<String>,
     },
     /// Check which repos need updating (fetch + compare with remote)
-    Status { query: Option<String> },
+    Status {
+        query: Option<String>,
+        /// Filter by tag
+        #[arg(long = "tag", short = 't')]
+        tag: Option<String>,
+    },
     /// Pull repos that are behind remote (fast-forward only)
-    Pull { query: String },
+    Pull {
+        query: String,
+        /// Filter by tag (pull all repos with this tag)
+        #[arg(long = "tag", short = 't')]
+        tag: Option<String>,
+    },
     /// Scan for exposed secrets and credentials
     Audit {
         /// Directory to scan (defaults to current directory)
@@ -119,8 +130,49 @@ pub enum Commands {
         #[arg(long = "summary")]
         summary_only: bool,
     },
+    /// Manage repository tags/groups
+    #[command(alias = "tags")]
+    Tag {
+        #[command(subcommand)]
+        action: TagAction,
+    },
     /// Validate installation and environment health
     Doctor,
+}
+
+#[derive(Subcommand)]
+pub enum TagAction {
+    /// Add a tag to a repository
+    Add {
+        /// Repository (name or owner/name)
+        repo: String,
+        /// Tag name
+        tag: String,
+    },
+    /// Remove a tag from a repository
+    Remove {
+        /// Repository (name or owner/name)
+        repo: String,
+        /// Tag name
+        tag: String,
+    },
+    /// List all tags or repos in a tag
+    List {
+        /// Tag name (omit to see all tags)
+        tag: Option<String>,
+    },
+    /// Delete an entire tag
+    Delete {
+        /// Tag to delete
+        tag: String,
+    },
+    /// Rename a tag
+    Rename {
+        /// Current tag name
+        old: String,
+        /// New tag name
+        new_name: String,
+    },
 }
 
 pub fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_eyre::Result<()> {
@@ -135,13 +187,14 @@ pub fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_
         Commands::Agent => { system::cmd_agent(config); Ok(()) }
         Commands::Completions { shell } => { system::cmd_completions(shell); Ok(()) }
         Commands::Config { key, set } => system::cmd_config(key, set, config),
-        Commands::Status { query } => { repos::cmd_status(query, config); Ok(()) }
-        Commands::Pull { query } => { repos::cmd_pull(&query, config); Ok(()) }
+        Commands::Status { query, tag } => { repos::cmd_status(query, tag, config); Ok(()) }
+        Commands::Pull { query, tag } => { repos::cmd_pull(&query, tag, config); Ok(()) }
         Commands::Audit { path, output, init_ignore, offline, deps_only } => {
             if deps_only { audit::cmd_audit_deps(path); }
             else { audit::cmd_audit(path, output, init_ignore, offline); }
             Ok(())
         }
+        Commands::Tag { action } => { tags::cmd_tag(action, config); Ok(()) }
         Commands::Certs { path, keychain_only, show_all: _, expired_only, summary_only } => {
             certs::cmd_certs(path, keychain_only, expired_only, summary_only); Ok(())
         }
