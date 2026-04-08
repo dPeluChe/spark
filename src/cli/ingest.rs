@@ -5,9 +5,21 @@ use crate::scanner::{repo_manager, repo_ingest};
 use crate::utils::fs::format_size;
 use super::shorten_path;
 
-pub fn cmd_ingest(query: Option<String>, list: bool, compress: bool, config: &config::SparkConfig) {
-    if list {
-        cmd_ingest_list();
+pub fn cmd_ingest(query: Option<String>, all: bool, compress: bool, read: bool, config: &config::SparkConfig) {
+    // --read: print ingest content to stdout
+    if read {
+        if let Some(ref q) = query {
+            cmd_ingest_read(q, config);
+        } else {
+            eprintln!("  Specify a repo: spark ingest <repo> --read");
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    // Default (no query, no --all) = list existing
+    if query.is_none() && !all {
+        cmd_ingest_list(config);
         return;
     }
 
@@ -42,8 +54,8 @@ pub fn cmd_ingest(query: Option<String>, list: bool, compress: bool, config: &co
 
         let repo = found[0];
         generate_one(repo, compress);
-    } else {
-        // No query — ingest all repos
+    } else if all {
+        // --all: ingest all repos
         println!("  SPARK Ingest — generating LLM context for {} repos\n", repos.len());
         let mut ok = 0;
         let mut skipped = 0;
@@ -74,51 +86,121 @@ pub fn cmd_ingest(query: Option<String>, list: bool, compress: bool, config: &co
 }
 
 fn generate_one(repo: &repo_manager::ManagedRepo, compress: bool) {
-    let compress_label = if compress { " (compressed)" } else { "" };
-    println!("  Generating LLM context for {}/{}{}\n", repo.owner, repo.name, compress_label);
+    let compress_label = if compress { " --compress" } else { "" };
+    println!("  Ingest via repomix{}", compress_label);
+    println!("  \x1b[90mgithub.com/yamadashy/repomix\x1b[0m\n");
 
-    eprint!("  repomix running");
+    eprint!("  Analyzing {}/{}...", repo.owner, repo.name);
     match repo_ingest::generate_ingest(&repo.path, &repo.host, &repo.owner, &repo.name, compress) {
         Ok(path) => {
-            eprintln!(".. done\n");
+            eprintln!(" done\n");
             let info = repo_ingest::ingest_info(&repo.host, &repo.owner, &repo.name);
             let size = info.as_ref().map(|i| format_size(i.size)).unwrap_or_default();
             let short = shorten_path(&path.display().to_string());
             println!("  Output: {} ({})", short, size);
-            println!("  Use: paste this file into any LLM for full project context");
+            println!("\n  \x1b[90mspark ingest {} --read     print to stdout\x1b[0m", repo.name);
+            println!("  \x1b[90mspark ingest {} --compress  reduce ~70%% tokens\x1b[0m", repo.name);
         }
         Err(e) => {
-            eprintln!(".. failed\n");
+            eprintln!(" failed\n");
             eprintln!("  Error: {}", e);
             std::process::exit(1);
         }
     }
 }
 
-fn cmd_ingest_list() {
-    let ingests = repo_ingest::list_ingests();
-    if ingests.is_empty() {
-        println!("  No ingest files found.");
-        println!("  Use: spark ingest <repo> to generate");
-        return;
+fn cmd_ingest_read(query: &str, config: &config::SparkConfig) {
+    let repos = repo_manager::list_managed_repos(&config.repos_root);
+    let q = query.to_lowercase();
+    let found = repos.iter().find(|r| {
+        r.name.to_lowercase() == q
+            || format!("{}/{}", r.owner, r.name).to_lowercase() == q
+            || r.name.to_lowercase().contains(&q)
+    });
+
+    let repo = match found {
+        Some(r) => r,
+        None => { eprintln!("  No repo matching '{}'", query); std::process::exit(1); }
+    };
+
+    let path = repo_ingest::ingest_path(&repo.host, &repo.owner, &repo.name);
+    if !path.exists() {
+        eprintln!("  No ingest for {}/{}. Run: spark ingest {}", repo.owner, repo.name, repo.name);
+        std::process::exit(1);
     }
 
-    println!("  \x1b[1m{} ingest files\x1b[0m\n", ingests.len());
+    match std::fs::read_to_string(&path) {
+        Ok(content) => print!("{}", content),
+        Err(e) => { eprintln!("  Error reading ingest: {}", e); std::process::exit(1); }
+    }
+}
+
+fn cmd_ingest_list(config: &config::SparkConfig) {
+    let repos = repo_manager::list_managed_repos(&config.repos_root);
+    let ingests = repo_ingest::list_ingests();
+
+    let total_repos = repos.len();
+    let ingested = ingests.len();
+
+    println!("  \x1b[1mLLM Ingest\x1b[0m — {}/{} repos have context files\n", ingested, total_repos);
+
+    if ingests.is_empty() {
+        println!("  No ingest files yet.");
+        println!("  spark ingest <repo>       generate for a repo");
+        println!("  spark ingest --all        generate for all repos");
+        return;
+    }
 
     let max_name = ingests.iter()
         .map(|(_, o, n, _)| o.len() + 1 + n.len())
         .max().unwrap_or(20) + 2;
 
+    // Check if ingest is stale (repo has newer commits)
     for (host, owner, name, info) in &ingests {
         let repo_name = format!("{}/{}", owner, name);
         let size = format_size(info.size);
         let age = info.age_display();
-        let short = shorten_path(&info.path.display().to_string());
-        println!("  {:<width$}  {}  {:>8}  \x1b[90m{}\x1b[0m",
-            repo_name, age, size, short, width = max_name);
-        let _ = host; // used in path
+
+        // Find matching repo to check if stale
+        let repo = repos.iter().find(|r| r.host == *host && r.owner == *owner && r.name == *name);
+        let status = if let Some(r) = repo {
+            // Compare ingest age with repo's git status
+            let repo_path_str = r.path.display().to_string();
+            let cache = repo_manager::load_status_cache();
+            let is_behind = match cache.get(&repo_path_str) {
+                Some((status, ts)) if repo_manager::is_cache_valid(*ts) => {
+                    status.starts_with("behind") || status.starts_with("diverged")
+                }
+                _ => false,
+            };
+            if is_behind {
+                "\x1b[33mstale\x1b[0m"
+            } else {
+                "\x1b[32mfresh\x1b[0m"
+            }
+        } else {
+            "\x1b[90m?\x1b[0m"
+        };
+
+        println!("  {:<width$}  {}  {:>8}  {}  \x1b[90m{}\x1b[0m",
+            repo_name, status, size, age, shorten_path(&info.path.display().to_string()), width = max_name);
     }
 
-    println!("\n  \x1b[90mspark ingest <repo>       regenerate\x1b[0m");
-    println!("  \x1b[90mspark ingest --compress   with tree-sitter compression\x1b[0m");
+    // Show repos without ingest
+    let missing: Vec<_> = repos.iter().filter(|r| {
+        !ingests.iter().any(|(h, o, n, _)| *h == r.host && *o == r.owner && *n == r.name)
+    }).collect();
+
+    if !missing.is_empty() && missing.len() <= 10 {
+        println!("\n  \x1b[90mNo ingest ({}):\x1b[0m", missing.len());
+        for r in &missing {
+            println!("    \x1b[90m{}/{}\x1b[0m", r.owner, r.name);
+        }
+    } else if !missing.is_empty() {
+        println!("\n  \x1b[90m{} repos without ingest — spark ingest --all\x1b[0m", missing.len());
+    }
+
+    println!("\n  \x1b[90mspark ingest <repo>          regenerate one\x1b[0m");
+    println!("  \x1b[90mspark ingest --all           generate all\x1b[0m");
+    println!("  \x1b[90mspark ingest <r> --compress   with tree-sitter (~70%% less tokens)\x1b[0m");
 }

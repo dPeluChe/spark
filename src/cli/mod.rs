@@ -133,14 +133,17 @@ pub enum Commands {
     },
     /// Generate LLM-ready context file for a repo (uses repomix)
     Ingest {
-        /// Repo to ingest (name or owner/name). Omit to ingest all.
+        /// Repo to ingest (name or owner/name). Omit to list existing.
         query: Option<String>,
-        /// List existing ingest files
-        #[arg(long = "list", short = 'l')]
-        list: bool,
+        /// Ingest ALL repos (slow — runs repomix on each)
+        #[arg(long = "all")]
+        all: bool,
         /// Compress with Tree-sitter (reduces ~70% tokens)
         #[arg(long = "compress")]
         compress: bool,
+        /// Print the ingest content to stdout (for piping to LLMs)
+        #[arg(long = "read")]
+        read: bool,
     },
     /// Manage repository tags/groups
     #[command(alias = "tags")]
@@ -206,7 +209,7 @@ pub fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_
             else { audit::cmd_audit(path, output, init_ignore, offline); }
             Ok(())
         }
-        Commands::Ingest { query, list, compress } => { ingest::cmd_ingest(query, list, compress, config); Ok(()) }
+        Commands::Ingest { query, all, compress, read } => { ingest::cmd_ingest(query, all, compress, read, config); Ok(()) }
         Commands::Tag { action } => { tags::cmd_tag(action, config); Ok(()) }
         Commands::Certs { path, keychain_only, show_all: _, expired_only, summary_only } => {
             certs::cmd_certs(path, keychain_only, expired_only, summary_only); Ok(())
