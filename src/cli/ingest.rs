@@ -142,7 +142,11 @@ fn cmd_ingest_list(config: &config::SparkConfig) {
     let total_repos = repos.len();
     let ingested = ingests.len();
 
-    println!("  \x1b[1mLLM Ingest\x1b[0m — {}/{} repos have context files\n", ingested, total_repos);
+    // Show base path once
+    let base_path = dirs::config_dir()
+        .unwrap_or_default().join("spark").join("ingest");
+    println!("  \x1b[1mLLM Ingest\x1b[0m — {}/{} repos have context files", ingested, total_repos);
+    println!("  \x1b[90m{}\x1b[0m\n", shorten_path(&base_path.display().to_string()));
 
     if ingests.is_empty() {
         println!("  No ingest files yet.");
@@ -155,35 +159,28 @@ fn cmd_ingest_list(config: &config::SparkConfig) {
         .map(|(_, o, n, _)| o.len() + 1 + n.len())
         .max().unwrap_or(20) + 2;
 
-    // Check if ingest is stale (repo has newer commits)
+    let cache = repo_manager::load_status_cache();
+
     for (host, owner, name, info) in &ingests {
         let repo_name = format!("{}/{}", owner, name);
         let size = format_size(info.size);
         let age = info.age_display();
 
-        // Find matching repo to check if stale
         let repo = repos.iter().find(|r| r.host == *host && r.owner == *owner && r.name == *name);
         let status = if let Some(r) = repo {
-            // Compare ingest age with repo's git status
             let repo_path_str = r.path.display().to_string();
-            let cache = repo_manager::load_status_cache();
             let is_behind = match cache.get(&repo_path_str) {
-                Some((status, ts)) if repo_manager::is_cache_valid(*ts) => {
-                    status.starts_with("behind") || status.starts_with("diverged")
+                Some((s, ts)) if repo_manager::is_cache_valid(*ts) => {
+                    s.starts_with("behind") || s.starts_with("diverged")
                 }
                 _ => false,
             };
-            if is_behind {
-                "\x1b[33mstale\x1b[0m"
-            } else {
-                "\x1b[32mfresh\x1b[0m"
-            }
-        } else {
-            "\x1b[90m?\x1b[0m"
-        };
+            if is_behind { "\x1b[33mstale\x1b[0m" } else { "\x1b[32mfresh\x1b[0m" }
+        } else { "\x1b[90m?\x1b[0m" };
 
+        let md_path = format!("{}/{}/{}.md", host, owner, name);
         println!("  {:<width$}  {}  {:>8}  {}  \x1b[90m{}\x1b[0m",
-            repo_name, status, size, age, shorten_path(&info.path.display().to_string()), width = max_name);
+            repo_name, status, size, age, md_path, width = max_name);
     }
 
     // Show repos without ingest
