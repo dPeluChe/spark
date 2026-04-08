@@ -154,7 +154,7 @@ Context-aware severity: Source Code > Config > Test > Docs (findings in tests/do
 
 ```bash
 cargo run                  # Dev mode
-cargo test                 # 118 tests
+cargo test                 # 124 tests
 cargo build --release      # Optimized build
 ```
 

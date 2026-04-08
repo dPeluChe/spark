@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spark — Developer Operations Platform</title>
+  <meta name="description" content="Rust-based TUI for managing repos, scanning health, cleaning artifacts, monitoring ports, auditing security, and updating dev tools.">
+  <style>
+    :root {
+      --bg: #06080f;
+      --bg2: #0d1117;
+      --bg3: #161b22;
+      --text: #e6edf3;
+      --text2: #8b949e;
+      --accent: #f0a030;
+      --accent2: #e8883a;
+      --green: #3fb950;
+      --blue: #58a6ff;
+      --purple: #bc8cff;
+      --red: #f85149;
+      --border: #21262d;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 80px 0 60px;
+    }
+
+    .hero-ascii {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 14px;
+      line-height: 1.2;
+      color: var(--accent);
+      margin-bottom: 16px;
+      white-space: pre;
+    }
+
+    .hero h1 {
+      font-size: 20px;
+      font-weight: 400;
+      color: var(--text2);
+      margin-bottom: 24px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .hero-tagline {
+      font-size: 16px;
+      color: var(--text2);
+      margin-bottom: 32px;
+    }
+
+    .badges {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 32px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: monospace;
+      border: 1px solid var(--border);
+      color: var(--text2);
+    }
+
+    .badge-accent { border-color: var(--accent); color: var(--accent); }
+    .badge-green { border-color: var(--green); color: var(--green); }
+    .badge-blue { border-color: var(--blue); color: var(--blue); }
+
+    /* Install block */
+    .install-block {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px 24px;
+      max-width: 520px;
+      margin: 0 auto 16px;
+      text-align: left;
+    }
+
+    .install-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .install-row:last-child { margin-bottom: 0; }
+
+    .install-label {
+      font-size: 12px;
+      color: var(--text2);
+      min-width: 80px;
+    }
+
+    .install-cmd {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      color: var(--green);
+      flex: 1;
+    }
+
+    .copy-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text2);
+      padding: 2px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      font-family: monospace;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .copy-btn.copied { border-color: var(--green); color: var(--green); }
+
+    /* Modules */
+    .section {
+      padding: 60px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .section-title {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      color: var(--accent);
+      margin-bottom: 32px;
+      text-align: center;
+    }
+
+    .modules-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .module-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      transition: border-color 0.2s;
+    }
+
+    .module-card:hover { border-color: var(--accent); }
+
+    .module-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .module-desc {
+      font-size: 13px;
+      color: var(--text2);
+      line-height: 1.5;
+    }
+
+    .module-tag {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      margin-top: 8px;
+      font-family: monospace;
+    }
+
+    .tag-cli { background: #1a2332; color: var(--blue); }
+    .tag-tui { background: #1a1a2e; color: var(--purple); }
+
+    /* TUI Preview */
+    .tui-preview {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      overflow-x: auto;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .tui-preview .tab-active { color: var(--accent); font-weight: bold; }
+    .tui-preview .tab-inactive { color: var(--text2); }
+    .tui-preview .green { color: var(--green); }
+    .tui-preview .yellow { color: var(--accent); }
+    .tui-preview .red { color: var(--red); }
+    .tui-preview .purple { color: var(--purple); }
+    .tui-preview .dim { color: var(--text2); }
+    .tui-preview .blue { color: var(--blue); }
+
+    /* Stats */
+    .stats-row {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      flex-wrap: wrap;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--accent);
+      font-family: monospace;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* CLI Examples */
+    .cli-examples {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      line-height: 1.8;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .cli-comment { color: var(--text2); }
+    .cli-cmd { color: var(--green); }
+    .cli-flag { color: var(--blue); }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 40px 0;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--text2);
+    }
+
+    .footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .footer a:hover { text-decoration: underline; }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .hero { padding: 48px 0 40px; }
+      .hero-ascii { font-size: 10px; }
+      .stats-row { gap: 24px; }
+      .stat-value { font-size: 22px; }
+      .modules-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="container">
+      <div class="hero-ascii">   _____ ____  ___  ____  __ __
+  / ___// __ \/   |/ __ \/ //_/
+  \__ \/ /_/ / /| / /_/ / ,&lt;
+ ___/ / ____/ ___ / _, _/ /| |
+/____/_/   /_/  |/_/ |_/_/ |_|</div>
+      <h1>Developer Operations Platform</h1>
+      <p class="hero-tagline">Manage repos, scan health, clean artifacts, monitor ports, audit security, update dev tools.<br>One TUI. Rust. Ratatui. tokio.</p>
+
+      <div class="badges">
+        <span class="badge badge-accent">v0.8.0</span>
+        <span class="badge badge-green">124 tests</span>
+        <span class="badge badge-blue">58 tools</span>
+        <span class="badge">Rust</span>
+        <span class="badge">macOS + Linux</span>
+      </div>
+
+      <div class="install-block">
+        <div class="install-row">
+          <span class="install-label">npm</span>
+          <span class="install-cmd">npm install -g @dpeluche/spark</span>
+          <button class="copy-btn" onclick="copyCmd(this, 'npm install -g @dpeluche/spark')">copy</button>
+        </div>
+        <div class="install-row">
+          <span class="install-label">npx</span>
+          <span class="install-cmd">npx @dpeluche/spark</span>
+          <button class="copy-btn" onclick="copyCmd(this, 'npx @dpeluche/spark')">copy</button>
+        </div>
+        <div class="install-row">
+          <span class="install-label">cargo</span>
+          <span class="install-cmd">cargo install --git https://github.com/dPeluChe/labs-spark</span>
+          <button class="copy-btn" onclick="copyCmd(this, 'cargo install --git https://github.com/dPeluChe/labs-spark')">copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modules -->
+  <div class="section">
+    <div class="container">
+      <div class="section-title">Modules</div>
+      <div class="modules-grid">
+        <div class="module-card">
+          <div class="module-name">Repository Scanner</div>
+          <div class="module-desc">Discover git repos, health-score them (A-F), detect containers, clean stale artifacts (node_modules, target/, .venv).</div>
+          <span class="module-tag tag-tui">TUI</span>
+        </div>
+        <div class="module-card">
+          <div class="module-name">Repo Manager</div>
+          <div class="module-desc">ghq-compatible clone/pull/status. Organize by host/owner/name. Tag repos into groups. Pull by tag.</div>
+          <span class="module-tag tag-cli">CLI</span> <span class="module-tag tag-tui">TUI</span>
+        </div>
+        <div class="module-card">
+          <div class="module-name">Security Audit</div>
+          <div class="module-desc">4-phase scan: secrets, git history, OWASP code patterns, dependency vulnerabilities (OSV.dev + npm audit).</div>
+          <span class="module-tag tag-cli">CLI</span> <span class="module-tag tag-tui">TUI</span>
+        </div>
+        <div class="module-card">
+          <div class="module-name">Certificate Scanner</div>
+          <div class="module-desc">Scan SSL/TLS certs in Keychain and filesystem. Find expired certs, loose keys, with risk recommendations.</div>
+          <span class="module-tag tag-cli">CLI</span>
+        </div>
+        <div class="module-card">
+          <div class="module-name">Port Scanner</div>
+          <div class="module-desc">Find and kill dev servers. Detect runtime (Node, Python, Go, Rust). Group dev vs system services.</div>
+          <span class="module-tag tag-tui">TUI</span>
+        </div>
+        <div class="module-card">
+          <div class="module-name">System Cleanup</div>
+          <div class="module-desc">Docker, dev caches (brew/npm/pip/cargo), VMs, logs. Risk indicators. Safety guards inspired by tw93/mole.</div>
+          <span class="module-tag tag-tui">TUI</span>
+        </div>
+        <div class="module-card">
+          <div class="module-name">Tool Updater</div>
+          <div class="module-desc">Manage 58 dev tools across 8 categories. Version comparison. Batch update with safety checks for runtimes.</div>
+          <span class="module-tag tag-tui">TUI</span>
+        </div>
+        <div class="module-card">
+          <div class="module-name">Doctor</div>
+          <div class="module-desc">Validate installation health. Check binary, git, config, shell integration, completions, platform tools.</div>
+          <span class="module-tag tag-cli">CLI</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TUI Preview -->
+  <div class="section">
+    <div class="container">
+      <div class="section-title">TUI Preview</div>
+      <div class="tui-preview">
+<span class="tab-inactive"> Scanner </span> <span class="tab-inactive"> Repos </span> <span class="tab-inactive"> Ports </span> <span class="tab-inactive"> System </span> <span class="tab-active"> Audit </span> <span class="tab-inactive"> Updater </span>  <span class="dim">TAB switch  SPARK v0.8.0</span>
+<span class="red"> SECURITY AUDIT </span>  <span class="red">3 critical</span>  <span class="yellow">12 warnings</span>  <span class="dim">8 info</span>
+<span class="dim">4 projects scanned</span>
+
+<span class="dim">  Project              Critical  Warning  Info   Path</span>
+<span class="dim">  ────────────────────────────────────────────────────────</span>
+  <span class="purple">my-api</span>                   <span class="red">2</span>        <span class="yellow">5</span>       3    <span class="dim">~/projects/my-api</span>
+  <span class="purple">frontend</span>                 <span class="red">1</span>        <span class="yellow">4</span>       2    <span class="dim">~/projects/frontend</span>
+  <span class="purple">shared-utils</span>             0        <span class="yellow">3</span>       3    <span class="dim">~/projects/shared</span>
+
+<span class="dim">[ENTER] Detail  [r] Rescan  [TAB] Next  [q] Back</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLI -->
+  <div class="section">
+    <div class="container">
+      <div class="section-title">CLI</div>
+      <div class="cli-examples">
+<span class="cli-comment"># Repository management</span>
+<span class="cli-cmd">spark clone</span> user/repo          <span class="cli-comment"># ghq-compatible clone</span>
+<span class="cli-cmd">spark list</span>                      <span class="cli-comment"># tree view with branch + age</span>
+<span class="cli-cmd">spark status</span>                    <span class="cli-comment"># which repos need pull</span>
+<span class="cli-cmd">spark pull all</span> <span class="cli-flag">--tag</span> learning  <span class="cli-comment"># pull repos by tag</span>
+
+<span class="cli-comment"># Security</span>
+<span class="cli-cmd">spark audit</span>                     <span class="cli-comment"># secrets + OWASP + deps</span>
+<span class="cli-cmd">spark certs</span>                     <span class="cli-comment"># SSL/TLS certificate health</span>
+
+<span class="cli-comment"># System</span>
+<span class="cli-cmd">spark doctor</span>                    <span class="cli-comment"># installation health check</span>
+<span class="cli-cmd">spark</span>                           <span class="cli-comment"># open TUI</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="section">
+    <div class="container">
+      <div class="section-title">Numbers</div>
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat-value">58</div>
+          <div class="stat-label">Dev Tools</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">124</div>
+          <div class="stat-label">Tests</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">7</div>
+          <div class="stat-label">Modules</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">0</div>
+          <div class="stat-label">Clippy Warnings</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Install -->
+  <div class="section">
+    <div class="container">
+      <div class="section-title">Install</div>
+      <div class="install-block" style="max-width: 600px;">
+        <div class="install-row">
+          <span class="install-label">npm</span>
+          <span class="install-cmd">npm install -g @dpeluche/spark</span>
+          <button class="copy-btn" onclick="copyCmd(this, 'npm install -g @dpeluche/spark')">copy</button>
+        </div>
+        <div class="install-row">
+          <span class="install-label">npx</span>
+          <span class="install-cmd">npx @dpeluche/spark</span>
+          <button class="copy-btn" onclick="copyCmd(this, 'npx @dpeluche/spark')">copy</button>
+        </div>
+        <div class="install-row">
+          <span class="install-label">cargo</span>
+          <span class="install-cmd">cargo install --git https://github.com/dPeluChe/labs-spark</span>
+          <button class="copy-btn" onclick="copyCmd(this, 'cargo install --git https://github.com/dPeluChe/labs-spark')">copy</button>
+        </div>
+        <div class="install-row">
+          <span class="install-label">source</span>
+          <span class="install-cmd">git clone https://github.com/dPeluChe/labs-spark && cd labs-spark && ./install.sh</span>
+          <button class="copy-btn" onclick="copyCmd(this, 'git clone https://github.com/dPeluChe/labs-spark && cd labs-spark && ./install.sh')">copy</button>
+        </div>
+      </div>
+      <p style="text-align: center; margin-top: 12px; font-size: 13px; color: var(--text2);">After installing: <code style="color: var(--green);">spark init</code> to set up shell integration and completions.</p>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="container">
+      <div class="footer-links">
+        <a href="https://github.com/dPeluChe/labs-spark">GitHub</a>
+        <a href="https://www.npmjs.com/package/@dpeluche/spark">npm</a>
+        <a href="https://github.com/dPeluChe/labs-spark/blob/main/CLAUDE.md">Docs</a>
+      </div>
+      <p>Built with Rust & caffeine by <a href="https://iteris.tech">Iteris</a> &middot; iteris.tech</p>
+    </div>
+  </div>
+
+  <script>
+    function copyCmd(btn, text) {
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'copy';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>
