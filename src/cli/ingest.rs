@@ -142,11 +142,18 @@ fn cmd_ingest_list(config: &config::SparkConfig) {
     let total_repos = repos.len();
     let ingested = ingests.len();
 
-    // Show base path once
     let base_path = dirs::config_dir()
         .unwrap_or_default().join("spark").join("ingest");
+    // Find common host (usually all github.com)
+    let common_host = ingests.first().map(|(h, _, _, _)| h.as_str()).unwrap_or("github.com");
+    let all_same_host = ingests.iter().all(|(h, _, _, _)| h == common_host);
+
     println!("  \x1b[1mLLM Ingest\x1b[0m — {}/{} repos have context files", ingested, total_repos);
-    println!("  \x1b[90m{}\x1b[0m\n", shorten_path(&base_path.display().to_string()));
+    if all_same_host && !ingests.is_empty() {
+        println!("  \x1b[90m{}/{}\x1b[0m\n", shorten_path(&base_path.display().to_string()), common_host);
+    } else {
+        println!("  \x1b[90m{}\x1b[0m\n", shorten_path(&base_path.display().to_string()));
+    }
 
     if ingests.is_empty() {
         println!("  No ingest files yet.");
@@ -162,7 +169,6 @@ fn cmd_ingest_list(config: &config::SparkConfig) {
     let cache = repo_manager::load_status_cache();
 
     for (host, owner, name, info) in &ingests {
-        let repo_name = format!("{}/{}", owner, name);
         let size = format_size(info.size);
         let age = info.age_display();
 
@@ -178,9 +184,13 @@ fn cmd_ingest_list(config: &config::SparkConfig) {
             if is_behind { "\x1b[33mstale\x1b[0m" } else { "\x1b[32mfresh\x1b[0m" }
         } else { "\x1b[90m?\x1b[0m" };
 
-        let md_path = format!("{}/{}/{}.md", host, owner, name);
-        println!("  {:<width$}  {}  {:>8}  {}  \x1b[90m{}\x1b[0m",
-            repo_name, status, size, age, md_path, width = max_name);
+        let md_suffix = if all_same_host {
+            format!("{}/{}\x1b[90m.md\x1b[0m", owner, name)
+        } else {
+            format!("{}/{}/{}\x1b[90m.md\x1b[0m", host, owner, name)
+        };
+        println!("  {:<width$}  {}  {:>8}  {}",
+            md_suffix, status, size, age, width = max_name + 3);
     }
 
     // Show repos without ingest
