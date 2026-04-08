@@ -162,8 +162,9 @@ fn cmd_ingest_list(config: &config::SparkConfig) {
         return;
     }
 
+    // +3 for .md suffix in display
     let max_name = ingests.iter()
-        .map(|(_, o, n, _)| o.len() + 1 + n.len())
+        .map(|(_, o, n, _)| o.len() + 1 + n.len() + 3)
         .max().unwrap_or(20) + 2;
 
     let cache = repo_manager::load_status_cache();
@@ -184,13 +185,18 @@ fn cmd_ingest_list(config: &config::SparkConfig) {
             if is_behind { "\x1b[33mstale\x1b[0m" } else { "\x1b[32mfresh\x1b[0m" }
         } else { "\x1b[90m?\x1b[0m" };
 
-        let md_suffix = if all_same_host {
-            format!("{}/{}\x1b[90m.md\x1b[0m", owner, name)
+        let display_name = if all_same_host {
+            format!("{}/{}.md", owner, name)
         } else {
-            format!("{}/{}/{}\x1b[90m.md\x1b[0m", host, owner, name)
+            format!("{}/{}/{}.md", host, owner, name)
         };
-        println!("  {:<width$}  {}  {:>8}  {}",
-            md_suffix, status, size, age, width = max_name + 3);
+        let padding = if display_name.len() < max_name {
+            " ".repeat(max_name - display_name.len())
+        } else {
+            "  ".to_string()
+        };
+        println!("  {}\x1b[90m{}\x1b[0m{}{}  {:>8}  {}",
+            &display_name[..display_name.len()-3], ".md", padding, status, size, age);
     }
 
     // Show repos without ingest
