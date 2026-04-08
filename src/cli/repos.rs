@@ -133,6 +133,11 @@ pub fn cmd_search(query: &str, first: bool, config: &config::SparkConfig) -> col
             println!("  status: {}", status_str);
             println!("  commit: {}", age);
             println!("  path:   {}", short);
+            // Show ingest info if available
+            if let Some(info) = scanner::repo_ingest::ingest_info(&repo.host, &repo.owner, &repo.name) {
+                println!("  ingest: {} ({}, {})", shorten_path(&info.path.display().to_string()),
+                    crate::utils::fs::format_size(info.size), info.age_display());
+            }
         }
     }
     Ok(())

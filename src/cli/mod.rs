@@ -5,6 +5,7 @@ mod system;
 mod audit;
 mod certs;
 mod tags;
+mod ingest;
 
 use std::path::PathBuf;
 use clap::{Parser, Subcommand};
@@ -130,6 +131,17 @@ pub enum Commands {
         #[arg(long = "summary")]
         summary_only: bool,
     },
+    /// Generate LLM-ready context file for a repo (uses repomix)
+    Ingest {
+        /// Repo to ingest (name or owner/name). Omit to ingest all.
+        query: Option<String>,
+        /// List existing ingest files
+        #[arg(long = "list", short = 'l')]
+        list: bool,
+        /// Compress with Tree-sitter (reduces ~70% tokens)
+        #[arg(long = "compress")]
+        compress: bool,
+    },
     /// Manage repository tags/groups
     #[command(alias = "tags")]
     Tag {
@@ -194,6 +206,7 @@ pub fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_
             else { audit::cmd_audit(path, output, init_ignore, offline); }
             Ok(())
         }
+        Commands::Ingest { query, list, compress } => { ingest::cmd_ingest(query, list, compress, config); Ok(()) }
         Commands::Tag { action } => { tags::cmd_tag(action, config); Ok(()) }
         Commands::Certs { path, keychain_only, show_all: _, expired_only, summary_only } => {
             certs::cmd_certs(path, keychain_only, expired_only, summary_only); Ok(())
