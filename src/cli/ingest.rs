@@ -215,8 +215,8 @@ fn cmd_ingest_list(config: &config::SparkConfig) {
         } else {
             "  ".to_string()
         };
-        println!("  {}\x1b[90m{}\x1b[0m{}{}  {:>8}  {}",
-            &display_name[..display_name.len()-3], ".md", padding, status, size, age);
+        println!("  {}\x1b[90m.md\x1b[0m{}{}  {:>8}  {}",
+            &display_name[..display_name.len()-3], padding, status, size, age);
     }
 
     // Show repos without ingest

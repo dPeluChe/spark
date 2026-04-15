@@ -124,7 +124,7 @@ fn col_widths(ports: &[&PortInfo]) -> (usize, usize) {
 
 fn print_port_section(label: &str, ports: &[&PortInfo], max_proc: usize, max_rt: usize) {
     println!("\n  \x1b[1m{} ({})\x1b[0m", label, ports.len());
-    println!("  {:<6}  {:<7}  {:<wp$}  {:<wr$}  {}", "PORT", "PID", "PROCESS", "RUNTIME", "PROJECT", wp = max_proc, wr = max_rt);
+    println!("  {:<6}  {:<7}  {:<wp$}  {:<wr$}  PROJECT", "PORT", "PID", "PROCESS", "RUNTIME", wp = max_proc, wr = max_rt);
     println!("  {:-<6}  {:-<7}  {:-<wp$}  {:-<wr$}  {:-<30}", "", "", "", "", "", wp = max_proc, wr = max_rt);
     for p in ports {
         println!(
@@ -211,7 +211,7 @@ fn ps_list() -> Vec<PsEntry> {
         for _ in 0..6 { parts.next()?; }
         let command: String = parts.collect::<Vec<_>>().join(" ");
         if command.is_empty() { return None; }
-        let name = command.split('/').last().unwrap_or(&command)
+        let name = command.split('/').next_back().unwrap_or(&command)
             .split(' ').next().unwrap_or(&command)
             .to_string();
         Some(PsEntry { pid, cpu, mem, command, name })
@@ -244,9 +244,9 @@ fn cmd_kill_silent(target: &str) {
             return;
         }
         // Try direct PID kill
-        match port_scanner::kill_process(num) {
-            Ok(_) => { println!("  \x1b[32m[+]\x1b[0m Killed pid {}", num); return; }
-            Err(_) => {}
+        if port_scanner::kill_process(num).is_ok() {
+            println!("  \x1b[32m[+]\x1b[0m Killed pid {}", num);
+            return;
         }
         eprintln!("  process not found: {}", target);
         std::process::exit(1);
