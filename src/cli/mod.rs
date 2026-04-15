@@ -6,6 +6,7 @@ mod audit;
 mod certs;
 mod tags;
 mod ingest;
+mod ports;
 
 use std::path::PathBuf;
 use clap::{Parser, Subcommand};
@@ -151,6 +152,18 @@ pub enum Commands {
         #[command(subcommand)]
         action: TagAction,
     },
+    /// Inspect processes and ports (replaces lsof + ps aux | grep)
+    #[command(alias = "ports")]
+    Ps {
+        /// Search processes by name (shows their ports if listening)
+        query: Option<String>,
+        /// Show all ports including system processes (default: dev servers only)
+        #[arg(long = "all", short = 'a')]
+        all: bool,
+        /// Kill by port, PID, or name. Use with query for non-interactive: spark ps node --kill
+        #[arg(long = "kill", short = 'k', num_args = 0..=1, default_missing_value = "")]
+        kill: Option<String>,
+    },
     /// Validate installation and environment health
     Doctor,
 }
@@ -214,6 +227,7 @@ pub fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_
         Commands::Certs { path, keychain_only, show_all: _, expired_only, summary_only } => {
             certs::cmd_certs(path, keychain_only, expired_only, summary_only); Ok(())
         }
+        Commands::Ps { all, query, kill } => { ports::cmd_ports(all, query, kill); Ok(()) }
         Commands::Doctor => { system::cmd_doctor(config); Ok(()) }
     }
 }

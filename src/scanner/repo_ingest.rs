@@ -56,16 +56,10 @@ impl IngestInfo {
     }
 }
 
-/// Check if repomix is available (via npx or direct)
-pub fn is_repomix_available() -> bool {
-    // Check direct install first
-    if Command::new("repomix").arg("--version").output()
-        .map(|o| o.status.success()).unwrap_or(false) {
-        return true;
-    }
-    // Check npx
-    Command::new("npx").args(["repomix@latest", "--version"])
-        .output().map(|o| o.status.success()).unwrap_or(false)
+/// Check if npx is available (repomix runs via npx)
+pub fn is_npx_available() -> bool {
+    Command::new("npx").arg("--version").output()
+        .map(|o| o.status.success()).unwrap_or(false)
 }
 
 /// Generate ingest for a repo

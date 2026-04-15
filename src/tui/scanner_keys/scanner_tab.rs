@@ -10,7 +10,7 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Option<Action> {
 
     match s.state {
         ScannerState::ScanConfig => match key.code {
-            KeyCode::Char('q') | KeyCode::Char('Q') => {
+            KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
                 app.should_quit = true;
                 Some(Action::Quit)
             }

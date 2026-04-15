@@ -79,6 +79,14 @@ Pending tasks and improvements for the SPARK DevOps platform.
 - Pressing Enter on a non-container repo in ScanResults goes to RepoDetail
 - Could show richer info: recent commits, branch list, disk usage breakdown
 
+### Audit: AST-based parsing for code_patterns.rs `added: 2026-04-15`
+- Today `code_patterns.rs` uses pure regex for OWASP Top 10 detection
+- Replace with layered strategy: AST parsing first (tree-sitter), regex fallback for unsupported langs
+- Benefit: fewer false positives (e.g. detections inside string literals or comments)
+- Inspiration: CodeFlow (github.com/braedonsaunders/codeflow) uses Acorn + Tree-Sitter WASM with regex fallback for 40+ languages
+- Tree-sitter already used in `spark ingest --compress` — leverage same crate
+- Start with JS/TS and Python (highest false-positive risk), keep regex for Rust/Go
+
 ### Audit: more ecosystems
 - Support `go.sum` (Go modules), `Gemfile.lock` (Ruby), `composer.lock` (PHP)
 - Support `pnpm-lock.yaml`, `yarn.lock` for npm alternatives

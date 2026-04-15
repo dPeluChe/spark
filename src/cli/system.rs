@@ -115,6 +115,44 @@ spark-cd() { cd "$(spark cd "$1")" ; }
         _ => {}
     }
 
+    // Install AI agent skill — writes to ~/.agents/skills/spark/SKILL.md
+    // then symlinks from ~/.claude/skills/spark, ~/.codex/skills/spark, ~/.gemini/skills/spark
+    let skill_content = include_str!("../../assets/spark.skill.md");
+    let agents_skill_dir = home.join(".agents/skills/spark");
+    let skill_installed = if !agents_skill_dir.exists() {
+        std::fs::create_dir_all(&agents_skill_dir).ok();
+        let skill_file = agents_skill_dir.join("SKILL.md");
+        std::fs::write(&skill_file, skill_content).is_ok()
+    } else {
+        // Update skill content on re-init
+        let skill_file = agents_skill_dir.join("SKILL.md");
+        std::fs::write(&skill_file, skill_content).is_ok()
+    };
+
+    if skill_installed {
+        println!("  [+] Skill: {}", agents_skill_dir.join("SKILL.md").display());
+        // Symlink from each AI agent's skills dir
+        let link_dirs = [
+            home.join(".claude/skills"),
+            home.join(".codex/skills"),
+            home.join(".gemini/skills"),
+        ];
+        for link_dir in &link_dirs {
+            if link_dir.exists() {
+                let link = link_dir.join("spark");
+                if !link.exists() {
+                    // Relative symlink: ../../.agents/skills/spark
+                    let _ = std::os::unix::fs::symlink(&agents_skill_dir, &link);
+                    println!("  [+] Linked skill: {}", link.display());
+                } else {
+                    println!("  [+] Skill link exists: {}", link.display());
+                }
+            }
+        }
+    } else {
+        println!("  [-] Could not install skill (check ~/.agents/skills/ permissions)");
+    }
+
     println!("\n  Setup complete!\n");
     println!("  Repos root:  {}", config.repos_root.display());
     println!("  Config:      {}", config_dir.display());

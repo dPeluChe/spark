@@ -318,10 +318,23 @@ pub async fn run(
                             app.scanner.state = ScannerState::SecretAuditScanning;
                             let tx2 = tx.clone();
                             tokio::spawn(async move {
+                                let path2 = path.clone();
                                 let results = tokio::task::spawn_blocking(move || {
-                                    crate::scanner::secret_scanner::scan_directory(&path)
+                                    crate::scanner::secret_scanner::scan_directory(&path2)
                                 }).await.unwrap_or_default();
-                                let _ = tx2.send(AppMessage::AuditScanResult { results });
+                                // Also run dep scan (async)
+                                let dep_vulns = {
+                                    let path3 = path.clone();
+                                    let deps = tokio::task::spawn_blocking(move || {
+                                        crate::scanner::dep_scanner::parse_dependencies(&path3)
+                                    }).await.unwrap_or_default();
+                                    if !deps.is_empty() {
+                                        crate::scanner::dep_scanner::check_vulnerabilities(&deps).await.vulnerabilities
+                                    } else {
+                                        Vec::new()
+                                    }
+                                };
+                                let _ = tx2.send(AppMessage::AuditScanResult { results, dep_vulns });
                             });
                         }
                         Action::LoadContainerChildren(path) => {

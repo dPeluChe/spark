@@ -409,6 +409,7 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
             app.system_cleaner.cursor = 0;
             app.system_cleaner.checked.clear();
             app.system_cleaner.scanning = false;
+            app.system_cleaner.rebuild_display_order();
         }
         AppMessage::SystemCleanItemResult { index, recovered, success, error } => {
             if success {
@@ -418,15 +419,11 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
                     format!("Cleaned {} ({})", name, crate::utils::fs::format_size(recovered)),
                     false,
                 );
-                // Remove cleaned item
+                // Remove cleaned item and rebuild display order
                 if index < app.system_cleaner.items.len() {
                     app.system_cleaner.items.remove(index);
-                    if app.system_cleaner.cursor > 0
-                        && app.system_cleaner.cursor >= app.system_cleaner.items.len()
-                    {
-                        app.system_cleaner.cursor -= 1;
-                    }
                 }
+                app.system_cleaner.rebuild_display_order();
             } else if let Some(err) = error {
                 app.show_toast(format!("Clean failed: {}", err), true);
             }
@@ -439,11 +436,13 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
                 app.scanner.state = ScannerState::RepoDetail;
             }
         }
-        AppMessage::AuditScanResult { results } => {
+        AppMessage::AuditScanResult { results, dep_vulns } => {
             app.audit.total_critical = results.iter().map(|r| r.critical_count).sum();
             app.audit.total_warning = results.iter().map(|r| r.warning_count).sum();
             app.audit.total_info = results.iter().map(|r| r.info_count).sum();
             app.audit.results = results;
+            app.audit.dep_vulns = dep_vulns;
+            app.audit.dep_cursor = 0;
             app.audit.scanning = false;
             app.audit.cursor = 0;
             app.scanner.state = ScannerState::SecretAudit;

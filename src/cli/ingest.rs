@@ -23,11 +23,10 @@ pub fn cmd_ingest(query: Option<String>, all: bool, compress: bool, read: bool, 
         return;
     }
 
-    // Check repomix availability
-    if !repo_ingest::is_repomix_available() {
-        eprintln!("  repomix not found. Install with:");
-        eprintln!("    npm install -g repomix");
-        eprintln!("  or it will be used via npx (requires Node.js)");
+    // Check npx availability (repomix runs via npx)
+    if !repo_ingest::is_npx_available() {
+        eprintln!("  npx not found. Install Node.js to use repomix:");
+        eprintln!("    brew install node");
         std::process::exit(1);
     }
 
@@ -130,9 +129,30 @@ fn cmd_ingest_read(query: &str, config: &config::SparkConfig) {
     }
 
     match std::fs::read_to_string(&path) {
-        Ok(content) => print!("{}", content),
+        Ok(content) => {
+            // Filter out base64/binary lines (SVG data, images, etc.)
+            for line in content.lines() {
+                if is_binary_line(line) { continue; }
+                println!("{}", line);
+            }
+        }
         Err(e) => { eprintln!("  Error reading ingest: {}", e); std::process::exit(1); }
     }
+}
+
+/// Skip lines that are base64-encoded data, binary blobs, or very long data URIs
+fn is_binary_line(line: &str) -> bool {
+    let trimmed = line.trim();
+    // Skip base64 data URIs (common in SVG/HTML)
+    if trimmed.contains("data:image/") || trimmed.contains("data:application/") {
+        return true;
+    }
+    // Skip pure base64 blocks (long lines of only base64 chars)
+    if trimmed.len() > 200 {
+        let base64_chars = trimmed.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=');
+        if base64_chars { return true; }
+    }
+    false
 }
 
 fn cmd_ingest_list(config: &config::SparkConfig) {

@@ -10,10 +10,8 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Option<Action> {
             let sc = &mut app.system_cleaner;
             match key.code {
                 KeyCode::Esc | KeyCode::Char('q') => { app.scanner.state = ScannerState::ScanConfig; None }
-                KeyCode::Up | KeyCode::Char('k') => { if sc.cursor > 0 { sc.cursor -= 1; } None }
-                KeyCode::Down | KeyCode::Char('j') => {
-                    if sc.cursor < sc.items.len().saturating_sub(1) { sc.cursor += 1; } None
-                }
+                KeyCode::Up | KeyCode::Char('k') => { sc.move_up(); None }
+                KeyCode::Down | KeyCode::Char('j') => { sc.move_down(); None }
                 KeyCode::Char(' ') => {
                     if sc.checked.contains(&sc.cursor) { sc.checked.remove(&sc.cursor); }
                     else { sc.checked.insert(sc.cursor); }

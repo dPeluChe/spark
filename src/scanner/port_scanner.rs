@@ -115,8 +115,12 @@ pub fn is_dev_server(info: &PortInfo) -> bool {
     let proc = info.process_name.to_lowercase();
     if matches!(proc.as_str(),
         "controlce" | "rapportd" | "spotify" | "raycast" | "dropbox"
-        | "figma_age" | "zed" | "ollama" | "superset"
+        | "figma_age" | "zed" | "ollama" | "superset" | "stable"
     ) {
+        return false;
+    }
+    // Terminal apps (Warp uses binary name "stable")
+    if proc.contains("warp") || proc.contains("iterm") || proc.contains("ghostty") {
         return false;
     }
     // Homebrew services
@@ -324,8 +328,10 @@ fn scan_ports_proc() -> Vec<PortInfo> {
 
 /// Kill a process by PID
 pub fn kill_process(pid: u32) -> Result<(), String> {
+    use std::process::Stdio;
     let status = Command::new("kill")
         .arg(pid.to_string())
+        .stderr(Stdio::null())
         .status()
         .map_err(|e| format!("Failed to send SIGTERM: {}", e))?;
 
@@ -334,10 +340,12 @@ pub fn kill_process(pid: u32) -> Result<(), String> {
         // Check if still alive
         let check = Command::new("kill")
             .args(["-0", &pid.to_string()])
+            .stderr(Stdio::null())
             .status();
         if check.map(|s| s.success()).unwrap_or(false) {
             let _ = Command::new("kill")
                 .args(["-9", &pid.to_string()])
+                .stderr(Stdio::null())
                 .status();
         }
         Ok(())
