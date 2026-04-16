@@ -8,6 +8,12 @@ Pending tasks and improvements for the SPARK DevOps platform.
 
 ## High Priority
 
+### spark ingest: switch to trs --output flag `added: 2026-04-16`
+- When new trs version ships with `-o <path>` support, update `src/scanner/repo_ingest.rs`
+- Remove stdout capture, replace with `args.push("-o"); args.push(output_path)`
+- Read stdout to confirm path returned by trs
+- One-liner change — see TODO comment in `generate_ingest()`
+
 ### Updater: runtime version manager sub-panel
 - Show installed versions per runtime (nvm ls, pyenv versions, rvm list, rustup toolchain list)
 - Accessible via Enter on a runtime tool in the updater table
