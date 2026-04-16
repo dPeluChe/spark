@@ -1,13 +1,33 @@
-//! Repository ingest: generate LLM-ready context files using repomix.
+//! Repository ingest: generate LLM-ready context files via trs.
 //!
-//! After clone/pull, generates a single .md file with the full repo content
-//! optimized for LLM consumption. Stored in ~/.config/spark/ingest/ mirroring
-//! the repos_root structure.
+//! trs ingest is the sole backend — budget-aware, git-aware, agent-friendly.
+//! Output stored in ~/.config/spark/ingest/<host>/<owner>/<name>.md
+//!
+//! Install trs: npm install -g @dpeluche/trs
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// Get the ingest directory path
+/// Options forwarded to `trs ingest`
+#[derive(Default)]
+pub struct IngestOptions {
+    /// Aggressive compression: trs -l aggressive (~93% reduction)
+    pub compress: bool,
+    /// Token budget constraint, e.g. "32k", "128k"
+    pub budget: Option<String>,
+    /// Only uncommitted/modified files
+    pub changed: bool,
+    /// Only files changed since a git ref, e.g. "HEAD~5"
+    pub since: Option<String>,
+    /// Dependency graph only — no file content
+    pub deps: bool,
+}
+
+pub fn is_trs_available() -> bool {
+    Command::new("trs").arg("--version").output()
+        .map(|o| o.status.success()).unwrap_or(false)
+}
+
 fn ingest_dir() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
@@ -15,7 +35,6 @@ fn ingest_dir() -> PathBuf {
         .join("ingest")
 }
 
-/// Get the ingest file path for a repo (mirrors repos_root structure)
 pub fn ingest_path(host: &str, owner: &str, name: &str) -> PathBuf {
     ingest_dir().join(host).join(owner).join(format!("{}.md", name))
 }
@@ -25,88 +44,94 @@ pub fn has_ingest(host: &str, owner: &str, name: &str) -> bool {
     ingest_path(host, owner, name).exists()
 }
 
-/// Get ingest file info (exists, size, age)
 pub fn ingest_info(host: &str, owner: &str, name: &str) -> Option<IngestInfo> {
     let path = ingest_path(host, owner, name);
     let meta = std::fs::metadata(&path).ok()?;
-    let age = meta.modified().ok()
+    let age  = meta.modified().ok()
         .and_then(|t| t.elapsed().ok())
         .map(|d| d.as_secs());
-    Some(IngestInfo {
-        path,
-        size: meta.len(),
-        age_secs: age,
-    })
+    Some(IngestInfo { path, size: meta.len(), age_secs: age })
 }
 
 pub struct IngestInfo {
-    pub path: PathBuf,
-    pub size: u64,
+    pub path:     PathBuf,
+    pub size:     u64,
     pub age_secs: Option<u64>,
 }
 
 impl IngestInfo {
     pub fn age_display(&self) -> String {
         match self.age_secs {
-            Some(s) if s < 3600 => format!("{}m ago", s / 60),
+            Some(s) if s < 3600  => format!("{}m ago", s / 60),
             Some(s) if s < 86400 => format!("{}h ago", s / 3600),
-            Some(s) => format!("{}d ago", s / 86400),
-            None => "unknown".into(),
+            Some(s)              => format!("{}d ago", s / 86400),
+            None                 => "unknown".into(),
         }
     }
 }
 
-/// Check if npx is available (repomix runs via npx)
-pub fn is_npx_available() -> bool {
-    Command::new("npx").arg("--version").output()
-        .map(|o| o.status.success()).unwrap_or(false)
-}
-
-/// Generate ingest for a repo
+/// Generate ingest for a repo via trs.
+/// Returns the path where the digest was written.
 pub fn generate_ingest(
     repo_path: &Path,
     host: &str,
     owner: &str,
     name: &str,
-    compress: bool,
+    opts: &IngestOptions,
 ) -> Result<PathBuf, String> {
-    let output_path = ingest_path(host, owner, name);
+    if !is_trs_available() {
+        return Err(
+            "trs not found. Install it:\n  npm install -g @dpeluche/trs\n  or: curl -fsSL https://raw.githubusercontent.com/dPeluChe/trs/main/scripts/install.sh | sh".to_string()
+        );
+    }
 
-    // Create parent dirs
+    let output_path = ingest_path(host, owner, name);
     if let Some(parent) = output_path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create ingest directory: {}", e))?;
     }
 
-    // Build repomix command
-    let output_str = output_path.display().to_string();
-    let mut args = vec![
-        "repomix@latest".to_string(),
-        "--style".into(), "markdown".into(),
-        "--output".into(), output_str.clone(),
-    ];
+    let mut args = vec!["ingest".to_string()];
 
-    if compress {
-        args.push("--compress".into());
+    // TODO: replace stdout capture with --output once trs supports it:
+    //   args.push("--output".into());
+    //   args.push(output_path.display().to_string());
+
+    if let Some(ref budget) = opts.budget {
+        args.push("--budget".into());
+        args.push(budget.clone());
+    }
+    if opts.changed {
+        args.push("--changed".into());
+    }
+    if let Some(ref since) = opts.since {
+        args.push("--since".into());
+        args.push(since.clone());
+    }
+    if opts.deps {
+        args.push("--deps".into());
+    }
+    if opts.compress {
+        args.push("-l".into());
+        args.push("aggressive".into());
     }
 
-    // Add the repo path as the target
-    args.push(repo_path.display().to_string());
-
-    // Try npx first, then direct repomix
-    let result = Command::new("npx")
+    let result = Command::new("trs")
         .args(&args)
         .current_dir(repo_path)
-        .output();
+        .output()
+        .map_err(|e| format!("Failed to run trs: {}", e))?;
 
-    match result {
-        Ok(output) if output.status.success() => Ok(output_path),
-        Ok(output) => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("repomix failed: {}", stderr.trim()))
-        }
-        Err(e) => Err(format!("Failed to run repomix: {}", e)),
+    if !result.status.success() {
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        return Err(format!("trs ingest failed: {}", stderr.trim()));
     }
+
+    // Capture stdout → spark's path (until trs --output is available)
+    std::fs::write(&output_path, &result.stdout)
+        .map_err(|e| format!("Failed to write digest: {}", e))?;
+
+    Ok(output_path)
 }
 
 /// List all existing ingest files
@@ -116,38 +141,20 @@ pub fn list_ingests() -> Vec<(String, String, String, IngestInfo)> {
 
     let mut results = Vec::new();
 
-    // Walk host/owner/name.md structure
-    let hosts = match std::fs::read_dir(&base) {
-        Ok(e) => e,
-        Err(_) => return results,
-    };
-
-    for host_entry in hosts.filter_map(|e| e.ok()) {
+    for host_entry in std::fs::read_dir(&base).into_iter().flatten().flatten() {
         if !host_entry.path().is_dir() { continue; }
         let host = host_entry.file_name().to_string_lossy().to_string();
 
-        let owners = match std::fs::read_dir(host_entry.path()) {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
-
-        for owner_entry in owners.filter_map(|e| e.ok()) {
+        for owner_entry in std::fs::read_dir(host_entry.path()).into_iter().flatten().flatten() {
             if !owner_entry.path().is_dir() { continue; }
             let owner = owner_entry.file_name().to_string_lossy().to_string();
 
-            let files = match std::fs::read_dir(owner_entry.path()) {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
-
-            for file_entry in files.filter_map(|e| e.ok()) {
+            for file_entry in std::fs::read_dir(owner_entry.path()).into_iter().flatten().flatten() {
                 let path = file_entry.path();
                 if path.extension().and_then(|e| e.to_str()) != Some("md") { continue; }
-
                 let name = path.file_stem()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_default();
-
                 if let Some(info) = ingest_info(&host, &owner, &name) {
                     results.push((host.clone(), owner.clone(), name, info));
                 }
@@ -166,8 +173,7 @@ mod tests {
     #[test]
     fn test_ingest_path() {
         let path = ingest_path("github.com", "user", "repo");
-        assert!(path.display().to_string().contains("github.com"));
-        assert!(path.display().to_string().contains("user"));
+        assert!(path.display().to_string().contains("github.com/user"));
         assert!(path.display().to_string().ends_with("repo.md"));
     }
 

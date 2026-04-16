@@ -132,19 +132,31 @@ pub enum Commands {
         #[arg(long = "summary")]
         summary_only: bool,
     },
-    /// Generate LLM-ready context file for a repo (uses repomix)
+    /// Generate LLM-ready context file for a repo (uses trs)
     Ingest {
         /// Repo to ingest (name or owner/name). Omit to list existing.
         query: Option<String>,
-        /// Ingest ALL repos (slow — runs repomix on each)
+        /// Ingest ALL repos
         #[arg(long = "all")]
         all: bool,
-        /// Compress with Tree-sitter (reduces ~70% tokens)
+        /// Aggressive compression: maps to trs -l aggressive (~93% token reduction)
         #[arg(long = "compress")]
         compress: bool,
         /// Print the ingest content to stdout (for piping to LLMs)
         #[arg(long = "read")]
         read: bool,
+        /// Constrain output to token budget (trs only, e.g. 32k, 128k)
+        #[arg(long = "budget")]
+        budget: Option<String>,
+        /// Only include uncommitted/modified files (trs only)
+        #[arg(long = "changed")]
+        changed: bool,
+        /// Only include files changed since a git ref (trs only, e.g. HEAD~5)
+        #[arg(long = "since")]
+        since: Option<String>,
+        /// Output dependency graph only — no file content (trs only)
+        #[arg(long = "deps")]
+        deps: bool,
     },
     /// Manage repository tags/groups
     #[command(alias = "tags")]
@@ -222,7 +234,9 @@ pub fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_
             else { audit::cmd_audit(path, output, init_ignore, offline); }
             Ok(())
         }
-        Commands::Ingest { query, all, compress, read } => { ingest::cmd_ingest(query, all, compress, read, config); Ok(()) }
+        Commands::Ingest { query, all, compress, read, budget, changed, since, deps } => {
+            ingest::cmd_ingest(query, all, compress, read, budget, changed, since, deps, config); Ok(())
+        }
         Commands::Tag { action } => { tags::cmd_tag(action, config); Ok(()) }
         Commands::Certs { path, keychain_only, show_all: _, expired_only, summary_only } => {
             certs::cmd_certs(path, keychain_only, expired_only, summary_only); Ok(())
