@@ -1,0 +1,13 @@
+#!/bin/sh
+# Pre-push hook — mirrors CI checks exactly.
+# Install: git config core.hooksPath .githooks
+
+set -e
+
+echo "  [pre-push] cargo clippy -- -D warnings"
+cargo clippy -- -D warnings
+
+echo "  [pre-push] cargo test"
+cargo test --quiet
+
+echo "  [pre-push] all checks passed"
