@@ -40,6 +40,11 @@ spark audit --deps         # Dependency-only scan (OSV.dev + npm audit)
 spark audit --offline      # Local-only scan (no network)
 spark audit --init         # Create .sparkauditignore
 spark audit -o report.txt  # Save audit report to file
+spark ps                   # Dev server ports (pid, process, runtime, project)
+spark ps --all             # All ports: macOS / SERVICES / APPS sections
+spark ps <query>           # Search processes by name, cross-ref with ports
+spark ps --kill <target>   # Kill by port, PID, or name (interactive)
+spark ps <query> --kill    # Kill non-interactive (exit 0/1 — for scripts/agents)
 spark certs                # Scan certificates (Keychain + files + ~/home)
 spark certs --keychain     # Keychain only
 spark certs --expired      # Show only expired
