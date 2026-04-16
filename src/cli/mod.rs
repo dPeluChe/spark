@@ -157,6 +157,9 @@ pub enum Commands {
         /// Output dependency graph only — no file content (trs only)
         #[arg(long = "deps")]
         deps: bool,
+        /// Skip regeneration if HEAD unchanged (trs only)
+        #[arg(long = "fresh")]
+        fresh: bool,
     },
     /// Manage repository tags/groups
     #[command(alias = "tags")]
@@ -234,8 +237,8 @@ pub fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_
             else { audit::cmd_audit(path, output, init_ignore, offline); }
             Ok(())
         }
-        Commands::Ingest { query, all, compress, read, budget, changed, since, deps } => {
-            ingest::cmd_ingest(query, all, compress, read, budget, changed, since, deps, config); Ok(())
+        Commands::Ingest { query, all, compress, read, budget, changed, since, deps, fresh } => {
+            ingest::cmd_ingest(query, all, compress, read, budget, changed, since, deps, fresh, config); Ok(())
         }
         Commands::Tag { action } => { tags::cmd_tag(action, config); Ok(()) }
         Commands::Certs { path, keychain_only, show_all: _, expired_only, summary_only } => {

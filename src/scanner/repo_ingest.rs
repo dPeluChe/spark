@@ -21,6 +21,8 @@ pub struct IngestOptions {
     pub since: Option<String>,
     /// Dependency graph only — no file content
     pub deps: bool,
+    /// Reuse cached digest if HEAD unchanged (skip regeneration)
+    pub fresh: bool,
 }
 
 pub fn is_trs_available() -> bool {
@@ -93,24 +95,21 @@ pub fn generate_ingest(
 
     let mut args = vec!["ingest".to_string()];
 
-    // TODO: replace stdout capture with --output once trs supports it:
-    //   args.push("--output".into());
-    //   args.push(output_path.display().to_string());
+    // Write directly to spark's path — no shadow save in ~/.trs/ingest/
+    args.push("-o".into());
+    args.push(output_path.display().to_string());
 
     if let Some(ref budget) = opts.budget {
         args.push("--budget".into());
         args.push(budget.clone());
     }
-    if opts.changed {
-        args.push("--changed".into());
-    }
+    if opts.changed { args.push("--changed".into()); }
     if let Some(ref since) = opts.since {
         args.push("--since".into());
         args.push(since.clone());
     }
-    if opts.deps {
-        args.push("--deps".into());
-    }
+    if opts.deps    { args.push("--deps".into()); }
+    if opts.fresh   { args.push("--fresh".into()); }
     if opts.compress {
         args.push("-l".into());
         args.push("aggressive".into());
@@ -127,10 +126,7 @@ pub fn generate_ingest(
         return Err(format!("trs ingest failed: {}", stderr.trim()));
     }
 
-    // Capture stdout → spark's path (until trs --output is available)
-    std::fs::write(&output_path, &result.stdout)
-        .map_err(|e| format!("Failed to write digest: {}", e))?;
-
+    // trs -o writes the file and returns the path on stdout
     Ok(output_path)
 }
 

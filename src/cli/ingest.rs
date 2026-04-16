@@ -16,6 +16,7 @@ pub fn cmd_ingest(
     changed:  bool,
     since:    Option<String>,
     deps:     bool,
+    fresh:    bool,
     config:   &config::SparkConfig,
 ) {
     if read {
@@ -40,7 +41,7 @@ pub fn cmd_ingest(
         std::process::exit(1);
     }
 
-    let opts = IngestOptions { compress, budget, changed, since, deps };
+    let opts = IngestOptions { compress, budget, changed, since, deps, fresh };
     let repos = repo_manager::list_managed_repos(&config.repos_root);
 
     if let Some(q) = query {
@@ -88,11 +89,12 @@ pub fn cmd_ingest(
 
 fn generate_one(repo: &repo_manager::ManagedRepo, opts: &IngestOptions) {
     let mut flags = vec!["trs ingest"];
-    if opts.compress                  { flags.push("-l aggressive"); }
-    if opts.changed                   { flags.push("--changed"); }
-    if opts.deps                      { flags.push("--deps"); }
-    if opts.budget.is_some()          { flags.push("--budget <n>"); }
-    if opts.since.is_some()           { flags.push("--since <ref>"); }
+    if opts.compress         { flags.push("-l aggressive"); }
+    if opts.changed          { flags.push("--changed"); }
+    if opts.deps             { flags.push("--deps"); }
+    if opts.fresh            { flags.push("--fresh"); }
+    if opts.budget.is_some() { flags.push("--budget <n>"); }
+    if opts.since.is_some()  { flags.push("--since <ref>"); }
 
     println!("  Ingest via {}", flags.join(" "));
     println!("  \x1b[90mgithub.com/dPeluChe/trs\x1b[0m\n");
