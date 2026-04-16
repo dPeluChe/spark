@@ -169,7 +169,7 @@ pub fn find_artifacts(repo_path: &Path) -> Vec<ArtifactInfo> {
     }
 
     // Sort by size descending
-    artifacts.sort_by(|a, b| b.size.cmp(&a.size));
+    artifacts.sort_by_key(|b| std::cmp::Reverse(b.size));
     artifacts
 }
 

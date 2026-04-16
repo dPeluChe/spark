@@ -319,7 +319,7 @@ fn print_repos_tree(repos: &[&scanner::repo_manager::ManagedRepo]) {
 
     // Fixed column at 50, but ensure longest name fits with at least 2 spaces
     let longest = tree.values().flat_map(|owners| {
-        owners.iter().flat_map(|(_, entries)| {
+        owners.values().flat_map(|entries| {
             entries.iter().map(|e| 8 + e.name.len())
         })
     }).max().unwrap_or(30);
