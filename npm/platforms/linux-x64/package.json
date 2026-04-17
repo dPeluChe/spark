@@ -1,0 +1,19 @@
+{
+  "name": "@dpeluche/spark-cli-linux-x64",
+  "version": "0.5.0",
+  "description": "spark binary for linux x64",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dPeluChe/spark"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "spark"
+  ]
+}
