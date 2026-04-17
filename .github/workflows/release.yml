@@ -22,7 +22,7 @@ jobs:
             npm_dir: darwin-arm64
 
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-latest
             binary: spark
             artifact: spark-darwin-x64
             npm_dir: darwin-x64
