@@ -72,6 +72,12 @@ spark-cd() { cd "$(spark cd "$1")" ; }
     let config_dir = dirs::config_dir().unwrap_or_default().join("spark");
     std::fs::create_dir_all(&config_dir)?;
 
+    let config_toml = config_dir.join("config.toml");
+    if !config_toml.exists() {
+        config.save()?;
+        println!("  [+] Created config.toml");
+    }
+
     let whitelist_path = config_dir.join("whitelist.txt");
     if !whitelist_path.exists() {
         std::fs::write(&whitelist_path,
