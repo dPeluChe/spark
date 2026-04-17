@@ -99,7 +99,7 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, app: &App) {
         && matches!(
             app.scanner.state,
             ScannerState::SecretAudit | ScannerState::SecretAuditScanning
-                | ScannerState::SecretAuditDetail
+                | ScannerState::SecretAuditDetail | ScannerState::SecretAuditDeps
         );
 
     let active = |on: bool, color: Color| -> Style {

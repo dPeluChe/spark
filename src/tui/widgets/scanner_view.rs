@@ -95,6 +95,9 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
         ScannerState::SecretAuditDetail => {
             super::audit_view::render_audit_detail(frame, area, &app.audit);
         }
+        ScannerState::SecretAuditDeps => {
+            super::audit_view::render_audit_deps(frame, area, &app.audit);
+        }
         ScannerState::PortScan => {
             super::port_view::render_ports(frame, area, &app.port_scanner);
         }

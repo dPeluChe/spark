@@ -40,7 +40,7 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
 
         // Audit tab
         ScannerState::SecretAudit | ScannerState::SecretAuditScanning
-        | ScannerState::SecretAuditDetail
+        | ScannerState::SecretAuditDetail | ScannerState::SecretAuditDeps
             => audit_tab::handle(app, key),
     }
 }

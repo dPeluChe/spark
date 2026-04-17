@@ -184,21 +184,11 @@ fn render_table(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
         }
     }
 
-    // Scroll offset
+    // Scroll offset: use display_order for accurate visual row position
     let visible_height = area.height.saturating_sub(3) as usize;
-    let mut cursor_row_pos = 0usize;
-    let mut found = false;
-    for cat in &categories {
-        let has_items = model.items.iter().any(|i| i.category == *cat);
-        if !has_items { continue; }
-        cursor_row_pos += 1; // header
-        for (i, item) in model.items.iter().enumerate() {
-            if item.category != *cat { continue; }
-            if i == model.cursor { found = true; break; }
-            cursor_row_pos += 1;
-        }
-        if found { break; }
-    }
+    let cursor_row_pos = model.display_order.iter()
+        .position(|d| *d == Some(model.cursor))
+        .unwrap_or(0);
     let scroll_offset = if cursor_row_pos >= visible_height {
         cursor_row_pos - visible_height + 1
     } else { 0 };

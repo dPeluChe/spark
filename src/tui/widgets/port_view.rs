@@ -94,7 +94,7 @@ fn render_header(frame: &mut Frame, area: Rect, model: &PortScannerModel) {
         }
     }
     let mut rt_parts: Vec<(String, usize)> = runtime_counts.into_iter().collect();
-    rt_parts.sort_by(|a, b| b.1.cmp(&a.1));
+    rt_parts.sort_by_key(|b| std::cmp::Reverse(b.1));
     let runtime_summary: String = rt_parts.iter().map(|(k, v)| format!("{}:{}", k, v)).collect::<Vec<_>>().join(" ");
 
     let status = if model.scanning {

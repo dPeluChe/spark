@@ -5,6 +5,8 @@ mod system;
 mod audit;
 mod certs;
 mod tags;
+mod ingest;
+mod ports;
 
 use std::path::PathBuf;
 use clap::{Parser, Subcommand};
@@ -130,11 +132,52 @@ pub enum Commands {
         #[arg(long = "summary")]
         summary_only: bool,
     },
+    /// Generate LLM-ready context file for a repo (uses trs)
+    Ingest {
+        /// Repo to ingest (name or owner/name). Omit to list existing.
+        query: Option<String>,
+        /// Ingest ALL repos
+        #[arg(long = "all")]
+        all: bool,
+        /// Aggressive compression: maps to trs -l aggressive (~93% token reduction)
+        #[arg(long = "compress")]
+        compress: bool,
+        /// Print the ingest content to stdout (for piping to LLMs)
+        #[arg(long = "read")]
+        read: bool,
+        /// Constrain output to token budget (trs only, e.g. 32k, 128k)
+        #[arg(long = "budget")]
+        budget: Option<String>,
+        /// Only include uncommitted/modified files (trs only)
+        #[arg(long = "changed")]
+        changed: bool,
+        /// Only include files changed since a git ref (trs only, e.g. HEAD~5)
+        #[arg(long = "since")]
+        since: Option<String>,
+        /// Output dependency graph only — no file content (trs only)
+        #[arg(long = "deps")]
+        deps: bool,
+        /// Skip regeneration if HEAD unchanged (trs only)
+        #[arg(long = "fresh")]
+        fresh: bool,
+    },
     /// Manage repository tags/groups
     #[command(alias = "tags")]
     Tag {
         #[command(subcommand)]
         action: TagAction,
+    },
+    /// Inspect processes and ports (replaces lsof + ps aux | grep)
+    #[command(alias = "ports")]
+    Ps {
+        /// Search processes by name (shows their ports if listening)
+        query: Option<String>,
+        /// Show all ports including system processes (default: dev servers only)
+        #[arg(long = "all", short = 'a')]
+        all: bool,
+        /// Kill by port, PID, or name. Use with query for non-interactive: spark ps node --kill
+        #[arg(long = "kill", short = 'k', num_args = 0..=1, default_missing_value = "")]
+        kill: Option<String>,
     },
     /// Validate installation and environment health
     Doctor,
@@ -194,10 +237,14 @@ pub fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_
             else { audit::cmd_audit(path, output, init_ignore, offline); }
             Ok(())
         }
+        Commands::Ingest { query, all, compress, read, budget, changed, since, deps, fresh } => {
+            ingest::cmd_ingest(query, all, compress, read, budget, changed, since, deps, fresh, config); Ok(())
+        }
         Commands::Tag { action } => { tags::cmd_tag(action, config); Ok(()) }
         Commands::Certs { path, keychain_only, show_all: _, expired_only, summary_only } => {
             certs::cmd_certs(path, keychain_only, expired_only, summary_only); Ok(())
         }
+        Commands::Ps { all, query, kill } => { ports::cmd_ports(all, query, kill); Ok(()) }
         Commands::Doctor => { system::cmd_doctor(config); Ok(()) }
     }
 }

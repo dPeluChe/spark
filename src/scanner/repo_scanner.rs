@@ -370,7 +370,7 @@ pub fn scan_container_children(container_path: &std::path::Path) -> Vec<RepoInfo
         }
     }
 
-    children.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    children.sort_by_key(|a| a.name.to_lowercase());
     children
 }
 
@@ -415,7 +415,7 @@ pub fn discover_project_dirs() -> Vec<DiscoveredDir> {
     }
 
     // Sort by repo count descending (most repos first)
-    found.sort_by(|a, b| b.repo_count.cmp(&a.repo_count));
+    found.sort_by_key(|b| std::cmp::Reverse(b.repo_count));
     found
 }
 
