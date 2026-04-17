@@ -1,0 +1,213 @@
+#!/bin/sh
+# spark installer — downloads the prebuilt binary for your platform.
+#
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/dPeluChe/spark/main/scripts/install.sh | sh
+#
+# Options (env vars):
+#   SPARK_VERSION=v0.5.0  — pin a specific release (default: latest)
+#   SPARK_INSTALL_DIR=... — override install location
+#
+# Install dir selection (in priority order):
+#   1. $SPARK_INSTALL_DIR if set
+#   2. $HOME/.local/bin if already in $PATH (XDG, ~80% of modern systems)
+#   3. $HOME/bin if already in $PATH
+#   4. $HOME/.local/bin as fallback (with a one-time PATH warning)
+
+set -eu
+
+REPO="dPeluChe/spark"
+BIN_NAME="spark"
+
+if [ -t 1 ]; then
+    C_RESET='\033[0m'
+    C_BOLD='\033[1m'
+    C_GREEN='\033[0;32m'
+    C_YELLOW='\033[0;33m'
+    C_RED='\033[0;31m'
+    C_CYAN='\033[0;36m'
+    C_GRAY='\033[0;90m'
+else
+    C_RESET=''; C_BOLD=''; C_GREEN=''; C_YELLOW=''; C_RED=''; C_CYAN=''; C_GRAY=''
+fi
+
+info()    { printf '%b▸%b %s\n' "$C_CYAN" "$C_RESET" "$*"; }
+ok()      { printf '%b✓%b %s\n' "$C_GREEN" "$C_RESET" "$*"; }
+warn()    { printf '%b!%b %s\n' "$C_YELLOW" "$C_RESET" "$*" >&2; }
+error()   { printf '%b✗%b %s\n' "$C_RED" "$C_RESET" "$*" >&2; exit 1; }
+
+detect_platform() {
+    os=$(uname -s 2>/dev/null || echo unknown)
+    arch=$(uname -m 2>/dev/null || echo unknown)
+
+    case "$os" in
+        Darwin) os_tag=darwin ;;
+        Linux)  os_tag=linux ;;
+        *) error "unsupported OS: $os (install via: cargo install --git https://github.com/$REPO)" ;;
+    esac
+
+    case "$arch" in
+        x86_64|amd64)  arch_tag=x64 ;;
+        arm64|aarch64) arch_tag=arm64 ;;
+        *) error "unsupported arch: $arch" ;;
+    esac
+
+    echo "${os_tag}-${arch_tag}"
+}
+
+resolve_version() {
+    if [ -n "${SPARK_VERSION:-}" ]; then
+        echo "$SPARK_VERSION"
+        return
+    fi
+    tag=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null \
+        | grep -o '"tag_name": *"[^"]*"' \
+        | head -1 \
+        | sed -E 's/.*"tag_name": *"([^"]*)".*/\1/')
+    [ -n "$tag" ] || error "could not resolve latest release (set SPARK_VERSION=v0.5.0)"
+    echo "$tag"
+}
+
+download() {
+    url="$1"
+    out="$2"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$url" -o "$out"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO "$out" "$url"
+    else
+        error "neither curl nor wget is available"
+    fi
+}
+
+path_contains() {
+    case ":$PATH:" in
+        *":$1:"*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+already_in_path() {
+    path_contains "$INSTALL_DIR"
+}
+
+pick_install_dir() {
+    if [ -n "${SPARK_INSTALL_DIR:-}" ]; then
+        echo "$SPARK_INSTALL_DIR"
+        return
+    fi
+    for d in "$HOME/.local/bin" "$HOME/bin"; do
+        if path_contains "$d"; then
+            echo "$d"
+            return
+        fi
+    done
+    echo "$HOME/.local/bin"
+}
+
+shell_rc_for() {
+    case "${SHELL:-}" in
+        */zsh)  echo "$HOME/.zshrc" ;;
+        */bash) echo "$HOME/.bashrc" ;;
+        */fish) echo "$HOME/.config/fish/config.fish" ;;
+        *)      echo "" ;;
+    esac
+}
+
+append_path_instructions() {
+    rc=$(shell_rc_for)
+    export_line="export PATH=\"$INSTALL_DIR:\$PATH\""
+    fish_line="fish_add_path $INSTALL_DIR"
+
+    printf '\n'
+    warn "$INSTALL_DIR is not in your PATH."
+    printf '  Add this line to '
+    if [ -n "$rc" ]; then
+        printf '%b%s%b:\n' "$C_BOLD" "$rc" "$C_RESET"
+    else
+        printf 'your shell rc:\n'
+    fi
+    case "${SHELL:-}" in
+        */fish) printf '    %b%s%b\n' "$C_CYAN" "$fish_line" "$C_RESET" ;;
+        *)      printf '    %b%s%b\n' "$C_CYAN" "$export_line" "$C_RESET" ;;
+    esac
+    printf '\n  Then restart your shell or: %bsource %s%b\n\n' "$C_CYAN" "${rc:-<rc>}" "$C_RESET"
+}
+
+check_existing_install() {
+    existing=$(command -v spark 2>/dev/null || true)
+    if [ -z "$existing" ]; then
+        return 0
+    fi
+    target="$INSTALL_DIR/$BIN_NAME"
+    existing_real=$(cd "$(dirname "$existing")" 2>/dev/null && pwd -P)/$(basename "$existing")
+    if [ -d "$INSTALL_DIR" ]; then
+        target_dir_real=$(cd "$INSTALL_DIR" && pwd -P)
+    else
+        target_dir_real="$INSTALL_DIR"
+    fi
+    target_real="$target_dir_real/$BIN_NAME"
+    if [ "$existing_real" = "$target_real" ]; then
+        return 0
+    fi
+    source_hint="unknown source"
+    case "$existing" in
+        */node_modules/*|*/npm/*)
+            source_hint="probably npm (try: npm uninstall -g @dpeluche/spark)" ;;
+        *"/.cargo/bin/"*)
+            source_hint="from cargo (try: cargo uninstall spark)" ;;
+        /opt/homebrew/bin/spark|/usr/local/bin/spark)
+            source_hint="from Homebrew or system package manager" ;;
+    esac
+    printf '\n'
+    warn "Another spark is already installed at:"
+    printf '       %s\n' "$existing"
+    printf '       (%s)\n\n' "$source_hint"
+    printf '  After this install, PATH order decides which runs.\n'
+    printf '  Put %b%s%b first in PATH to prefer this new install.\n\n' \
+        "$C_CYAN" "$INSTALL_DIR" "$C_RESET"
+}
+
+printf '\n%bspark installer%b\n' "$C_BOLD" "$C_RESET"
+printf '%b%s%b\n\n' "$C_GRAY" "https://github.com/$REPO" "$C_RESET"
+
+INSTALL_DIR=$(pick_install_dir)
+
+platform=$(detect_platform)
+info "platform: $platform"
+
+check_existing_install
+
+version=$(resolve_version)
+info "version:  $version"
+
+asset="spark-${platform}"
+url="https://github.com/${REPO}/releases/download/${version}/${asset}"
+
+info "url:      $url"
+info "install:  $INSTALL_DIR/$BIN_NAME"
+printf '\n'
+
+mkdir -p "$INSTALL_DIR"
+tmp=$(mktemp "${TMPDIR:-/tmp}/spark-install.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+
+info "downloading..."
+download "$url" "$tmp"
+chmod +x "$tmp"
+
+if ! "$tmp" --version >/dev/null 2>&1; then
+    error "downloaded binary failed to run — architecture mismatch?"
+fi
+
+mv "$tmp" "$INSTALL_DIR/$BIN_NAME"
+ok "installed $BIN_NAME $version to $INSTALL_DIR/$BIN_NAME"
+
+if already_in_path; then
+    ok "$INSTALL_DIR is in PATH"
+    printf '\n%bDone.%b Run: %bspark init%b\n\n' "$C_GREEN" "$C_RESET" "$C_CYAN" "$C_RESET"
+else
+    append_path_instructions
+    printf '%bDone.%b After reloading your shell, try: %bspark init%b\n\n' \
+        "$C_GREEN" "$C_RESET" "$C_CYAN" "$C_RESET"
+fi

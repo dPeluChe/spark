@@ -1,4 +1,4 @@
-# SPARK v0.8.0
+# SPARK v0.5.0
 
 **SPARK** is a developer operations platform built as a high-performance TUI. Manage repos, scan health, clean artifacts, monitor ports, update dev tools — all from one place.
 
@@ -9,7 +9,7 @@
  ___/ / ____/ ___ / _, _/ /| |
 /____/_/   /_/  |/_/ |_/_/ |_|
 
-   Developer Operations Platform v0.8.0
+   Developer Operations Platform v0.5.0
 ```
 
 Built with **Rust**, **Ratatui**, and **tokio**.
@@ -19,17 +19,17 @@ Built with **Rust**, **Ratatui**, and **tokio**.
 ## Install
 
 ```bash
-# npm (recommended)
+# curl (prebuilt binary — recommended)
+curl -fsSL https://raw.githubusercontent.com/dPeluChe/spark/main/scripts/install.sh | sh
+
+# npm
 npm install -g @dpeluche/spark
 
-# npx (run without installing)
-npx @dpeluche/spark
-
-# cargo
-cargo install --git https://github.com/dPeluChe/labs-spark
+# cargo (build from source)
+cargo install --git https://github.com/dPeluChe/spark
 
 # from source
-git clone https://github.com/dPeluChe/labs-spark && cd labs-spark
+git clone https://github.com/dPeluChe/spark && cd spark
 ./install.sh
 ```
 
@@ -77,16 +77,18 @@ Find and manage development servers running on your machine.
 - Detects Node.js, Python, Go, Rust, Ruby, and more
 - Groups dev servers vs system services
 - Project path detection via working directory
-- Kill processes from the TUI
+- Kill processes from the TUI or CLI
 
 ### System Cleanup — Docker, Caches, VMs, Logs
 
 Clean up disk space with safety guards inspired by [tw93/mole](https://github.com/tw93/mole).
 
+- Risk indicators per item: **safe** (green), **caution** (yellow), **danger** (red)
+- Confirmation popup with explanation before cleaning any item
 - **Docker**: dangling images, stopped containers, build cache
-- **VMs**: Docker VM disk, Android emulators, legacy VMs
 - **Caches**: Homebrew, npm, pip, Cargo, Xcode, CocoaPods, Go, Gradle
 - **Logs**: dev logs >10MB older than 7 days
+- **VMs**: Docker VM disk, Android emulators, legacy VMs
 - **Downloads**: ISOs, DMGs, PKGs >50MB
 
 **Safety**: path validation, app-aware (skips running apps), age-based filtering, operation logging, whitelist support, dry-run mode.
@@ -111,18 +113,6 @@ Scan and audit certificates across your system:
 - **Recommendations by type**: Apple (safe to remove), Developer (renew), Self-signed (review and rotate)
 - **Expiration analysis**: summary by age, cert file status parsing
 
-### System Cleanup — Docker, Caches, VMs, Logs
-
-Clean up disk space with safety guards inspired by [tw93/mole](https://github.com/tw93/mole).
-
-- Risk indicators per item: **safe** (green), **caution** (yellow), **danger** (red)
-- Confirmation popup with explanation before cleaning any item
-- **Docker**: dangling images, stopped containers, build cache
-- **Caches**: Homebrew, npm, pip, Cargo, Xcode, CocoaPods, Go, Gradle
-- **Logs**: dev logs >10MB older than 7 days
-- **VMs**: Docker VM disk, Android emulators, legacy VMs
-- **Downloads**: ISOs, DMGs, PKGs >50MB
-
 ### Updater — Tool Update Manager
 
 Manages updates for 55 developer tools across 8 categories: AI tools, terminals, IDEs, productivity, infrastructure, utilities, runtimes, system. Table view with version comparison and status indicators.
@@ -132,35 +122,45 @@ Manages updates for 55 developer tools across 8 categories: AI tools, terminals,
 ## CLI Commands
 
 ```bash
-spark                      # Open TUI
-spark init                 # Setup shell integration + completions
-spark clone <url>          # Clone repo (ghq-compatible, owner/repo shorthand)
-spark clone <url> -p       # Clone via SSH
-spark clone <url> --shallow # Shallow clone
-spark cd <name>            # Print path to repo
-spark search <query>       # Search repos (shows status, commit age, path)
-spark list [-p] [query]    # List repos (tree with branch + age + tags)
-spark tag add <repo> <tag> # Tag a repo for group management
-spark tag list [tag]       # List tags or repos in a tag
-spark status [query]       # Check which repos need pull (fetch + compare)
-spark status --tag <tag>   # Status filtered by tag
-spark pull <query|all>     # Pull repos behind remote (ff-only)
-spark pull all --tag <tag> # Pull all repos with a tag
-spark audit [path]         # Security audit (secrets + OWASP + deps)
-spark audit --deps         # Dependency-only scan (OSV.dev + npm audit)
-spark audit --offline      # Local-only scan (no network)
-spark audit --init         # Create .sparkauditignore
-spark audit -o report.txt  # Save report to file
-spark certs                # Scan SSL/TLS certs (Keychain + files + ~/)
-spark certs --expired      # Show only expired
-spark certs --summary      # Summary only
-spark root [--set <path>]  # Show/change repos root
-spark rm <query>           # Remove a repo
-spark doctor               # Validate installation + environment
-spark config [key --set v] # Show/update configuration
-spark agent                # AI agent integration tips
-spark completions <shell>  # Generate zsh/bash/fish completions
-spark --dry-run            # TUI in preview mode (no destructive actions)
+spark                          # Open TUI
+spark init                     # Setup shell integration + completions
+spark clone <url>              # Clone repo (ghq-compatible, owner/repo shorthand)
+spark clone <url> -p           # Clone via SSH
+spark clone <url> --shallow    # Shallow clone
+spark cd <name>                # Print path to repo
+spark search <query>           # Search repos (shows status, commit age, path)
+spark list [-p] [query]        # List repos (tree with branch + age + tags)
+spark tag add <repo> <tag>     # Tag a repo for group management
+spark tag remove <repo> <tag>  # Remove a tag from a repo
+spark tag list [tag]           # List tags or repos in a tag
+spark tag delete <tag>         # Delete an entire tag
+spark tag rename <old> <new>   # Rename a tag
+spark status [query]           # Check which repos need pull (fetch + compare)
+spark status --tag <tag>       # Status filtered by tag
+spark pull <query|all>         # Pull repos behind remote (ff-only)
+spark pull all --tag <tag>     # Pull all repos with a tag
+spark ps                       # Dev server ports (pid, process, runtime, project)
+spark ps --all                 # All ports: macOS / SERVICES / APPS sections
+spark ps <query>               # Search processes by name, cross-ref with ports
+spark ps --kill <target>       # Kill by port, PID, or name (interactive)
+spark audit [path]             # Security audit (secrets + OWASP + deps)
+spark audit --deps             # Dependency-only scan (OSV.dev + npm audit)
+spark audit --offline          # Local-only scan (no network)
+spark audit --init             # Create .sparkauditignore
+spark audit -o report.txt      # Save report to file
+spark certs                    # Scan SSL/TLS certs (Keychain + files + ~/)
+spark certs --keychain         # Keychain only
+spark certs --expired          # Show only expired
+spark certs --summary          # Summary only
+spark ingest [path]            # Generate LLM-ready context digest (uses trs)
+spark ingest --all             # Ingest all managed repos
+spark root [--set <path>]      # Show/change repos root
+spark rm <query>               # Remove a repo
+spark doctor                   # Validate installation + environment
+spark config [key --set v]     # Show/update configuration
+spark agent                    # AI agent integration tips
+spark completions <shell>      # Generate zsh/bash/fish completions
+spark --dry-run                # TUI in preview mode (no destructive actions)
 ```
 
 ---
@@ -223,6 +223,23 @@ spark --dry-run            # TUI in preview mode (no destructive actions)
 | `r` | Rescan |
 | `PgUp/PgDn` | Page navigation |
 
+### Certs
+| Key | Action |
+|-----|--------|
+| `ENTER` | View certificate detail |
+| `j/k` | Navigate certificates |
+| `r` | Rescan |
+| `f` | Filter (expired / expiring / all) |
+
+### Updater
+| Key | Action |
+|-----|--------|
+| `ENTER` | View tool detail / changelog |
+| `u` | Update selected tool |
+| `U` | Update all outdated tools |
+| `r` | Refresh versions |
+| `j/k` | Navigate tools |
+
 ---
 
 ## Configuration
@@ -281,7 +298,7 @@ System cleanup follows [tw93/mole](https://github.com/tw93/mole) safety principl
 
 ```bash
 cargo run                  # Run in dev mode
-cargo test                 # 79 tests
+cargo test                 # 127 tests
 cargo build --release      # Optimized build
 ```
 
@@ -295,4 +312,4 @@ Inspired by [ghq](https://github.com/x-motemen/ghq), [mole](https://github.com/t
 
 ---
 
-**SPARK** v0.8.0 — Developer Operations Platform
+**SPARK** v0.5.0 — Developer Operations Platform

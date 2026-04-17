@@ -2,12 +2,31 @@
   "name": "@dpeluche/spark",
   "version": "0.5.0",
   "description": "SPARK — Developer Operations Platform. Manage repos, scan health, clean artifacts, monitor ports, update dev tools.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dPeluChe/spark"
+  },
+  "homepage": "https://github.com/dPeluChe/spark#readme",
+  "author": "dPeluChe",
   "bin": {
     "spark": "bin/spark"
   },
-  "scripts": {
-    "postinstall": "node install.js"
+  "files": [
+    "bin/spark",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=16"
   },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
   "keywords": [
     "devops",
     "tui",
@@ -20,28 +39,9 @@
     "port-scanner",
     "system-maintenance"
   ],
-  "author": "dPeluChe",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/dPeluChe/spark"
-  },
-  "homepage": "https://github.com/dPeluChe/spark#readme",
-  "engines": {
-    "node": ">=16"
-  },
-  "os": [
-    "darwin",
-    "linux"
-  ],
-  "cpu": [
-    "x64",
-    "arm64"
-  ],
-  "files": [
-    "bin/",
-    "install.js",
-    "README.md",
-    "LICENSE"
-  ]
+  "optionalDependencies": {
+    "@dpeluche/spark-cli-darwin-arm64": "0.5.0",
+    "@dpeluche/spark-cli-darwin-x64": "0.5.0",
+    "@dpeluche/spark-cli-linux-x64": "0.5.0"
+  }
 }
