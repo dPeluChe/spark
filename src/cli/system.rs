@@ -251,13 +251,14 @@ pub fn cmd_doctor(config: &config::SparkConfig) {
 
     let root_exists = config.repos_root.exists();
     let root_writable = root_exists && std::fs::metadata(&config.repos_root).map(|m| !m.permissions().readonly()).unwrap_or(false);
-    check(&format!("repos root exists ({})", config.repos_root.display()), root_exists, &format!("mkdir -p {}", config.repos_root.display()));
+    let config_dir = dirs::config_dir().unwrap_or_default().join("spark");
+    let root_source = if config_dir.join("config.toml").exists() { "configured" } else { "auto-detected" };
+    check(&format!("repos root ({root_source}: {})", config.repos_root.display()), root_exists, &format!("mkdir -p {}", config.repos_root.display()));
     if root_exists {
         check("repos root writable", root_writable, "check permissions");
         println!("    repos:   {}", scanner::repo_manager::list_managed_repos(&config.repos_root).len());
     }
 
-    let config_dir = dirs::config_dir().unwrap_or_default().join("spark");
     check("config directory", config_dir.exists(), &format!("spark init  (creates {})", config_dir.display()));
     check("config.toml", config_dir.join("config.toml").exists(), "spark init  (creates default config)");
     check("whitelist.txt", config_dir.join("whitelist.txt").exists(), "spark init  (creates whitelist)");
