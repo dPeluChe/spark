@@ -111,6 +111,13 @@ jobs:
         with:
           path: artifacts/
 
+      - name: Assemble platform packages
+        run: |
+          for dir in darwin-arm64 darwin-x64 linux-x64; do
+            cp -r artifacts/npm-${dir}/* npm/platforms/${dir}/
+            chmod +x npm/platforms/${dir}/spark
+          done
+
       - name: Sync version from tag
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
@@ -130,13 +137,6 @@ jobs:
               bump('npm/platforms/' + d + '/package.json')
             );
           "
-
-      - name: Assemble platform packages
-        run: |
-          for dir in darwin-arm64 darwin-x64 linux-x64; do
-            cp -r artifacts/npm-${dir}/* npm/platforms/${dir}/
-            chmod +x npm/platforms/${dir}/spark
-          done
 
       - name: Publish platform packages
         env:
