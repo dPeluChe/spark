@@ -143,15 +143,23 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           for dir in npm/platforms/*/; do
-            echo "Publishing $(basename $dir)..."
-            cd "$dir"
-            npm publish --access public || echo "Failed: $(basename $dir), continuing..."
-            cd -
+            PKG=$(node -p "require('./$dir/package.json').name")
+            PUBLISHED=$(npm view "$PKG" version 2>/dev/null || echo "none")
+            if [ "$PUBLISHED" = "$VERSION" ]; then
+              echo "Already published $PKG@$VERSION, skipping"
+            else
+              echo "Publishing $PKG@$VERSION..."
+              cd "$dir" && npm publish --access public && cd -
+            fi
           done
 
       - name: Publish base package
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          cd npm
-          npm publish --access public
+          PUBLISHED=$(npm view @dpeluche/spark version 2>/dev/null || echo "none")
+          if [ "$PUBLISHED" = "$VERSION" ]; then
+            echo "Already published @dpeluche/spark@$VERSION, skipping"
+          else
+            cd npm && npm publish --access public
+          fi
