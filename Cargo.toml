@@ -1,12 +1,12 @@
 [package]
 name = "spark"
-version = "0.8.0"
+version = "0.5.0"
 edition = "2021"
 rust-version = "1.75"
 description = "Surgical Precision Update Utility & Repository Scanner — a Rust TUI for managing 44+ developer tools and cleaning stale git repos"
 authors = ["dPeluChe"]
 license = "MIT"
-repository = "https://github.com/dPeluChe/labs-spark"
+repository = "https://github.com/dPeluChe/spark"
 readme = "README.md"
 keywords = ["tui", "updater", "scanner", "developer-tools", "cleanup"]
 categories = ["command-line-utilities", "development-tools"]

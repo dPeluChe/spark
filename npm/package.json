@@ -1,6 +1,6 @@
 {
   "name": "@dpeluche/spark",
-  "version": "0.8.0",
+  "version": "0.5.0",
   "description": "SPARK — Developer Operations Platform. Manage repos, scan health, clean artifacts, monitor ports, update dev tools.",
   "bin": {
     "spark": "bin/spark"
@@ -24,9 +24,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/dPeluChe/labs-spark"
+    "url": "https://github.com/dPeluChe/spark"
   },
-  "homepage": "https://github.com/dPeluChe/labs-spark#readme",
+  "homepage": "https://github.com/dPeluChe/spark#readme",
   "engines": {
     "node": ">=16"
   },
