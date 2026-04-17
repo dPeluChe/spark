@@ -27,7 +27,6 @@ jobs:
             binary: spark
             artifact: spark-darwin-x64
             npm_dir: darwin-x64
-            extra_features: --features vendored-openssl
 
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
@@ -48,6 +47,13 @@ jobs:
       - name: Install system dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y cmake pkg-config
+
+      - name: Install x86_64 OpenSSL via Rosetta (macOS cross-compile)
+        if: matrix.target == 'x86_64-apple-darwin'
+        run: |
+          arch -x86_64 /usr/local/bin/brew install openssl@3
+          echo "OPENSSL_DIR=/usr/local/opt/openssl@3" >> $GITHUB_ENV
+          echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }} ${{ matrix.extra_features }}
