@@ -86,6 +86,10 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
             super::system_view::render_system_cleaner(frame, area, &app.system_cleaner);
             super::system_view::render_risk_confirm(frame, area, &app.system_cleaner);
         }
+        ScannerState::SystemCleanConfirmBulk => {
+            super::system_view::render_system_cleaner(frame, area, &app.system_cleaner);
+            super::system_view::render_bulk_confirm(frame, area, &app.system_cleaner);
+        }
         ScannerState::SecretAuditScanning => {
             super::audit_view::render_audit_scanning(frame, area, tick);
         }
@@ -97,6 +101,10 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
         }
         ScannerState::SecretAuditDeps => {
             super::audit_view::render_audit_deps(frame, area, &app.audit);
+        }
+        ScannerState::SecretAuditPathInput => {
+            super::audit_view::render_audit_list(frame, area, &app.audit);
+            super::audit_view::render_audit_path_input(frame, area, &app.audit);
         }
         ScannerState::PortScan => {
             super::port_view::render_ports(frame, area, &app.port_scanner);
@@ -492,7 +500,7 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
 
     // Help bar
     let help = Paragraph::new(Span::styled(
-        "[ENTER] Detail • [c] Clean • [x] Delete • [s] Sort • [?] Health info • [TAB] Next",
+        "[ENTER] Detail • [a] Add path • [c] Clean • [x] Delete • [s] Sort • [?] Health info • [TAB] Next",
         Style::default().fg(GRAY),
     ));
     frame.render_widget(help, chunks[2]);

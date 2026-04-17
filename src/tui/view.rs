@@ -93,13 +93,14 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, app: &App) {
     let is_system = app.mode == AppMode::Scanner
         && matches!(
             app.scanner.state,
-            ScannerState::SystemClean | ScannerState::SystemCleanConfirm
+            ScannerState::SystemClean | ScannerState::SystemCleanConfirm | ScannerState::SystemCleanConfirmBulk
         );
     let is_audit = app.mode == AppMode::Scanner
         && matches!(
             app.scanner.state,
             ScannerState::SecretAudit | ScannerState::SecretAuditScanning
                 | ScannerState::SecretAuditDetail | ScannerState::SecretAuditDeps
+                | ScannerState::SecretAuditPathInput
         );
 
     let active = |on: bool, color: Color| -> Style {

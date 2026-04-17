@@ -169,9 +169,9 @@ pub fn render_audit_list(frame: &mut Frame, area: Rect, model: &AuditModel) {
     }
 
     let help_text = if model.results.is_empty() && model.dep_vulns.is_empty() && !model.scanning {
-        "[r] Scan current directory  [TAB] Next  [q] Back"
+        "[a] Set folder  [r] Scan  [TAB] Next  [q] Back"
     } else {
-        "[ENTER] Detail / Deps  [r] Rescan  [TAB] Next  [q] Back"
+        "[ENTER] Detail / Deps  [a] Set folder  [r] Rescan  [TAB] Next  [q] Back"
     };
     let help = Paragraph::new(vec![
         Line::from(Span::styled(
@@ -418,6 +418,47 @@ pub fn render_audit_deps(frame: &mut Frame, area: Rect, model: &AuditModel) {
         Line::from(Span::styled("  [q] Back  [j/k] Navigate", Style::default().fg(GRAY)))
     };
     frame.render_widget(Paragraph::new(vec![detail_line]), chunks[2]);
+}
+
+pub fn render_audit_path_input(frame: &mut Frame, area: Rect, model: &AuditModel) {
+    let modal_area = center_modal(frame, area, 60, 9);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Thick)
+        .border_style(Style::default().fg(RED))
+        .style(Style::default().bg(MODAL_BG));
+    let inner = block.inner(modal_area);
+    frame.render_widget(block, modal_area);
+
+    let current = model.scan_path.as_ref()
+        .map(|p| crate::scanner::common::shorten_path(&p.display().to_string()))
+        .unwrap_or_else(|| "not set".to_string());
+
+    let lines = vec![
+        Line::from(Span::styled(
+            " AUDIT FOLDER ",
+            Style::default().fg(WHITE).bg(RED).bold(),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Current: ", Style::default().fg(GRAY)),
+            Span::styled(current, Style::default().fg(TERM_GRAY)),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Path: ", Style::default().fg(PURPLE)),
+            Span::styled(model.path_input.clone(), Style::default().fg(WHITE).bold()),
+            Span::styled("_", Style::default().fg(YELLOW)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  [ENTER] Scan  [ESC] Cancel",
+            Style::default().fg(GRAY),
+        )),
+    ];
+
+    frame.render_widget(Paragraph::new(lines).alignment(Alignment::Left), inner);
 }
 
 fn dep_severity_style(severity: &str) -> (&'static str, Style) {

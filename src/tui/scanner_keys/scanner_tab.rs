@@ -87,12 +87,7 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Option<Action> {
             KeyCode::Enter => {
                 let input = s.path_input.trim().to_string();
                 if !input.is_empty() {
-                    let path = if input.starts_with('~') {
-                        let home = dirs::home_dir().unwrap_or_default();
-                        home.join(input.strip_prefix("~/").unwrap_or(&input))
-                    } else {
-                        std::path::PathBuf::from(&input)
-                    };
+                    let path = crate::utils::fs::expand_tilde(&input);
                     if path.exists() && path.is_dir() {
                         let idx = s.discovered_dirs.len();
                         let repo_count = crate::scanner::repo_scanner::count_repos_in(&path);
@@ -170,6 +165,7 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Option<Action> {
                 if s.repos.get(s.cursor).is_some() { s.state = ScannerState::DeleteRepoConfirm; }
                 None
             }
+            KeyCode::Char('a') | KeyCode::Char('A') => { s.state = ScannerState::ScanAddPath; None }
             KeyCode::Char('?') | KeyCode::Char('h') => { s.state = ScannerState::HealthHelp; None }
             KeyCode::Char('s') => {
                 s.sort_by = match s.sort_by {

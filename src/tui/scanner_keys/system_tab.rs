@@ -17,8 +17,16 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Option<Action> {
                     else { sc.checked.insert(sc.cursor); }
                     None
                 }
-                KeyCode::Enter | KeyCode::Char('x') => {
+                KeyCode::Enter => {
                     if sc.items.get(sc.cursor).is_some() {
+                        app.scanner.state = ScannerState::SystemCleanConfirm;
+                    }
+                    None
+                }
+                KeyCode::Char('x') | KeyCode::Char('X') => {
+                    if !sc.checked.is_empty() {
+                        app.scanner.state = ScannerState::SystemCleanConfirmBulk;
+                    } else if sc.items.get(sc.cursor).is_some() {
                         app.scanner.state = ScannerState::SystemCleanConfirm;
                     }
                     None
@@ -33,6 +41,19 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Option<Action> {
                 let idx = app.system_cleaner.cursor;
                 app.scanner.state = ScannerState::SystemClean;
                 Some(Action::CleanSystemItem(idx))
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc | KeyCode::Char('q') => {
+                app.scanner.state = ScannerState::SystemClean; None
+            }
+            _ => None,
+        },
+
+        ScannerState::SystemCleanConfirmBulk => match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                let indices: Vec<usize> = app.system_cleaner.checked.iter().copied().collect();
+                app.system_cleaner.checked.clear();
+                app.scanner.state = ScannerState::SystemClean;
+                Some(Action::CleanSystemItems(indices))
             }
             KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc | KeyCode::Char('q') => {
                 app.scanner.state = ScannerState::SystemClean; None

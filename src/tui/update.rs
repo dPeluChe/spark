@@ -40,6 +40,7 @@ pub enum Action {
     ScanSystem,
     /// Clean a specific system item by index
     CleanSystemItem(usize),
+    CleanSystemItems(Vec<usize>),
     /// Start security audit on a path
     StartAudit(std::path::PathBuf),
 }
