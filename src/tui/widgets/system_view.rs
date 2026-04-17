@@ -10,6 +10,7 @@ pub fn render_system_cleaner(frame: &mut Frame, area: Rect, model: &SystemCleane
         Constraint::Length(3), // header
         Constraint::Min(5),   // table
         Constraint::Length(1), // help
+        Constraint::Length(1), // mole tip
     ])
     .split(area);
 
@@ -24,6 +25,7 @@ pub fn render_system_cleaner(frame: &mut Frame, area: Rect, model: &SystemCleane
     }
 
     render_help(frame, chunks[2], model);
+    render_mole_tip(frame, chunks[3]);
 }
 
 fn render_header(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
@@ -221,9 +223,9 @@ fn render_table(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
 fn render_help(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
     let selected = model.checked.len();
     let help_text = if selected > 0 {
-        format!(" [x] Clean {} selected  [SPACE] Toggle  [r] Rescan  [TAB] Switch  [q] Back", selected)
+        format!(" [ENTER] Detail/risk  [SPACE] Toggle  [x] Clean {} selected  [r] Rescan  [TAB] Switch  [q] Back", selected)
     } else {
-        " [ENTER] Clean item  [SPACE] Select  [x] Clean selected  [r] Rescan  [TAB] Switch  [q] Back".into()
+        " [ENTER] Detail/risk  [SPACE] Select  [x] Clean selected  [r] Rescan  [TAB] Switch  [q] Back".into()
     };
     frame.render_widget(
         Paragraph::new(Span::styled(help_text, Style::default().fg(GRAY))),
@@ -335,6 +337,64 @@ pub fn render_risk_confirm(frame: &mut Frame, area: Rect, model: &SystemCleanerM
         "  Proceed? (y/N)",
         Style::default().fg(WHITE),
     )));
+
+    frame.render_widget(Paragraph::new(lines).alignment(Alignment::Left), inner);
+}
+
+fn render_mole_tip(frame: &mut Frame, area: Rect) {
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled("  Tip: ", Style::default().fg(TERM_GRAY)),
+            Span::styled("tw93/mole", Style::default().fg(CYAN)),
+            Span::styled(" — native macOS app for deep system cleanup  ", Style::default().fg(TERM_GRAY)),
+            Span::styled("github.com/tw93/mole", Style::default().fg(GRAY)),
+        ])),
+        area,
+    );
+}
+
+pub fn render_bulk_confirm(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
+    let count = model.checked.len();
+    let total: u64 = model.checked.iter()
+        .filter_map(|i| model.items.get(*i))
+        .map(|item| item.size)
+        .sum();
+
+    let modal_area = center_modal(frame, area, 55, 10);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Thick)
+        .border_style(Style::default().fg(YELLOW))
+        .style(Style::default().bg(MODAL_BG));
+    let inner = block.inner(modal_area);
+    frame.render_widget(block, modal_area);
+
+    let lines = vec![
+        Line::from(Span::styled(
+            " CLEAN SELECTED ",
+            Style::default().fg(WHITE).bg(YELLOW).bold(),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Items: ", Style::default().fg(PURPLE)),
+            Span::styled(format!("{} selected", count), Style::default().fg(WHITE).bold()),
+        ]),
+        Line::from(vec![
+            Span::styled("  Total: ", Style::default().fg(PURPLE)),
+            Span::styled(format_size(total), Style::default().fg(YELLOW)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  Items marked as RUNNING will be skipped.",
+            Style::default().fg(GRAY),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  Clean all selected? (y/N)",
+            Style::default().fg(WHITE),
+        )),
+    ];
 
     frame.render_widget(Paragraph::new(lines).alignment(Alignment::Left), inner);
 }

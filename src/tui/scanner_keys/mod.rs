@@ -30,7 +30,7 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
             => port_tab::handle(app, key),
 
         // System tab
-        ScannerState::SystemClean | ScannerState::SystemCleanConfirm
+        ScannerState::SystemClean | ScannerState::SystemCleanConfirm | ScannerState::SystemCleanConfirmBulk
             => system_tab::handle(app, key),
 
         // Repo manager tab
@@ -41,6 +41,7 @@ pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
         // Audit tab
         ScannerState::SecretAudit | ScannerState::SecretAuditScanning
         | ScannerState::SecretAuditDetail | ScannerState::SecretAuditDeps
+        | ScannerState::SecretAuditPathInput
             => audit_tab::handle(app, key),
     }
 }

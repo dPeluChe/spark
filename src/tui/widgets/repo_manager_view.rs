@@ -48,11 +48,12 @@ fn render_header(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
 
     let home = std::env::var("HOME").unwrap_or_default();
     let root_str = model.root.display().to_string();
-    let root_short = if root_str.starts_with(&home) {
+    let root_display = if root_str.starts_with(&home) {
         format!("~{}", &root_str[home.len()..])
     } else {
         root_str
     };
+    let root_short = format!("{root_display}  ({})", model.root_source);
 
     let header_lines = vec![
         Line::from(vec![
@@ -88,16 +89,21 @@ fn render_header(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
 
 fn render_repo_table(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
     if model.repos.is_empty() {
+        let (line1, line2) = if !model.root.exists() {
+            (
+                "  Repos root not found.",
+                "  Run `spark root --set <path>` to configure it, then restart.",
+            )
+        } else {
+            (
+                "  No managed repos found.",
+                "  Press [c] to clone a repo (ghq-style: host/owner/name layout)",
+            )
+        };
         let empty = Paragraph::new(vec![
             Line::from(""),
-            Line::from(Span::styled(
-                "  No managed repos found.",
-                Style::default().fg(GRAY),
-            )),
-            Line::from(Span::styled(
-                "  Press [c] to clone a repo (ghq-style: host/owner/name layout)",
-                Style::default().fg(GRAY),
-            )),
+            Line::from(Span::styled(line1, Style::default().fg(GRAY))),
+            Line::from(Span::styled(line2, Style::default().fg(GRAY))),
         ])
         .block(
             Block::default()

@@ -48,6 +48,7 @@ pub enum ScannerState {
     PortAction,
     PortKillConfirm,
     SystemClean,
+    SystemCleanConfirmBulk,
     #[allow(dead_code)]
     SystemCleanConfirm,
     RepoManager,
@@ -58,6 +59,7 @@ pub enum ScannerState {
     SecretAuditScanning,
     SecretAuditDetail,
     SecretAuditDeps,
+    SecretAuditPathInput,
 }
 
 /// Sort field for scanner results
@@ -409,6 +411,7 @@ pub struct RepoManagerModel {
     pub cursor: usize,
     pub checked: HashSet<usize>,
     pub root: PathBuf,
+    pub root_source: &'static str,
     pub clone_input: String,
     pub clone_error: Option<String>,
     pub cloning: bool,
@@ -426,12 +429,13 @@ pub struct CloneSummary {
 }
 
 impl RepoManagerModel {
-    pub fn new(repos_root: &std::path::Path) -> Self {
+    pub fn new(repos_root: &std::path::Path, root_source: &'static str) -> Self {
         Self {
             repos: Vec::new(),
             cursor: 0,
             checked: HashSet::new(),
             root: repos_root.to_path_buf(),
+            root_source,
             clone_input: String::new(),
             clone_error: None,
             cloning: false,
@@ -520,6 +524,7 @@ pub struct AuditModel {
     pub total_warning: usize,
     pub total_info: usize,
     pub scan_path: Option<std::path::PathBuf>,
+    pub path_input: String,
     /// Dependency vulnerabilities from OSV.dev scan
     pub dep_vulns: Vec<DepVulnerability>,
     /// Cursor in the dep vulns detail view
@@ -537,6 +542,7 @@ impl AuditModel {
             total_warning: 0,
             total_info: 0,
             scan_path: None,
+            path_input: String::new(),
             dep_vulns: Vec::new(),
             dep_cursor: 0,
         }
@@ -572,6 +578,18 @@ pub struct App {
 
 impl App {
     pub fn new(config: SparkConfig) -> Self {
+        let config_exists = dirs::config_dir()
+            .unwrap_or_default()
+            .join("spark")
+            .join("config.toml")
+            .exists();
+        let root_source: &'static str = if config_exists {
+            "configured"
+        } else if crate::config::detect_ghq_root().is_some() {
+            "ghq"
+        } else {
+            "default"
+        };
         Self {
             mode: AppMode::Scanner,
             show_welcome: true,
@@ -579,7 +597,7 @@ impl App {
             scanner: ScannerModel::new(),
             port_scanner: PortScannerModel::new(),
             system_cleaner: SystemCleanerModel::new(),
-            repo_manager: RepoManagerModel::new(&config.repos_root),
+            repo_manager: RepoManagerModel::new(&config.repos_root, root_source),
             audit: AuditModel::new(),
             config,
             should_quit: false,

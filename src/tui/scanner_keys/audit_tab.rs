@@ -34,8 +34,14 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Option<Action> {
                 }
                 None
             }
+            KeyCode::Char('a') | KeyCode::Char('A') => {
+                app.audit.path_input.clear();
+                s.state = ScannerState::SecretAuditPathInput;
+                None
+            }
             KeyCode::Char('r') | KeyCode::Char('R') => {
-                let path = std::env::current_dir().unwrap_or_else(|_| app.config.repos_root.clone());
+                let path = app.audit.scan_path.clone()
+                    .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| app.config.repos_root.clone()));
                 Some(Action::StartAudit(path))
             }
             _ => None,
@@ -82,6 +88,29 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Option<Action> {
                 app.audit.dep_cursor = (app.audit.dep_cursor + super::PAGE_JUMP)
                     .min(app.audit.dep_vulns.len().saturating_sub(1)); None
             }
+            _ => None,
+        },
+
+        ScannerState::SecretAuditPathInput => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                s.state = ScannerState::SecretAudit;
+                None
+            }
+            KeyCode::Enter => {
+                let input = app.audit.path_input.trim().to_string();
+                if !input.is_empty() {
+                    let path = crate::utils::fs::expand_tilde(&input);
+                    if path.exists() && path.is_dir() {
+                        app.audit.scan_path = Some(path.clone());
+                        s.state = ScannerState::SecretAuditScanning;
+                        return Some(Action::StartAudit(path));
+                    }
+                }
+                s.state = ScannerState::SecretAudit;
+                None
+            }
+            KeyCode::Backspace => { app.audit.path_input.pop(); None }
+            KeyCode::Char(c) => { app.audit.path_input.push(c); None }
             _ => None,
         },
 

@@ -1,5 +1,15 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+
+/// Expand a leading `~` to the user's home directory.
+pub fn expand_tilde(input: &str) -> PathBuf {
+    if input.starts_with('~') {
+        let home = dirs::home_dir().unwrap_or_default();
+        home.join(input.strip_prefix("~/").unwrap_or(input))
+    } else {
+        PathBuf::from(input)
+    }
+}
 
 /// Calculate total size of a directory recursively
 pub fn dir_size(path: &Path) -> u64 {

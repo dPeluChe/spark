@@ -123,15 +123,22 @@ fn col_widths(ports: &[&PortInfo]) -> (usize, usize) {
 }
 
 fn print_port_section(label: &str, ports: &[&PortInfo], max_proc: usize, max_rt: usize) {
+    const MAX_PATH: usize = 50;
     println!("\n  \x1b[1m{} ({})\x1b[0m", label, ports.len());
     println!("  {:<6}  {:<7}  {:<wp$}  {:<wr$}  PROJECT", "PORT", "PID", "PROCESS", "RUNTIME", wp = max_proc, wr = max_rt);
     println!("  {:-<6}  {:-<7}  {:-<wp$}  {:-<wr$}  {:-<30}", "", "", "", "", "", wp = max_proc, wr = max_rt);
     for p in ports {
+        let raw_path = p.project_dir.as_deref().unwrap_or("-");
+        let path = if raw_path.len() > MAX_PATH {
+            format!("…{}", &raw_path[raw_path.len() - (MAX_PATH - 1)..])
+        } else {
+            raw_path.to_string()
+        };
         println!(
             "  {:<6}  {:<7}  {:<wp$}  {:<wr$}  {}",
             p.port, p.pid, p.process_name,
             format!("{}", p.runtime),
-            p.project_dir.as_deref().unwrap_or("-"),
+            path,
             wp = max_proc, wr = max_rt,
         );
     }

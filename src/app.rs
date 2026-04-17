@@ -312,6 +312,26 @@ pub async fn run(
                                 });
                             }
                         }
+                        Action::CleanSystemItems(indices) => {
+                            let is_dry_run = app.dry_run;
+                            for index in indices {
+                                if let Some(item) = app.system_cleaner.items.get(index).cloned() {
+                                    let tx2 = tx.clone();
+                                    tokio::spawn(async move {
+                                        let result = tokio::task::spawn_blocking(move || {
+                                            crate::scanner::system_cleaner::execute_clean(&item, is_dry_run)
+                                        }).await.unwrap_or(Err("Task failed".into()));
+                                        let (success, recovered, error) = match result {
+                                            Ok(r) => (true, r, None),
+                                            Err(e) => (false, 0, Some(e)),
+                                        };
+                                        let _ = tx2.send(AppMessage::SystemCleanItemResult {
+                                            index, recovered, success, error,
+                                        });
+                                    });
+                                }
+                            }
+                        }
                         Action::StartAudit(path) => {
                             app.audit.scan_path = Some(path.clone());
                             app.audit.scanning = true;

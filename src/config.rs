@@ -26,7 +26,7 @@ fn default_repos_root() -> PathBuf {
 }
 
 /// Detect ghq root from `ghq root` command or git config
-fn detect_ghq_root() -> Option<PathBuf> {
+pub fn detect_ghq_root() -> Option<PathBuf> {
     // Try `ghq root` first
     if let Ok(output) = std::process::Command::new("ghq").arg("root").output() {
         if output.status.success() {
