@@ -12,6 +12,9 @@ keywords = ["tui", "updater", "scanner", "developer-tools", "cleanup"]
 categories = ["command-line-utilities", "development-tools"]
 exclude = ["cmd/", "internal/", "go.mod", "go.sum", "*.go"]
 
+[features]
+vendored-openssl = ["git2/vendored-openssl"]
+
 [dependencies]
 ratatui = "0.29"
 crossterm = "0.28"

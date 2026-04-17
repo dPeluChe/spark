@@ -23,10 +23,11 @@ jobs:
             npm_dir: darwin-arm64
 
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-latest
             binary: spark
             artifact: spark-darwin-x64
             npm_dir: darwin-x64
+            extra_features: --features vendored-openssl
 
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
@@ -49,7 +50,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y cmake pkg-config
 
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }} ${{ matrix.extra_features }}
 
       - name: Strip binary
         run: strip target/${{ matrix.target }}/release/${{ matrix.binary }}
