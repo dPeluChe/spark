@@ -3,9 +3,15 @@
 
 # Debug logs
 spark_debug.log
+*.log
 
 # OS files
 .DS_Store
 
 # Compiled binaries
 spark-tui
+spark
+
+# Editor
+.vscode/
+.idea/
