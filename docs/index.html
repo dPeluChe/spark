@@ -305,9 +305,9 @@
       <p class="hero-tagline">Manage repos, scan health, clean artifacts, monitor ports, audit security, update dev tools.<br>One TUI. Rust. Ratatui. tokio.</p>
 
       <div class="badges">
-        <span class="badge badge-accent">v0.8.0</span>
-        <span class="badge badge-green">124 tests</span>
-        <span class="badge badge-blue">61 tools</span>
+        <span class="badge badge-accent">v0.5.1</span>
+        <span class="badge badge-green">127 tests</span>
+        <span class="badge badge-blue">55 tools</span>
         <span class="badge">Rust</span>
         <span class="badge">macOS + Linux</span>
       </div>
@@ -325,8 +325,8 @@
         </div>
         <div class="install-row">
           <span class="install-label">cargo</span>
-          <span class="install-cmd">cargo install --git https://github.com/dPeluChe/labs-spark</span>
-          <button class="copy-btn" onclick="copyCmd(this, 'cargo install --git https://github.com/dPeluChe/labs-spark')">copy</button>
+          <span class="install-cmd">cargo install --git https://github.com/dPeluChe/spark</span>
+          <button class="copy-btn" onclick="copyCmd(this, 'cargo install --git https://github.com/dPeluChe/spark')">copy</button>
         </div>
       </div>
     </div>
@@ -386,7 +386,7 @@
     <div class="container">
       <div class="section-title">TUI Preview</div>
       <div class="tui-preview">
-<span class="tab-inactive"> Scanner </span> <span class="tab-inactive"> Repos </span> <span class="tab-inactive"> Ports </span> <span class="tab-inactive"> System </span> <span class="tab-active"> Audit </span> <span class="tab-inactive"> Updater </span>  <span class="dim">TAB switch  SPARK v0.8.0</span>
+<span class="tab-inactive"> Scanner </span> <span class="tab-inactive"> Repos </span> <span class="tab-inactive"> Ports </span> <span class="tab-inactive"> System </span> <span class="tab-active"> Audit </span> <span class="tab-inactive"> Updater </span>  <span class="dim">TAB switch  SPARK v0.5.1</span>
 <span class="red"> SECURITY AUDIT </span>  <span class="red">3 critical</span>  <span class="yellow">12 warnings</span>  <span class="dim">8 info</span>
 <span class="dim">4 projects scanned</span>
 
@@ -412,6 +412,10 @@
 <span class="cli-cmd">spark status</span>                    <span class="cli-comment"># which repos need pull</span>
 <span class="cli-cmd">spark pull all</span> <span class="cli-flag">--tag</span> learning  <span class="cli-comment"># pull repos by tag</span>
 
+<span class="cli-comment"># Ports</span>
+<span class="cli-cmd">spark ps</span>                        <span class="cli-comment"># dev servers — pid, runtime, project</span>
+<span class="cli-cmd">spark ps</span> <span class="cli-flag">--kill</span> 3000           <span class="cli-comment"># kill by port, PID, or name</span>
+
 <span class="cli-comment"># Security</span>
 <span class="cli-cmd">spark audit</span>                     <span class="cli-comment"># secrets + OWASP + deps</span>
 <span class="cli-cmd">spark certs</span>                     <span class="cli-comment"># SSL/TLS certificate health</span>
@@ -429,11 +433,11 @@
       <div class="section-title">Numbers</div>
       <div class="stats-row">
         <div class="stat">
-          <div class="stat-value">58</div>
+          <div class="stat-value">55</div>
           <div class="stat-label">Dev Tools</div>
         </div>
         <div class="stat">
-          <div class="stat-value">124</div>
+          <div class="stat-value">127</div>
           <div class="stat-label">Tests</div>
         </div>
         <div class="stat">
@@ -465,13 +469,13 @@
         </div>
         <div class="install-row">
           <span class="install-label">cargo</span>
-          <span class="install-cmd">cargo install --git https://github.com/dPeluChe/labs-spark</span>
-          <button class="copy-btn" onclick="copyCmd(this, 'cargo install --git https://github.com/dPeluChe/labs-spark')">copy</button>
+          <span class="install-cmd">cargo install --git https://github.com/dPeluChe/spark</span>
+          <button class="copy-btn" onclick="copyCmd(this, 'cargo install --git https://github.com/dPeluChe/spark')">copy</button>
         </div>
         <div class="install-row">
           <span class="install-label">source</span>
-          <span class="install-cmd">git clone https://github.com/dPeluChe/labs-spark && cd labs-spark && ./install.sh</span>
-          <button class="copy-btn" onclick="copyCmd(this, 'git clone https://github.com/dPeluChe/labs-spark && cd labs-spark && ./install.sh')">copy</button>
+          <span class="install-cmd">git clone https://github.com/dPeluChe/spark && cd labs-spark && ./install.sh</span>
+          <button class="copy-btn" onclick="copyCmd(this, 'git clone https://github.com/dPeluChe/spark && cd labs-spark && ./install.sh')">copy</button>
         </div>
       </div>
       <p style="text-align: center; margin-top: 12px; font-size: 13px; color: var(--text2);">After installing: <code style="color: var(--green);">spark init</code> to set up shell integration and completions.</p>
@@ -482,11 +486,12 @@
   <div class="footer">
     <div class="container">
       <div class="footer-links">
-        <a href="https://github.com/dPeluChe/labs-spark">GitHub</a>
+        <a href="https://github.com/dPeluChe/spark">GitHub</a>
         <a href="https://www.npmjs.com/package/@dpeluche/spark">npm</a>
-        <a href="https://github.com/dPeluChe/labs-spark/blob/main/CLAUDE.md">Docs</a>
+        <a href="https://github.com/dPeluChe/spark/blob/main/CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/dPeluChe/spark/blob/main/docs/dev/ARCHITECTURE.md">Architecture</a>
       </div>
-      <p>Built with Rust & caffeine by <a href="https://iteris.tech">Iteris</a> &middot; iteris.tech</p>
+      <p>Built with Rust &middot; MIT License</p>
     </div>
   </div>
 

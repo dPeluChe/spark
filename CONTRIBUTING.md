@@ -20,53 +20,15 @@ All three must pass before opening a PR.
 - Open an issue before starting large changes — alignment saves time
 - For bugs, include `spark doctor` output and the steps to reproduce
 
-## Code standards
+## Code standards and architecture
 
-**The pre-push hook enforces these automatically:**
+See [docs/dev/DEV_GUIDELINES.md](docs/dev/DEV_GUIDELINES.md) for code standards, patterns, and conventions.
 
-```bash
-cargo test                  # all tests must pass
-cargo clippy -- -D warnings # no warnings allowed
-cargo fmt -- --check        # formatting must match rustfmt defaults
-```
-
-**What we care about:**
-
-- No `unwrap()` on user-facing paths — use `?` or explicit error handling
-- No hardcoded paths — use `dirs::` crate for home, config, data dirs
-- New modules go in `src/scanner/` (data) or `src/tui/widgets/` (render) or `src/cli/` (commands)
-- New TUI states need entries in: `ScannerState` enum, `scanner_keys/mod.rs`, `scanner_view.rs`, `view.rs` tab bar
-- Keep render functions pure — no state mutation in widget code
-- Tests live next to the code they test (`#[cfg(test)]` at bottom of the file)
-
-## Architecture overview
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full map. The short version:
-
-```
-src/
-├── app.rs          — event loop, Action dispatch via mpsc channels
-├── config.rs       — SparkConfig, auto-detection of repos root
-├── cli/            — all spark <subcommand> implementations
-├── scanner/        — data layer: repos, ports, system, audit, certs
-├── tui/
-│   ├── model.rs    — all state (App, ScannerModel, AuditModel, ...)
-│   ├── update.rs   — Action enum + message handling
-│   ├── view.rs     — tab bar + render dispatcher
-│   ├── scanner_keys/ — key handlers split by tab
-│   └── widgets/    — all render functions
-└── utils/          — fs helpers (format_size, expand_tilde, dir_size)
-```
-
-The TUI follows a strict MVU pattern:
-1. Key event → `scanner_keys/` handler returns `Option<Action>`
-2. Action dispatched via `mpsc` channel to `app.rs`
-3. `app.rs` spawns async tasks, sends `AppMessage` back
-4. Model updates, next frame renders
+See [docs/dev/ARCHITECTURE.md](docs/dev/ARCHITECTURE.md) for the full codebase map.
 
 ## Adding a new tool to the Updater
 
-See [docs/ADDING_TOOLS.md](docs/ADDING_TOOLS.md). The short version: add an entry to `src/core/inventory.rs` with the tool name, category, detection command, and update method. No other files need changing for most tools.
+See [docs/dev/ADDING_TOOLS.md](docs/dev/ADDING_TOOLS.md). The short version: add an entry to `src/core/inventory.rs` with the tool name, category, detection command, and update method. No other files need changing for most tools.
 
 ## Pull request checklist
 
