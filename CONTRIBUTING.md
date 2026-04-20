@@ -16,7 +16,7 @@ All three must pass before opening a PR.
 
 ## Before you start
 
-- Check [docs/TASK_TODO.md](docs/TASK_TODO.md) for planned work
+- Check [docs/dev/TASK_TODO.md](docs/dev/TASK_TODO.md) for planned work
 - Open an issue before starting large changes — alignment saves time
 - For bugs, include `spark doctor` output and the steps to reproduce
 
