@@ -8,7 +8,7 @@ Pending tasks and improvements for the SPARK DevOps platform.
 
 ## High Priority
 
-### Updater: runtime version manager sub-panel
+### Updater: runtime version manager sub-panel `added: 2026-04-20`
 - Show installed versions per runtime (nvm ls, pyenv versions, rvm list, rustup toolchain list)
 - Accessible via Enter on a runtime tool in the updater table
 - Display as detail panel similar to repo detail in Scanner
@@ -17,20 +17,20 @@ Pending tasks and improvements for the SPARK DevOps platform.
 
 ## Medium Priority
 
-### Workspace sub-project listing
+### Workspace sub-project listing `added: 2026-04-20`
 - Inside repo detail, show workspace sub-projects (npm workspaces, cargo workspace members)
 - Parse `package.json` workspaces, `Cargo.toml` [workspace] members, `pnpm-workspace.yaml`
 
-### Persist scan paths in config
+### Persist scan paths in config `added: 2026-04-20`
 - Save user's selected scan directories in `config.toml`
 - Auto-load on next TUI launch (skip directory selection if paths saved)
 - Add `spark config --scan-dirs` to manage from CLI
 
-### Audit: git history false positives
+### Audit: git history false positives `added: 2026-04-20`
 - History scanner detects test fixtures from scanner's own test code in commit diffs
 - Could parse surrounding diff context to detect test blocks
 
-### Audit: parallel scan phases
+### Audit: parallel scan phases `added: 2026-04-20`
 - Phases 1-3 (secrets, history, patterns) run sequentially
 - Could parallelize since they don't share state
 
@@ -38,17 +38,17 @@ Pending tasks and improvements for the SPARK DevOps platform.
 
 ## Low Priority
 
-### Docker image testing
+### Docker image testing `added: 2026-04-20`
 - Create Dockerfile for testing spark on clean Linux (Ubuntu, Alpine)
 - Validate install.sh works in containerized environments
 - Test cargo install path on fresh Linux
 
-### Parallel status fetching
+### Parallel status fetching `added: 2026-04-20`
 - `spark status` fetches repos sequentially (slow for 50+ repos)
 - Consider parallel fetch with concurrency limit (e.g., 5 at a time)
 - Show progress bar instead of repo-by-repo counter
 
-### TUI repo detail for non-containers
+### TUI repo detail for non-containers `added: 2026-04-20`
 - Pressing Enter on a non-container repo in ScanResults goes to RepoDetail
 - Could show richer info: recent commits, branch list, disk usage breakdown
 
@@ -60,6 +60,6 @@ Pending tasks and improvements for the SPARK DevOps platform.
 - Tree-sitter already used in `spark ingest --compress` — leverage same crate
 - Start with JS/TS and Python (highest false-positive risk), keep regex for Rust/Go
 
-### Audit: more ecosystems
+### Audit: more ecosystems `added: 2026-04-20`
 - Support `go.sum` (Go modules), `Gemfile.lock` (Ruby), `composer.lock` (PHP)
 - Support `pnpm-lock.yaml`, `yarn.lock` for npm alternatives
