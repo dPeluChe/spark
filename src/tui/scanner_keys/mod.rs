@@ -1,15 +1,15 @@
 //! Key event handlers for all Scanner-mode tabs.
 //! Dispatches to sub-modules by scanner state group.
 
-mod scanner_tab;
-mod repo_tab;
-mod port_tab;
-mod system_tab;
 mod audit_tab;
+mod port_tab;
+mod repo_tab;
+mod scanner_tab;
+mod system_tab;
 
-use crossterm::event::KeyEvent;
 use crate::tui::model::*;
 use crate::tui::update::Action;
+use crossterm::event::KeyEvent;
 
 pub const PAGE_JUMP: usize = 20;
 
@@ -17,31 +17,40 @@ pub const PAGE_JUMP: usize = 20;
 pub fn handle_scanner_key(app: &mut App, key: KeyEvent) -> Option<Action> {
     match app.scanner.state {
         // Scanner tab (scan config, results, detail, clean, delete)
-        ScannerState::ScanConfig | ScannerState::ScanAddPath
-        | ScannerState::ContainerLoading | ScannerState::Scanning
-        | ScannerState::ScanResults | ScannerState::RepoDetail
-        | ScannerState::ContainerChildDetail | ScannerState::ContainerChildDelete
-        | ScannerState::HealthHelp | ScannerState::CleanConfirm
-        | ScannerState::DeleteRepoConfirm | ScannerState::Cleaning
-            => scanner_tab::handle(app, key),
+        ScannerState::ScanConfig
+        | ScannerState::ScanAddPath
+        | ScannerState::ContainerLoading
+        | ScannerState::Scanning
+        | ScannerState::ScanResults
+        | ScannerState::RepoDetail
+        | ScannerState::ContainerChildDetail
+        | ScannerState::ContainerChildDelete
+        | ScannerState::HealthHelp
+        | ScannerState::CleanConfirm
+        | ScannerState::DeleteRepoConfirm
+        | ScannerState::Cleaning => scanner_tab::handle(app, key),
 
         // Port tab
-        ScannerState::PortScan | ScannerState::PortAction | ScannerState::PortKillConfirm
-            => port_tab::handle(app, key),
+        ScannerState::PortScan | ScannerState::PortAction | ScannerState::PortKillConfirm => {
+            port_tab::handle(app, key)
+        }
 
         // System tab
-        ScannerState::SystemClean | ScannerState::SystemCleanConfirm | ScannerState::SystemCleanConfirmBulk
-            => system_tab::handle(app, key),
+        ScannerState::SystemClean
+        | ScannerState::SystemCleanConfirm
+        | ScannerState::SystemCleanConfirmBulk => system_tab::handle(app, key),
 
         // Repo manager tab
-        ScannerState::RepoManager | ScannerState::RepoAction
-        | ScannerState::RepoCloneInput | ScannerState::RepoCloneSummary
-            => repo_tab::handle(app, key),
+        ScannerState::RepoManager
+        | ScannerState::RepoAction
+        | ScannerState::RepoCloneInput
+        | ScannerState::RepoCloneSummary => repo_tab::handle(app, key),
 
         // Audit tab
-        ScannerState::SecretAudit | ScannerState::SecretAuditScanning
-        | ScannerState::SecretAuditDetail | ScannerState::SecretAuditDeps
-        | ScannerState::SecretAuditPathInput
-            => audit_tab::handle(app, key),
+        ScannerState::SecretAudit
+        | ScannerState::SecretAuditScanning
+        | ScannerState::SecretAuditDetail
+        | ScannerState::SecretAuditDeps
+        | ScannerState::SecretAuditPathInput => audit_tab::handle(app, key),
     }
 }

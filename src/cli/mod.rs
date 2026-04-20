@@ -1,16 +1,16 @@
 //! CLI command definitions and dispatch for spark subcommands.
 
-mod repos;
-mod system;
 mod audit;
 mod certs;
-mod tags;
 mod ingest;
 mod ports;
+mod repos;
+mod system;
+mod tags;
 
-use std::path::PathBuf;
-use clap::{Parser, Subcommand};
 use crate::config;
+use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 /// SPARK — Developer Operations Platform
 #[derive(Parser)]
@@ -227,25 +227,75 @@ pub fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_
         Commands::Search { query, first } => repos::cmd_search(&query, first, config),
         Commands::Cd { query } => repos::cmd_cd(&query, config),
         Commands::Init => system::cmd_init(config),
-        Commands::Agent => { system::cmd_agent(config); Ok(()) }
-        Commands::Completions { shell } => { system::cmd_completions(shell); Ok(()) }
-        Commands::Config { key, set } => system::cmd_config(key, set, config),
-        Commands::Status { query, tag } => { repos::cmd_status(query, tag, config); Ok(()) }
-        Commands::Pull { query, tag } => { repos::cmd_pull(&query, tag, config); Ok(()) }
-        Commands::Audit { path, output, init_ignore, offline, deps_only } => {
-            if deps_only { audit::cmd_audit_deps(path); }
-            else { audit::cmd_audit(path, output, init_ignore, offline); }
+        Commands::Agent => {
+            system::cmd_agent(config);
             Ok(())
         }
-        Commands::Ingest { query, all, compress, read, budget, changed, since, deps, fresh } => {
-            ingest::cmd_ingest(query, all, compress, read, budget, changed, since, deps, fresh, config); Ok(())
+        Commands::Completions { shell } => {
+            system::cmd_completions(shell);
+            Ok(())
         }
-        Commands::Tag { action } => { tags::cmd_tag(action, config); Ok(()) }
-        Commands::Certs { path, keychain_only, show_all: _, expired_only, summary_only } => {
-            certs::cmd_certs(path, keychain_only, expired_only, summary_only); Ok(())
+        Commands::Config { key, set } => system::cmd_config(key, set, config),
+        Commands::Status { query, tag } => {
+            repos::cmd_status(query, tag, config);
+            Ok(())
         }
-        Commands::Ps { all, query, kill } => { ports::cmd_ports(all, query, kill); Ok(()) }
-        Commands::Doctor => { system::cmd_doctor(config); Ok(()) }
+        Commands::Pull { query, tag } => {
+            repos::cmd_pull(&query, tag, config);
+            Ok(())
+        }
+        Commands::Audit {
+            path,
+            output,
+            init_ignore,
+            offline,
+            deps_only,
+        } => {
+            if deps_only {
+                audit::cmd_audit_deps(path);
+            } else {
+                audit::cmd_audit(path, output, init_ignore, offline);
+            }
+            Ok(())
+        }
+        Commands::Ingest {
+            query,
+            all,
+            compress,
+            read,
+            budget,
+            changed,
+            since,
+            deps,
+            fresh,
+        } => {
+            ingest::cmd_ingest(
+                query, all, compress, read, budget, changed, since, deps, fresh, config,
+            );
+            Ok(())
+        }
+        Commands::Tag { action } => {
+            tags::cmd_tag(action, config);
+            Ok(())
+        }
+        Commands::Certs {
+            path,
+            keychain_only,
+            show_all: _,
+            expired_only,
+            summary_only,
+        } => {
+            certs::cmd_certs(path, keychain_only, expired_only, summary_only);
+            Ok(())
+        }
+        Commands::Ps { all, query, kill } => {
+            ports::cmd_ports(all, query, kill);
+            Ok(())
+        }
+        Commands::Doctor => {
+            system::cmd_doctor(config);
+            Ok(())
+        }
     }
 }
 
@@ -268,12 +318,18 @@ pub(crate) fn expand_url(input: &str, use_ssh: bool) -> String {
     }
     let parts: Vec<&str> = input.split('/').collect();
     if parts.len() == 2 {
-        return if use_ssh { format!("git@github.com:{}/{}.git", parts[0], parts[1]) }
-            else { format!("https://github.com/{}/{}", parts[0], parts[1]) };
+        return if use_ssh {
+            format!("git@github.com:{}/{}.git", parts[0], parts[1])
+        } else {
+            format!("https://github.com/{}/{}", parts[0], parts[1])
+        };
     }
     if parts.len() == 3 {
-        return if use_ssh { format!("git@{}:{}/{}.git", parts[0], parts[1], parts[2]) }
-            else { format!("https://{}/{}/{}", parts[0], parts[1], parts[2]) };
+        return if use_ssh {
+            format!("git@{}:{}/{}.git", parts[0], parts[1], parts[2])
+        } else {
+            format!("https://{}/{}/{}", parts[0], parts[1], parts[2])
+        };
     }
     input.to_string()
 }

@@ -1,10 +1,15 @@
 //! Certificate scanner CLI command.
 
-use std::path::PathBuf;
-use crate::scanner::cert_scanner::{self, CertStatus, CertSource};
 use super::shorten_path;
+use crate::scanner::cert_scanner::{self, CertSource, CertStatus};
+use std::path::PathBuf;
 
-pub fn cmd_certs(path: Option<PathBuf>, keychain_only: bool, expired_only: bool, summary_only: bool) {
+pub fn cmd_certs(
+    path: Option<PathBuf>,
+    keychain_only: bool,
+    expired_only: bool,
+    summary_only: bool,
+) {
     println!("  SPARK Certificate Scanner\n");
 
     let scan_path = path.as_deref();
@@ -12,15 +17,31 @@ pub fn cmd_certs(path: Option<PathBuf>, keychain_only: bool, expired_only: bool,
     let result = if keychain_only {
         println!("  Scanning macOS Keychain...\n");
         let certs = cert_scanner::scan_keychain();
-        let expired = certs.iter().filter(|c| c.status == CertStatus::Expired).count();
-        let expiring = certs.iter().filter(|c| matches!(c.status, CertStatus::Expiring30 | CertStatus::Expiring90)).count();
-        let valid = certs.iter().filter(|c| c.status == CertStatus::Valid).count();
-        cert_scanner::CertScanResult { certs, expired_count: expired, expiring_count: expiring, valid_count: valid }
+        let expired = certs
+            .iter()
+            .filter(|c| c.status == CertStatus::Expired)
+            .count();
+        let expiring = certs
+            .iter()
+            .filter(|c| matches!(c.status, CertStatus::Expiring30 | CertStatus::Expiring90))
+            .count();
+        let valid = certs
+            .iter()
+            .filter(|c| c.status == CertStatus::Valid)
+            .count();
+        cert_scanner::CertScanResult {
+            certs,
+            expired_count: expired,
+            expiring_count: expiring,
+            valid_count: valid,
+        }
     } else {
-        let p = scan_path.unwrap_or_else(|| {
-            Box::leak(Box::new(std::env::current_dir().unwrap_or_default()))
-        });
-        println!("  Scanning {} + system Keychain...\n", shorten_path(&p.display().to_string()));
+        let p = scan_path
+            .unwrap_or_else(|| Box::leak(Box::new(std::env::current_dir().unwrap_or_default())));
+        println!(
+            "  Scanning {} + system Keychain...\n",
+            shorten_path(&p.display().to_string())
+        );
         cert_scanner::full_scan(Some(p))
     };
 
@@ -44,7 +65,8 @@ pub fn cmd_certs(path: Option<PathBuf>, keychain_only: bool, expired_only: bool,
             println!("  \x1b[33m--- Loose Key/Cert Files in ~/ ---\x1b[0m\n");
 
             // Group by type
-            let mut by_type: std::collections::BTreeMap<&str, Vec<&cert_scanner::LooseKeyFile>> = std::collections::BTreeMap::new();
+            let mut by_type: std::collections::BTreeMap<&str, Vec<&cert_scanner::LooseKeyFile>> =
+                std::collections::BTreeMap::new();
             for f in &found {
                 by_type.entry(&f.file_type).or_default().push(f);
             }
@@ -54,8 +76,13 @@ pub fn cmd_certs(path: Option<PathBuf>, keychain_only: bool, expired_only: bool,
                     "private key" | "SSH key" => ("!!", "31"),
                     _ => ("~ ", "33"),
                 };
-                println!("    \x1b[{}m{}\x1b[0m  \x1b[1m{}\x1b[0m \x1b[90m({} files)\x1b[0m",
-                    color, icon, file_type, files.len());
+                println!(
+                    "    \x1b[{}m{}\x1b[0m  \x1b[1m{}\x1b[0m \x1b[90m({} files)\x1b[0m",
+                    color,
+                    icon,
+                    file_type,
+                    files.len()
+                );
                 for f in files {
                     let short = shorten_path(&f.path.display().to_string());
                     let size = crate::utils::fs::format_size(f.size);
@@ -80,19 +107,33 @@ pub fn cmd_certs(path: Option<PathBuf>, keychain_only: bool, expired_only: bool,
 }
 
 fn print_certs(certs: &[cert_scanner::CertInfo], expired_only: bool) {
-    let expired: Vec<_> = certs.iter().filter(|c| c.status == CertStatus::Expired).collect();
-    let expiring: Vec<_> = certs.iter().filter(|c| matches!(c.status, CertStatus::Expiring30 | CertStatus::Expiring90)).collect();
-    let valid: Vec<_> = certs.iter().filter(|c| c.status == CertStatus::Valid).collect();
+    let expired: Vec<_> = certs
+        .iter()
+        .filter(|c| c.status == CertStatus::Expired)
+        .collect();
+    let expiring: Vec<_> = certs
+        .iter()
+        .filter(|c| matches!(c.status, CertStatus::Expiring30 | CertStatus::Expiring90))
+        .collect();
+    let valid: Vec<_> = certs
+        .iter()
+        .filter(|c| c.status == CertStatus::Valid)
+        .collect();
 
     if !expired.is_empty() {
         println!("  \x1b[31m--- Expired ({}) ---\x1b[0m\n", expired.len());
         print_grouped(&expired);
     }
 
-    if expired_only { return; }
+    if expired_only {
+        return;
+    }
 
     if !expiring.is_empty() {
-        println!("  \x1b[33m--- Expiring Soon ({}) ---\x1b[0m\n", expiring.len());
+        println!(
+            "  \x1b[33m--- Expiring Soon ({}) ---\x1b[0m\n",
+            expiring.len()
+        );
         print_grouped(&expiring);
     }
 
@@ -123,11 +164,24 @@ fn print_grouped(certs: &[&cert_scanner::CertInfo]) {
         if group.len() == 1 {
             let cert = group[0];
             let days_str = format_days(cert.days_remaining);
-            let self_signed = if cert.is_self_signed { " (self-signed)" } else { "" };
-            println!("    \x1b[{}m{}\x1b[0m  \x1b[1m{}\x1b[0m{}", color, icon, cert.subject, self_signed);
-            println!("        \x1b[90missuer: {} | {} | {}\x1b[0m", issuer, cert.not_after, days_str);
+            let self_signed = if cert.is_self_signed {
+                " (self-signed)"
+            } else {
+                ""
+            };
+            println!(
+                "    \x1b[{}m{}\x1b[0m  \x1b[1m{}\x1b[0m{}",
+                color, icon, cert.subject, self_signed
+            );
+            println!(
+                "        \x1b[90missuer: {} | {} | {}\x1b[0m",
+                issuer, cert.not_after, days_str
+            );
             match &cert.source {
-                CertSource::File(p) => println!("        \x1b[90mfile: {}\x1b[0m", shorten_path(&p.display().to_string())),
+                CertSource::File(p) => println!(
+                    "        \x1b[90mfile: {}\x1b[0m",
+                    shorten_path(&p.display().to_string())
+                ),
                 CertSource::Keychain(name) => println!("        \x1b[90m{}\x1b[0m", name),
             }
             println!();
@@ -137,23 +191,36 @@ fn print_grouped(certs: &[&cert_scanner::CertInfo]) {
             let oldest = group.iter().min_by_key(|c| c.days_remaining).unwrap();
             let newest = group.iter().max_by_key(|c| c.days_remaining).unwrap();
 
-            println!("    \x1b[{}m{}\x1b[0m  \x1b[1m{}\x1b[0m \x1b[90m({} certs)\x1b[0m",
-                color, icon, issuer, group.len());
+            println!(
+                "    \x1b[{}m{}\x1b[0m  \x1b[1m{}\x1b[0m \x1b[90m({} certs)\x1b[0m",
+                color,
+                icon,
+                issuer,
+                group.len()
+            );
 
             if group.len() <= 5 {
                 for cert in group {
                     let days_str = format_days(cert.days_remaining);
                     let self_signed = if cert.is_self_signed { " (ss)" } else { "" };
-                    println!("        \x1b[90m-- {}{} | {} | {}\x1b[0m",
-                        cert.subject, self_signed, cert.not_after, days_str);
+                    println!(
+                        "        \x1b[90m-- {}{} | {} | {}\x1b[0m",
+                        cert.subject, self_signed, cert.not_after, days_str
+                    );
                 }
             } else {
                 let others = group.len() - 2;
-                println!("        \x1b[90moldest: {} | {}\x1b[0m",
-                    oldest.not_after, format_days(oldest.days_remaining));
+                println!(
+                    "        \x1b[90moldest: {} | {}\x1b[0m",
+                    oldest.not_after,
+                    format_days(oldest.days_remaining)
+                );
                 println!("        \x1b[90m... {} other certs ...\x1b[0m", others);
-                println!("        \x1b[90mnewest: {} | {}\x1b[0m",
-                    newest.not_after, format_days(newest.days_remaining));
+                println!(
+                    "        \x1b[90mnewest: {} | {}\x1b[0m",
+                    newest.not_after,
+                    format_days(newest.days_remaining)
+                );
             }
             println!();
         }
@@ -170,7 +237,8 @@ fn format_days(days: i64) -> String {
 
 fn print_summary(result: &cert_scanner::CertScanResult, loose: &[cert_scanner::LooseKeyFile]) {
     // Group expired by age buckets
-    let mut by_year: std::collections::BTreeMap<i32, (usize, usize, usize)> = std::collections::BTreeMap::new();
+    let mut by_year: std::collections::BTreeMap<i32, (usize, usize, usize)> =
+        std::collections::BTreeMap::new();
     for cert in &result.certs {
         let year = if cert.days_remaining <= 0 {
             // Group by how long ago it expired
@@ -195,24 +263,49 @@ fn print_summary(result: &cert_scanner::CertScanResult, loose: &[cert_scanner::L
     if result.expired_count > 0 {
         println!("  \x1b[90mExpired by age:\x1b[0m");
         for (year, (expired, _, _)) in by_year.iter().rev() {
-            if *expired == 0 { continue; }
-            if *year == 0 { continue; }
+            if *expired == 0 {
+                continue;
+            }
+            if *year == 0 {
+                continue;
+            }
             let age = -year;
             if age == 1 {
                 println!("    \x1b[90m< 1 year:    {} certs\x1b[0m", expired);
             } else {
-                println!("    \x1b[90m{}-{} years:  {} certs\x1b[0m", age - 1, age, expired);
+                println!(
+                    "    \x1b[90m{}-{} years:  {} certs\x1b[0m",
+                    age - 1,
+                    age,
+                    expired
+                );
             }
         }
         println!();
     }
 
     if !loose.is_empty() {
-        let keys = loose.iter().filter(|f| f.file_type == "private key" || f.file_type == "SSH key").count();
-        let certs_count = loose.iter().filter(|f| f.file_type == "certificate").count();
+        let keys = loose
+            .iter()
+            .filter(|f| f.file_type == "private key" || f.file_type == "SSH key")
+            .count();
+        let certs_count = loose
+            .iter()
+            .filter(|f| f.file_type == "certificate")
+            .count();
         println!("  \x1b[1mLoose files found in ~/\x1b[0m");
-        if keys > 0 { println!("    \x1b[31m{} key files\x1b[0m — review for unused or exposed private keys", keys); }
-        if certs_count > 0 { println!("    \x1b[33m{} certificate files\x1b[0m — check expiration with spark certs", certs_count); }
+        if keys > 0 {
+            println!(
+                "    \x1b[31m{} key files\x1b[0m — review for unused or exposed private keys",
+                keys
+            );
+        }
+        if certs_count > 0 {
+            println!(
+                "    \x1b[33m{} certificate files\x1b[0m — check expiration with spark certs",
+                certs_count
+            );
+        }
 
         // Parse loose cert files to check expiration (per file, not per cert inside bundles)
         let mut files_with_expired = 0usize;
@@ -221,56 +314,110 @@ fn print_summary(result: &cert_scanner::CertScanResult, loose: &[cert_scanner::L
         let mut files_unparseable = 0usize;
         for f in loose.iter().filter(|f| f.file_type == "certificate") {
             let parsed = cert_scanner::parse_cert_file(&f.path);
-            if parsed.is_empty() { files_unparseable += 1; continue; }
+            if parsed.is_empty() {
+                files_unparseable += 1;
+                continue;
+            }
             // Classify file by its worst cert status
-            let has_expired = parsed.iter().any(|c| c.status == cert_scanner::CertStatus::Expired);
-            let has_expiring = parsed.iter().any(|c| matches!(c.status, cert_scanner::CertStatus::Expiring30 | cert_scanner::CertStatus::Expiring90));
-            if has_expired { files_with_expired += 1; }
-            else if has_expiring { files_expiring += 1; }
-            else { files_valid += 1; }
+            let has_expired = parsed
+                .iter()
+                .any(|c| c.status == cert_scanner::CertStatus::Expired);
+            let has_expiring = parsed.iter().any(|c| {
+                matches!(
+                    c.status,
+                    cert_scanner::CertStatus::Expiring30 | cert_scanner::CertStatus::Expiring90
+                )
+            });
+            if has_expired {
+                files_with_expired += 1;
+            } else if has_expiring {
+                files_expiring += 1;
+            } else {
+                files_valid += 1;
+            }
         }
         let total_parsed = files_with_expired + files_expiring + files_valid;
         if total_parsed > 0 {
             print!("    cert files: ");
-            if files_with_expired > 0 { print!("\x1b[31m{} contain expired certs\x1b[0m  ", files_with_expired); }
-            if files_expiring > 0 { print!("\x1b[33m{} expiring\x1b[0m  ", files_expiring); }
-            if files_valid > 0 { print!("\x1b[32m{} valid\x1b[0m", files_valid); }
+            if files_with_expired > 0 {
+                print!(
+                    "\x1b[31m{} contain expired certs\x1b[0m  ",
+                    files_with_expired
+                );
+            }
+            if files_expiring > 0 {
+                print!("\x1b[33m{} expiring\x1b[0m  ", files_expiring);
+            }
+            if files_valid > 0 {
+                print!("\x1b[32m{} valid\x1b[0m", files_valid);
+            }
             println!();
         }
         if files_unparseable > 0 {
-            println!("    \x1b[90m{} files could not be parsed (DER/binary format)\x1b[0m", files_unparseable);
+            println!(
+                "    \x1b[90m{} files could not be parsed (DER/binary format)\x1b[0m",
+                files_unparseable
+            );
         }
         println!();
     }
 }
 
 fn print_recommendations(result: &cert_scanner::CertScanResult) {
-    let expired: Vec<_> = result.certs.iter().filter(|c| c.status == CertStatus::Expired).collect();
-    if expired.is_empty() { return; }
+    let expired: Vec<_> = result
+        .certs
+        .iter()
+        .filter(|c| c.status == CertStatus::Expired)
+        .collect();
+    if expired.is_empty() {
+        return;
+    }
 
-    let apple_count = expired.iter().filter(|c| c.issuer.contains("Apple")).count();
+    let apple_count = expired
+        .iter()
+        .filter(|c| c.issuer.contains("Apple"))
+        .count();
     let self_signed = expired.iter().filter(|c| c.is_self_signed).count();
-    let dev_certs = expired.iter().filter(|c|
-        c.subject.contains("Developer") || c.subject.contains("iPhone")
-        || c.subject.contains("Distribution")
-    ).count();
-    let other = expired.len().saturating_sub(apple_count.max(dev_certs)).saturating_sub(self_signed);
+    let dev_certs = expired
+        .iter()
+        .filter(|c| {
+            c.subject.contains("Developer")
+                || c.subject.contains("iPhone")
+                || c.subject.contains("Distribution")
+        })
+        .count();
+    let other = expired
+        .len()
+        .saturating_sub(apple_count.max(dev_certs))
+        .saturating_sub(self_signed);
 
     if apple_count > 0 {
-        println!("    \x1b[90mApple certs ({} expired): safe to remove when expired.\x1b[0m", apple_count);
+        println!(
+            "    \x1b[90mApple certs ({} expired): safe to remove when expired.\x1b[0m",
+            apple_count
+        );
         println!("    \x1b[90m  Managed by Apple, auto-renewed on active devices.\x1b[0m");
     }
     if dev_certs > 0 {
-        println!("    \x1b[90mDeveloper certs ({} expired): remove old provisioning profiles.\x1b[0m", dev_certs);
+        println!(
+            "    \x1b[90mDeveloper certs ({} expired): remove old provisioning profiles.\x1b[0m",
+            dev_certs
+        );
         println!("    \x1b[90m  Renew active ones at developer.apple.com or Xcode.\x1b[0m");
     }
     if self_signed > 0 {
-        println!("    \x1b[33mSelf-signed certs ({} expired): review and rotate.\x1b[0m", self_signed);
+        println!(
+            "    \x1b[33mSelf-signed certs ({} expired): review and rotate.\x1b[0m",
+            self_signed
+        );
         println!("    \x1b[90m  Created manually for dev servers, VPNs, or internal tools.\x1b[0m");
         println!("    \x1b[90m  If still in use, regenerate. If not, remove from Keychain.\x1b[0m");
     }
     if other > 0 {
-        println!("    \x1b[90mOther expired certs ({}): review issuer and remove if unused.\x1b[0m", other);
+        println!(
+            "    \x1b[90mOther expired certs ({}): review issuer and remove if unused.\x1b[0m",
+            other
+        );
     }
 
     println!();

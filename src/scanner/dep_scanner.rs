@@ -3,8 +3,8 @@
 //! Parses package.json, requirements.txt, and Cargo.toml to extract
 //! dependencies, then queries the OSV.dev batch API for known vulnerabilities.
 
-use std::path::Path;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 /// A dependency found in a project
 #[derive(Debug, Clone)]
@@ -105,7 +105,10 @@ pub fn parse_dependencies(path: &Path) -> Vec<Dependency> {
         // Override with lock file versions where available
         let lock_deps = parse_package_lock(&pkg_lock);
         for ld in &lock_deps {
-            if let Some(d) = deps.iter_mut().find(|d| d.name == ld.name && d.ecosystem == "npm") {
+            if let Some(d) = deps
+                .iter_mut()
+                .find(|d| d.name == ld.name && d.ecosystem == "npm")
+            {
                 d.version = ld.version.clone();
                 d.source_file = ld.source_file.clone();
             }
@@ -148,11 +151,21 @@ fn parse_package_json(path: &Path) -> Vec<Dependency> {
             for (name, version) in obj {
                 let ver = version.as_str().unwrap_or("").to_string();
                 // Strip semver prefixes: ^1.2.3 → 1.2.3, ~1.2.3 → 1.2.3
-                let clean_ver = ver.trim_start_matches('^').trim_start_matches('~')
-                    .trim_start_matches(">=").trim_start_matches('>')
-                    .trim_start_matches("<=").trim_start_matches('<')
+                let clean_ver = ver
+                    .trim_start_matches('^')
+                    .trim_start_matches('~')
+                    .trim_start_matches(">=")
+                    .trim_start_matches('>')
+                    .trim_start_matches("<=")
+                    .trim_start_matches('<')
                     .to_string();
-                if !clean_ver.is_empty() && clean_ver.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                if !clean_ver.is_empty()
+                    && clean_ver
+                        .chars()
+                        .next()
+                        .map(|c| c.is_ascii_digit())
+                        .unwrap_or(false)
+                {
                     deps.push(Dependency {
                         name: name.clone(),
                         version: clean_ver,
@@ -180,9 +193,13 @@ fn parse_package_lock(path: &Path) -> Vec<Dependency> {
     // lockfileVersion 2/3 uses "packages"
     if let Some(packages) = json.get("packages").and_then(|v| v.as_object()) {
         for (key, val) in packages {
-            if key.is_empty() { continue; } // skip root
+            if key.is_empty() {
+                continue;
+            } // skip root
             let name = key.strip_prefix("node_modules/").unwrap_or(key);
-            if name.contains("node_modules/") { continue; } // skip nested
+            if name.contains("node_modules/") {
+                continue;
+            } // skip nested
             if let Some(version) = val.get("version").and_then(|v| v.as_str()) {
                 deps.push(Dependency {
                     name: name.to_string(),
@@ -214,22 +231,30 @@ fn parse_requirements_txt(path: &Path) -> Vec<Dependency> {
         Ok(c) => c,
         Err(_) => return Vec::new(),
     };
-    content.lines()
-        .filter(|l| !l.trim().is_empty() && !l.trim().starts_with('#') && !l.trim().starts_with('-'))
+    content
+        .lines()
+        .filter(|l| {
+            !l.trim().is_empty() && !l.trim().starts_with('#') && !l.trim().starts_with('-')
+        })
         .filter_map(|line| {
             let line = line.trim();
             // package==1.2.3 or package>=1.2.3
             if let Some(pos) = line.find("==") {
                 Some(Dependency {
                     name: line[..pos].trim().to_string(),
-                    version: line[pos+2..].trim().to_string(),
+                    version: line[pos + 2..].trim().to_string(),
                     ecosystem: "PyPI".into(),
                     source_file: "requirements.txt".into(),
                 })
             } else {
                 line.find(">=").map(|pos| Dependency {
                     name: line[..pos].trim().to_string(),
-                    version: line[pos+2..].split(',').next().unwrap_or("").trim().to_string(),
+                    version: line[pos + 2..]
+                        .split(',')
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .to_string(),
                     ecosystem: "PyPI".into(),
                     source_file: "requirements.txt".into(),
                 })
@@ -254,14 +279,21 @@ fn parse_cargo_toml(path: &Path) -> Vec<Dependency> {
             for (name, val) in table {
                 let version = match val {
                     toml::Value::String(s) => s.clone(),
-                    toml::Value::Table(t) => t.get("version")
-                        .and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    toml::Value::Table(t) => t
+                        .get("version")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
                     _ => continue,
                 };
-                let clean = version.trim_start_matches('^').trim_start_matches('~').to_string();
+                let clean = version
+                    .trim_start_matches('^')
+                    .trim_start_matches('~')
+                    .to_string();
                 if !clean.is_empty() {
                     deps.push(Dependency {
-                        name: name.clone(), version: clean,
+                        name: name.clone(),
+                        version: clean,
                         ecosystem: "crates.io".into(),
                         source_file: "Cargo.toml".into(),
                     });
@@ -288,7 +320,8 @@ fn parse_cargo_lock(path: &Path) -> Vec<Dependency> {
             let version = pkg.get("version").and_then(|v| v.as_str()).unwrap_or("");
             if !name.is_empty() && !version.is_empty() {
                 deps.push(Dependency {
-                    name: name.to_string(), version: version.to_string(),
+                    name: name.to_string(),
+                    version: version.to_string(),
                     ecosystem: "crates.io".into(),
                     source_file: "Cargo.lock".into(),
                 });
@@ -306,7 +339,10 @@ const BATCH_SIZE: usize = 100;
 /// Query OSV.dev for vulnerabilities in the given dependencies.
 pub async fn check_vulnerabilities(deps: &[Dependency]) -> DepScanResult {
     if deps.is_empty() {
-        return DepScanResult { deps_checked: 0, vulnerabilities: Vec::new() };
+        return DepScanResult {
+            deps_checked: 0,
+            vulnerabilities: Vec::new(),
+        };
     }
 
     let client = match reqwest::Client::builder()
@@ -314,17 +350,28 @@ pub async fn check_vulnerabilities(deps: &[Dependency]) -> DepScanResult {
         .build()
     {
         Ok(c) => c,
-        Err(_) => return DepScanResult { deps_checked: deps.len(), vulnerabilities: Vec::new() },
+        Err(_) => {
+            return DepScanResult {
+                deps_checked: deps.len(),
+                vulnerabilities: Vec::new(),
+            }
+        }
     };
 
     let mut all_vulns = Vec::new();
 
     // Process in batches to avoid oversized requests
     for chunk in deps.chunks(BATCH_SIZE) {
-        let queries: Vec<OsvQuery> = chunk.iter().map(|d| OsvQuery {
-            package: OsvPackage { name: d.name.clone(), ecosystem: d.ecosystem.clone() },
-            version: d.version.clone(),
-        }).collect();
+        let queries: Vec<OsvQuery> = chunk
+            .iter()
+            .map(|d| OsvQuery {
+                package: OsvPackage {
+                    name: d.name.clone(),
+                    ecosystem: d.ecosystem.clone(),
+                },
+                version: d.version.clone(),
+            })
+            .collect();
 
         let request = OsvBatchRequest { queries };
 
@@ -342,13 +389,17 @@ pub async fn check_vulnerabilities(deps: &[Dependency]) -> DepScanResult {
             if let Some(vulns) = &result.vulns {
                 let dep = &chunk[i];
                 for vuln in vulns {
-                    let severity = vuln.database_specific.as_ref()
+                    let severity = vuln
+                        .database_specific
+                        .as_ref()
                         .and_then(|d| d.get("severity"))
                         .and_then(|s| s.as_str())
                         .unwrap_or("UNKNOWN")
                         .to_string();
 
-                    let fixed = vuln.affected.as_ref()
+                    let fixed = vuln
+                        .affected
+                        .as_ref()
                         .and_then(|a| a.first())
                         .and_then(|a| a.ranges.as_ref())
                         .and_then(|r| r.first())
@@ -357,7 +408,10 @@ pub async fn check_vulnerabilities(deps: &[Dependency]) -> DepScanResult {
 
                     all_vulns.push(DepVulnerability {
                         id: vuln.id.clone(),
-                        summary: vuln.summary.clone().unwrap_or_else(|| "No description".into()),
+                        summary: vuln
+                            .summary
+                            .clone()
+                            .unwrap_or_else(|| "No description".into()),
                         severity,
                         dep_name: dep.name.clone(),
                         dep_version: dep.version.clone(),
@@ -372,7 +426,8 @@ pub async fn check_vulnerabilities(deps: &[Dependency]) -> DepScanResult {
 
     // Sort: critical first
     all_vulns.sort_by(|a, b| {
-        severity_order(&a.severity).cmp(&severity_order(&b.severity))
+        severity_order(&a.severity)
+            .cmp(&severity_order(&b.severity))
             .then(a.dep_name.cmp(&b.dep_name))
     });
 
@@ -400,7 +455,11 @@ mod tests {
     fn test_parse_package_json() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("package.json");
-        std::fs::write(&file, r#"{"dependencies":{"lodash":"^4.17.21"},"devDependencies":{"jest":"^29.0.0"}}"#).unwrap();
+        std::fs::write(
+            &file,
+            r#"{"dependencies":{"lodash":"^4.17.21"},"devDependencies":{"jest":"^29.0.0"}}"#,
+        )
+        .unwrap();
         let deps = parse_package_json(&file);
         assert_eq!(deps.len(), 2);
         assert_eq!(deps[0].name, "lodash");
@@ -424,14 +483,18 @@ mod tests {
     fn test_parse_cargo_toml() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("Cargo.toml");
-        std::fs::write(&file, r#"[package]
+        std::fs::write(
+            &file,
+            r#"[package]
 name = "test"
 version = "0.1.0"
 
 [dependencies]
 serde = "1.0"
 tokio = { version = "1", features = ["full"] }
-"#).unwrap();
+"#,
+        )
+        .unwrap();
         let deps = parse_cargo_toml(&file);
         assert_eq!(deps.len(), 2);
         assert!(deps.iter().any(|d| d.name == "serde" && d.version == "1.0"));

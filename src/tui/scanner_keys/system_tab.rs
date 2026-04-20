@@ -1,20 +1,32 @@
 //! Key handlers for System Cleanup tab.
 
-use crossterm::event::{KeyCode, KeyEvent};
 use crate::tui::model::*;
 use crate::tui::update::Action;
+use crossterm::event::{KeyCode, KeyEvent};
 
 pub fn handle(app: &mut App, key: KeyEvent) -> Option<Action> {
     match app.scanner.state {
         ScannerState::SystemClean => {
             let sc = &mut app.system_cleaner;
             match key.code {
-                KeyCode::Esc | KeyCode::Char('q') => { app.scanner.state = ScannerState::ScanConfig; None }
-                KeyCode::Up | KeyCode::Char('k') => { sc.move_up(); None }
-                KeyCode::Down | KeyCode::Char('j') => { sc.move_down(); None }
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    app.scanner.state = ScannerState::ScanConfig;
+                    None
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    sc.move_up();
+                    None
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    sc.move_down();
+                    None
+                }
                 KeyCode::Char(' ') => {
-                    if sc.checked.contains(&sc.cursor) { sc.checked.remove(&sc.cursor); }
-                    else { sc.checked.insert(sc.cursor); }
+                    if sc.checked.contains(&sc.cursor) {
+                        sc.checked.remove(&sc.cursor);
+                    } else {
+                        sc.checked.insert(sc.cursor);
+                    }
                     None
                 }
                 KeyCode::Enter => {
@@ -43,7 +55,8 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Option<Action> {
                 Some(Action::CleanSystemItem(idx))
             }
             KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc | KeyCode::Char('q') => {
-                app.scanner.state = ScannerState::SystemClean; None
+                app.scanner.state = ScannerState::SystemClean;
+                None
             }
             _ => None,
         },
@@ -56,7 +69,8 @@ pub fn handle(app: &mut App, key: KeyEvent) -> Option<Action> {
                 Some(Action::CleanSystemItems(indices))
             }
             KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc | KeyCode::Char('q') => {
-                app.scanner.state = ScannerState::SystemClean; None
+                app.scanner.state = ScannerState::SystemClean;
+                None
             }
             _ => None,
         },

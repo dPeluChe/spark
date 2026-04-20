@@ -17,12 +17,17 @@ pub struct RepoTags {
 #[allow(dead_code)]
 impl RepoTags {
     pub fn new() -> Self {
-        Self { tags: BTreeMap::new() }
+        Self {
+            tags: BTreeMap::new(),
+        }
     }
 
     /// Add a repo to a tag (creates tag if it doesn't exist)
     pub fn add(&mut self, repo_key: &str, tag: &str) {
-        self.tags.entry(tag.to_lowercase()).or_default().insert(repo_key.to_string());
+        self.tags
+            .entry(tag.to_lowercase())
+            .or_default()
+            .insert(repo_key.to_string());
     }
 
     /// Remove a repo from a tag
@@ -40,7 +45,8 @@ impl RepoTags {
 
     /// Get all tags for a repo
     pub fn tags_for_repo(&self, repo_key: &str) -> Vec<String> {
-        self.tags.iter()
+        self.tags
+            .iter()
             .filter(|(_, repos)| repos.contains(repo_key))
             .map(|(tag, _)| tag.clone())
             .collect()
@@ -48,7 +54,8 @@ impl RepoTags {
 
     /// Get all repos for a tag
     pub fn repos_for_tag(&self, tag: &str) -> Vec<String> {
-        self.tags.get(&tag.to_lowercase())
+        self.tags
+            .get(&tag.to_lowercase())
             .map(|repos| repos.iter().cloned().collect())
             .unwrap_or_default()
     }
@@ -60,7 +67,8 @@ impl RepoTags {
 
     /// Check if a repo has a specific tag
     pub fn has_tag(&self, repo_key: &str, tag: &str) -> bool {
-        self.tags.get(&tag.to_lowercase())
+        self.tags
+            .get(&tag.to_lowercase())
             .map(|repos| repos.contains(repo_key))
             .unwrap_or(false)
     }
@@ -174,7 +182,10 @@ mod tests {
 
     #[test]
     fn test_repo_key() {
-        assert_eq!(repo_key("github.com", "user", "repo"), "github.com/user/repo");
+        assert_eq!(
+            repo_key("github.com", "user", "repo"),
+            "github.com/user/repo"
+        );
         assert_eq!(repo_key_short("user", "repo"), "github.com/user/repo");
     }
 }

@@ -17,7 +17,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     // Tab bar + content
     let chunks = Layout::vertical([
         Constraint::Length(1), // tab bar
-        Constraint::Min(5),   // content
+        Constraint::Min(5),    // content
     ])
     .split(area);
 
@@ -26,12 +26,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     match app.mode {
         AppMode::Updater => render_updater(frame, chunks[1], app),
         AppMode::Scanner => {
-            super::widgets::scanner_view::render_scanner(
-                frame,
-                chunks[1],
-                app,
-                app.tick_count,
-            );
+            super::widgets::scanner_view::render_scanner(frame, chunks[1], app, app.tick_count);
         }
     }
 
@@ -82,8 +77,10 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, app: &App) {
     let is_repo_mgr = app.mode == AppMode::Scanner
         && matches!(
             app.scanner.state,
-            ScannerState::RepoManager | ScannerState::RepoAction
-                | ScannerState::RepoCloneInput | ScannerState::RepoCloneSummary
+            ScannerState::RepoManager
+                | ScannerState::RepoAction
+                | ScannerState::RepoCloneInput
+                | ScannerState::RepoCloneSummary
         );
     let is_ports = app.mode == AppMode::Scanner
         && matches!(
@@ -93,13 +90,17 @@ fn render_tab_bar(frame: &mut Frame, area: Rect, app: &App) {
     let is_system = app.mode == AppMode::Scanner
         && matches!(
             app.scanner.state,
-            ScannerState::SystemClean | ScannerState::SystemCleanConfirm | ScannerState::SystemCleanConfirmBulk
+            ScannerState::SystemClean
+                | ScannerState::SystemCleanConfirm
+                | ScannerState::SystemCleanConfirmBulk
         );
     let is_audit = app.mode == AppMode::Scanner
         && matches!(
             app.scanner.state,
-            ScannerState::SecretAudit | ScannerState::SecretAuditScanning
-                | ScannerState::SecretAuditDetail | ScannerState::SecretAuditDeps
+            ScannerState::SecretAudit
+                | ScannerState::SecretAuditScanning
+                | ScannerState::SecretAuditDetail
+                | ScannerState::SecretAuditDeps
                 | ScannerState::SecretAuditPathInput
         );
 

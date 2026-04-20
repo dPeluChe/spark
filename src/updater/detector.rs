@@ -51,9 +51,7 @@ impl Detector {
         match tool.method {
             UpdateMethod::MacApp => get_mac_app_version(&tool.binary).await,
             UpdateMethod::Omz => get_omz_version().await,
-            UpdateMethod::Manual if tool.binary == "antigravity" => {
-                get_antigravity_version().await
-            }
+            UpdateMethod::Manual if tool.binary == "antigravity" => get_antigravity_version().await,
             _ => get_cli_tool_version(tool).await,
         }
     }
@@ -82,7 +80,8 @@ impl Detector {
 }
 
 async fn fetch_brew_outdated(cache: Arc<RwLock<HashMap<String, String>>>) {
-    let output = run_command_lossy("brew", &["outdated", "--json=v2"], Duration::from_secs(30)).await;
+    let output =
+        run_command_lossy("brew", &["outdated", "--json=v2"], Duration::from_secs(30)).await;
     if output.is_empty() {
         return;
     }
@@ -109,8 +108,12 @@ async fn fetch_brew_outdated(cache: Arc<RwLock<HashMap<String, String>>>) {
 }
 
 async fn fetch_npm_outdated(cache: Arc<RwLock<HashMap<String, String>>>) {
-    let output =
-        run_command_lossy("npm", &["outdated", "-g", "--json"], Duration::from_secs(30)).await;
+    let output = run_command_lossy(
+        "npm",
+        &["outdated", "-g", "--json"],
+        Duration::from_secs(30),
+    )
+    .await;
     if output.is_empty() {
         return;
     }
@@ -208,9 +211,16 @@ async fn get_antigravity_version() -> String {
 async fn get_cli_tool_version(tool: &Tool) -> String {
     // Tools without version flags — just check if binary exists
     if tool.binary == "toad" {
-        let exists = std::process::Command::new("which").arg(&tool.binary)
-            .output().map(|o| o.status.success()).unwrap_or(false);
-        return if exists { "Installed".into() } else { "MISSING".into() };
+        let exists = std::process::Command::new("which")
+            .arg(&tool.binary)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        return if exists {
+            "Installed".into()
+        } else {
+            "MISSING".into()
+        };
     }
 
     // Tools that use non-standard version flags

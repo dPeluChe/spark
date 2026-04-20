@@ -26,8 +26,11 @@ pub struct IngestOptions {
 }
 
 pub fn is_trs_available() -> bool {
-    Command::new("trs").arg("--version").output()
-        .map(|o| o.status.success()).unwrap_or(false)
+    Command::new("trs")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 fn ingest_dir() -> PathBuf {
@@ -38,7 +41,10 @@ fn ingest_dir() -> PathBuf {
 }
 
 pub fn ingest_path(host: &str, owner: &str, name: &str) -> PathBuf {
-    ingest_dir().join(host).join(owner).join(format!("{}.md", name))
+    ingest_dir()
+        .join(host)
+        .join(owner)
+        .join(format!("{}.md", name))
 }
 
 #[allow(dead_code)]
@@ -49,25 +55,31 @@ pub fn has_ingest(host: &str, owner: &str, name: &str) -> bool {
 pub fn ingest_info(host: &str, owner: &str, name: &str) -> Option<IngestInfo> {
     let path = ingest_path(host, owner, name);
     let meta = std::fs::metadata(&path).ok()?;
-    let age  = meta.modified().ok()
+    let age = meta
+        .modified()
+        .ok()
         .and_then(|t| t.elapsed().ok())
         .map(|d| d.as_secs());
-    Some(IngestInfo { path, size: meta.len(), age_secs: age })
+    Some(IngestInfo {
+        path,
+        size: meta.len(),
+        age_secs: age,
+    })
 }
 
 pub struct IngestInfo {
-    pub path:     PathBuf,
-    pub size:     u64,
+    pub path: PathBuf,
+    pub size: u64,
     pub age_secs: Option<u64>,
 }
 
 impl IngestInfo {
     pub fn age_display(&self) -> String {
         match self.age_secs {
-            Some(s) if s < 3600  => format!("{}m ago", s / 60),
+            Some(s) if s < 3600 => format!("{}m ago", s / 60),
             Some(s) if s < 86400 => format!("{}h ago", s / 3600),
-            Some(s)              => format!("{}d ago", s / 86400),
-            None                 => "unknown".into(),
+            Some(s) => format!("{}d ago", s / 86400),
+            None => "unknown".into(),
         }
     }
 }
@@ -103,13 +115,19 @@ pub fn generate_ingest(
         args.push("--budget".into());
         args.push(budget.clone());
     }
-    if opts.changed { args.push("--changed".into()); }
+    if opts.changed {
+        args.push("--changed".into());
+    }
     if let Some(ref since) = opts.since {
         args.push("--since".into());
         args.push(since.clone());
     }
-    if opts.deps    { args.push("--deps".into()); }
-    if opts.fresh   { args.push("--fresh".into()); }
+    if opts.deps {
+        args.push("--deps".into());
+    }
+    if opts.fresh {
+        args.push("--fresh".into());
+    }
     if opts.compress {
         args.push("-l".into());
         args.push("aggressive".into());
@@ -133,22 +151,39 @@ pub fn generate_ingest(
 /// List all existing ingest files
 pub fn list_ingests() -> Vec<(String, String, String, IngestInfo)> {
     let base = ingest_dir();
-    if !base.exists() { return Vec::new(); }
+    if !base.exists() {
+        return Vec::new();
+    }
 
     let mut results = Vec::new();
 
     for host_entry in std::fs::read_dir(&base).into_iter().flatten().flatten() {
-        if !host_entry.path().is_dir() { continue; }
+        if !host_entry.path().is_dir() {
+            continue;
+        }
         let host = host_entry.file_name().to_string_lossy().to_string();
 
-        for owner_entry in std::fs::read_dir(host_entry.path()).into_iter().flatten().flatten() {
-            if !owner_entry.path().is_dir() { continue; }
+        for owner_entry in std::fs::read_dir(host_entry.path())
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            if !owner_entry.path().is_dir() {
+                continue;
+            }
             let owner = owner_entry.file_name().to_string_lossy().to_string();
 
-            for file_entry in std::fs::read_dir(owner_entry.path()).into_iter().flatten().flatten() {
+            for file_entry in std::fs::read_dir(owner_entry.path())
+                .into_iter()
+                .flatten()
+                .flatten()
+            {
                 let path = file_entry.path();
-                if path.extension().and_then(|e| e.to_str()) != Some("md") { continue; }
-                let name = path.file_stem()
+                if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                    continue;
+                }
+                let name = path
+                    .file_stem()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_default();
                 if let Some(info) = ingest_info(&host, &owner, &name) {

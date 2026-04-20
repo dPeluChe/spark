@@ -1,8 +1,8 @@
-use ratatui::prelude::*;
-use ratatui::widgets::*;
 use crate::tui::model::*;
 use crate::tui::styles::*;
 use crate::utils::fs::format_size;
+use ratatui::prelude::*;
+use ratatui::widgets::*;
 
 /// Render the scanner mode
 pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
@@ -14,8 +14,11 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
             render_add_path_modal(frame, area, model);
         }
         ScannerState::ContainerLoading => {
-            let repo_name = model.repos.get(model.cursor)
-                .map(|r| r.name.as_str()).unwrap_or("...");
+            let repo_name = model
+                .repos
+                .get(model.cursor)
+                .map(|r| r.name.as_str())
+                .unwrap_or("...");
             let spinner = SPINNER_FRAMES[tick % SPINNER_FRAMES.len()];
             let loading = Paragraph::new(vec![
                 Line::from(""),
@@ -26,7 +29,8 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
                 )),
                 Line::from(""),
                 Line::from(Span::styled("  [ESC] Cancel", Style::default().fg(GRAY))),
-            ]).alignment(Alignment::Center);
+            ])
+            .alignment(Alignment::Center);
             frame.render_widget(loading, area);
         }
         ScannerState::Scanning => render_scanning(frame, area, model, tick),
@@ -119,7 +123,12 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
                 .port_scanner
                 .checked
                 .iter()
-                .filter_map(|&i| app.port_scanner.ports.get(i).map(|p| format!(":{}", p.port)))
+                .filter_map(|&i| {
+                    app.port_scanner
+                        .ports
+                        .get(i)
+                        .map(|p| format!(":{}", p.port))
+                })
                 .collect::<Vec<_>>()
                 .join(", ");
             super::port_view::render_kill_confirm(
@@ -135,7 +144,7 @@ pub fn render_scanner(frame: &mut Frame, area: Rect, app: &App, tick: usize) {
 fn render_scan_config(frame: &mut Frame, area: Rect, model: &ScannerModel) {
     let chunks = Layout::vertical([
         Constraint::Length(4), // title
-        Constraint::Min(5),   // directory list
+        Constraint::Min(5),    // directory list
         Constraint::Length(2), // help
     ])
     .split(area);
@@ -143,7 +152,10 @@ fn render_scan_config(frame: &mut Frame, area: Rect, model: &ScannerModel) {
     let selected_count = model.selected_scan_dirs.len();
     let title = Paragraph::new(vec![
         Line::from(vec![
-            Span::styled(" REPOSITORY SCANNER ", Style::default().fg(WHITE).bg(PURPLE).bold()),
+            Span::styled(
+                " REPOSITORY SCANNER ",
+                Style::default().fg(WHITE).bg(PURPLE).bold(),
+            ),
             Span::raw("  "),
             if selected_count > 0 {
                 Span::styled(
@@ -206,7 +218,11 @@ fn render_scan_config(frame: &mut Frame, area: Rect, model: &ScannerModel) {
             Span::styled(format!("{:<40}", short), dir_style),
             Span::styled(
                 count_label,
-                Style::default().fg(if discovered.repo_count > 10 { GREEN } else { TERM_GRAY }),
+                Style::default().fg(if discovered.repo_count > 10 {
+                    GREEN
+                } else {
+                    TERM_GRAY
+                }),
             ),
         ]));
     }
@@ -247,11 +263,17 @@ fn render_scanning(frame: &mut Frame, area: Rect, model: &ScannerModel, tick: us
     let home = std::env::var("HOME").unwrap_or_default();
 
     // Show selected dirs being scanned
-    let scanning_dirs: Vec<String> = model.selected_scan_dirs.iter()
+    let scanning_dirs: Vec<String> = model
+        .selected_scan_dirs
+        .iter()
         .filter_map(|&i| model.discovered_dirs.get(i))
         .map(|d| {
             let s = d.path.display().to_string();
-            if s.starts_with(&home) { format!("~{}", &s[home.len()..]) } else { s }
+            if s.starts_with(&home) {
+                format!("~{}", &s[home.len()..])
+            } else {
+                s
+            }
         })
         .collect();
 
@@ -275,9 +297,15 @@ fn render_scanning(frame: &mut Frame, area: Rect, model: &ScannerModel, tick: us
     lines.push(Line::from(""));
     lines.push(Line::from(vec![
         Span::styled("  Entries scanned: ", Style::default().fg(GRAY)),
-        Span::styled(format!("{}", model.scan_progress_dirs), Style::default().fg(WHITE)),
+        Span::styled(
+            format!("{}", model.scan_progress_dirs),
+            Style::default().fg(WHITE),
+        ),
         Span::styled("    Repos found: ", Style::default().fg(GRAY)),
-        Span::styled(format!("{}", model.scan_progress_repos), Style::default().fg(GREEN).bold()),
+        Span::styled(
+            format!("{}", model.scan_progress_repos),
+            Style::default().fg(GREEN).bold(),
+        ),
     ]));
 
     if !model.scan_progress_current.is_empty() {
@@ -288,7 +316,7 @@ fn render_scanning(frame: &mut Frame, area: Rect, model: &ScannerModel, tick: us
         };
         // Truncate long paths
         let display = if current.len() > 60 {
-            format!("...{}", &current[current.len()-57..])
+            format!("...{}", &current[current.len() - 57..])
         } else {
             current
         };
@@ -304,16 +332,14 @@ fn render_scanning(frame: &mut Frame, area: Rect, model: &ScannerModel, tick: us
         Style::default().fg(GRAY),
     )));
 
-    let paragraph = Paragraph::new(lines).block(
-        Block::default().padding(Padding::new(2, 2, 1, 1)),
-    );
+    let paragraph = Paragraph::new(lines).block(Block::default().padding(Padding::new(2, 2, 1, 1)));
     frame.render_widget(paragraph, area);
 }
 
 fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
     let chunks = Layout::vertical([
         Constraint::Length(2), // summary bar
-        Constraint::Min(5),   // table
+        Constraint::Min(5),    // table
         Constraint::Length(2), // help
     ])
     .split(area);
@@ -355,7 +381,9 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
 
     let mut rows: Vec<Row> = Vec::new();
     for group in group_order {
-        let group_repos: Vec<(usize, &crate::scanner::repo_scanner::RepoInfo)> = model.repos.iter()
+        let group_repos: Vec<(usize, &crate::scanner::repo_scanner::RepoInfo)> = model
+            .repos
+            .iter()
             .enumerate()
             .filter(|(_, r)| r.group == *group)
             .collect();
@@ -365,10 +393,14 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
         rows.push(
             Row::new(vec![
                 Cell::from(Span::styled(group_label, Style::default().fg(CYAN).bold())),
-                Cell::from(""), Cell::from(""), Cell::from(""),
-                Cell::from(""), Cell::from(""), Cell::from(""),
+                Cell::from(""),
+                Cell::from(""),
+                Cell::from(""),
+                Cell::from(""),
+                Cell::from(""),
+                Cell::from(""),
             ])
-            .style(Style::default().bg(Color::Rgb(25, 25, 35)))
+            .style(Style::default().bg(Color::Rgb(25, 25, 35))),
         );
 
         for (i, repo) in group_repos {
@@ -379,13 +411,19 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
 
             let grade_style = health_grade_style(&repo.health_grade);
 
-            let last_commit = repo.last_commit_date
+            let last_commit = repo
+                .last_commit_date
                 .map(|d| {
                     let days = (chrono::Utc::now() - d).num_days();
-                    if days < 1 { "today".into() }
-                    else if days < 30 { format!("{}d", days) }
-                    else if days < 365 { format!("{}mo", days / 30) }
-                    else { format!("{}y", days / 365) }
+                    if days < 1 {
+                        "today".into()
+                    } else if days < 30 {
+                        format!("{}d", days)
+                    } else if days < 365 {
+                        format!("{}mo", days / 30)
+                    } else {
+                        format!("{}y", days / 365)
+                    }
                 })
                 .unwrap_or_else(|| "-".into());
 
@@ -430,22 +468,46 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
                 "clean".into()
             };
 
-            rows.push(Row::new(vec![
-                Cell::from(name_display).style(name_style),
-                Cell::from(if repo.is_container { "-".into() } else { format!("{}{}", repo.health_grade, repo.health_score) })
-                    .style(if repo.is_container { Style::default().fg(GRAY) } else { grade_style }),
-                Cell::from(if repo.is_container { "container".into() } else { repo.branch.clone() })
-                    .style(if repo.is_container { Style::default().fg(CYAN) } else { Style::default().fg(PURPLE) }),
-                Cell::from(if repo.is_container { "-".into() } else { last_commit }),
-                Cell::from(size_display)
-                    .style(Style::default().fg(GRAY)),
-                Cell::from(cleanup_display)
-                    .style(if repo.artifact_size > 100_000_000 { Style::default().fg(RED) }
-                        else if repo.artifact_size > 10_000_000 { Style::default().fg(YELLOW) }
-                        else { Style::default() }),
-                Cell::from(dirty)
-                    .style(Style::default().fg(YELLOW)),
-            ]).style(row_style));
+            rows.push(
+                Row::new(vec![
+                    Cell::from(name_display).style(name_style),
+                    Cell::from(if repo.is_container {
+                        "-".into()
+                    } else {
+                        format!("{}{}", repo.health_grade, repo.health_score)
+                    })
+                    .style(if repo.is_container {
+                        Style::default().fg(GRAY)
+                    } else {
+                        grade_style
+                    }),
+                    Cell::from(if repo.is_container {
+                        "container".into()
+                    } else {
+                        repo.branch.clone()
+                    })
+                    .style(if repo.is_container {
+                        Style::default().fg(CYAN)
+                    } else {
+                        Style::default().fg(PURPLE)
+                    }),
+                    Cell::from(if repo.is_container {
+                        "-".into()
+                    } else {
+                        last_commit
+                    }),
+                    Cell::from(size_display).style(Style::default().fg(GRAY)),
+                    Cell::from(cleanup_display).style(if repo.artifact_size > 100_000_000 {
+                        Style::default().fg(RED)
+                    } else if repo.artifact_size > 10_000_000 {
+                        Style::default().fg(YELLOW)
+                    } else {
+                        Style::default()
+                    }),
+                    Cell::from(dirty).style(Style::default().fg(YELLOW)),
+                ])
+                .style(row_style),
+            );
         }
     }
 
@@ -456,14 +518,18 @@ fn render_scan_results(frame: &mut Frame, area: Rect, model: &ScannerModel) {
     for row_group in group_order {
         cursor_row_pos += 1; // group header row
         for (i, repo) in model.repos.iter().enumerate() {
-            if repo.group != *row_group { continue; }
+            if repo.group != *row_group {
+                continue;
+            }
             if i == model.cursor {
                 found = true;
                 break;
             }
             cursor_row_pos += 1;
         }
-        if found { break; }
+        if found {
+            break;
+        }
     }
 
     let scroll_offset = if cursor_row_pos >= visible_height {
@@ -521,8 +587,7 @@ fn render_cleaning(frame: &mut Frame, area: Rect, model: &ScannerModel, tick: us
         Line::from(format!("  Progress: {}/{}", completed, total)),
     ];
 
-    let paragraph = Paragraph::new(lines)
-        .block(Block::default().padding(Padding::new(2, 2, 2, 2)));
+    let paragraph = Paragraph::new(lines).block(Block::default().padding(Padding::new(2, 2, 2, 2)));
     frame.render_widget(paragraph, area);
 }
 
@@ -537,9 +602,15 @@ fn render_health_help(frame: &mut Frame, area: Rect) {
     frame.render_widget(block, modal_area);
 
     let lines = vec![
-        Line::from(Span::styled(" HEALTH SCORE ", Style::default().fg(WHITE).bg(PURPLE).bold())),
+        Line::from(Span::styled(
+            " HEALTH SCORE ",
+            Style::default().fg(WHITE).bg(PURPLE).bold(),
+        )),
         Line::from(""),
-        Line::from(Span::styled("  Score 0-100 based on:", Style::default().fg(GRAY))),
+        Line::from(Span::styled(
+            "  Score 0-100 based on:",
+            Style::default().fg(GRAY),
+        )),
         Line::from(""),
         Line::from(vec![
             Span::styled("  Recent commits  ", Style::default().fg(WHITE)),
@@ -558,7 +629,10 @@ fn render_health_help(frame: &mut Frame, area: Rect) {
             Span::styled("-20 if >100MB of artifacts", Style::default().fg(GRAY)),
         ]),
         Line::from(""),
-        Line::from(Span::styled("  Grades:", Style::default().fg(YELLOW).bold())),
+        Line::from(Span::styled(
+            "  Grades:",
+            Style::default().fg(YELLOW).bold(),
+        )),
         Line::from(vec![
             Span::styled("  A", Style::default().fg(GREEN).bold()),
             Span::styled(" 80-100  ", Style::default().fg(GRAY)),
@@ -686,4 +760,3 @@ fn render_add_path_modal(frame: &mut Frame, area: Rect, model: &ScannerModel) {
     let paragraph = Paragraph::new(lines).alignment(Alignment::Center);
     frame.render_widget(paragraph, inner);
 }
-

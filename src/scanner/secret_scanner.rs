@@ -3,11 +3,10 @@
 //! Scans directories recursively for API keys, tokens, passwords, and files
 //! that should not be committed to version control.
 
-use std::path::{Path, PathBuf};
+use super::common;
 use once_cell::sync::Lazy;
 use regex::Regex;
-use super::common;
-
+use std::path::{Path, PathBuf};
 
 /// Severity of a finding
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -101,51 +100,75 @@ pub struct AuditResult {
 
 // --- Regex patterns ---
 
-static AWS_KEY: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?:AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}").unwrap());
-static AWS_SECRET: Lazy<Regex> = Lazy::new(|| Regex::new(r#"(?i)aws[_\-]?secret[_\-]?access[_\-]?key\s*[=:]\s*['"]?([A-Za-z0-9/+=]{40})['"]?"#).unwrap());
+static AWS_KEY: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?:AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}").unwrap());
+static AWS_SECRET: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r#"(?i)aws[_\-]?secret[_\-]?access[_\-]?key\s*[=:]\s*['"]?([A-Za-z0-9/+=]{40})['"]?"#,
+    )
+    .unwrap()
+});
 static GITHUB_TOKEN: Lazy<Regex> = Lazy::new(|| Regex::new(r"ghp_[A-Za-z0-9]{36}").unwrap());
 static GITHUB_OAUTH: Lazy<Regex> = Lazy::new(|| Regex::new(r"gho_[A-Za-z0-9]{36}").unwrap());
-static ANTHROPIC_KEY: Lazy<Regex> = Lazy::new(|| Regex::new(r"sk-ant-api03-[A-Za-z0-9\-_]{80,}").unwrap());
-static OPENAI_KEY: Lazy<Regex> = Lazy::new(|| Regex::new(r"sk-[A-Za-z0-9]{20}T3BlbkFJ[A-Za-z0-9]{20}").unwrap());
+static ANTHROPIC_KEY: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"sk-ant-api03-[A-Za-z0-9\-_]{80,}").unwrap());
+static OPENAI_KEY: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"sk-[A-Za-z0-9]{20}T3BlbkFJ[A-Za-z0-9]{20}").unwrap());
 static GOOGLE_API: Lazy<Regex> = Lazy::new(|| Regex::new(r"AIzaSy[A-Za-z0-9\-_]{33}").unwrap());
 static SENDGRID_KEY: Lazy<Regex> = Lazy::new(|| Regex::new(r"SG\.[A-Za-z0-9\-_]{22,}").unwrap());
-static SLACK_TOKEN: Lazy<Regex> = Lazy::new(|| Regex::new(r"xox[bpors]-[0-9]{10,13}-[0-9a-zA-Z\-]{10,}").unwrap());
-static STRIPE_KEY: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?:sk|pk)_(?:test|live)_[A-Za-z0-9]{20,}").unwrap());
+static SLACK_TOKEN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"xox[bpors]-[0-9]{10,13}-[0-9a-zA-Z\-]{10,}").unwrap());
+static STRIPE_KEY: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?:sk|pk)_(?:test|live)_[A-Za-z0-9]{20,}").unwrap());
 static TWILIO_KEY: Lazy<Regex> = Lazy::new(|| Regex::new(r"SK[a-f0-9]{32}").unwrap());
-static JWT_TOKEN: Lazy<Regex> = Lazy::new(|| Regex::new(r"eyJ[A-Za-z0-9\-_]+\.eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+").unwrap());
-static URL_WITH_PASS: Lazy<Regex> = Lazy::new(|| Regex::new(r"[a-z]+://[^:]+:[^@\s]{3,}@[^\s]+").unwrap());
+static JWT_TOKEN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"eyJ[A-Za-z0-9\-_]+\.eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+").unwrap());
+static URL_WITH_PASS: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"[a-z]+://[^:]+:[^@\s]{3,}@[^\s]+").unwrap());
 static GENERIC_SECRET: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"(?i)(?:password|passwd|secret|token|api[_\-]?key|apikey|auth[_\-]?token|access[_\-]?key)\s*[=:]\s*['"]([^'"]{8,})['"]"#).unwrap()
 });
-static NPM_TOKEN: Lazy<Regex> = Lazy::new(|| Regex::new(r"//registry\.npmjs\.org/:_authToken=\S+").unwrap());
-pub static PRIVATE_KEY_CONTENT: Lazy<Regex> = Lazy::new(|| Regex::new(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----").unwrap());
+static NPM_TOKEN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"//registry\.npmjs\.org/:_authToken=\S+").unwrap());
+pub static PRIVATE_KEY_CONTENT: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----").unwrap());
 
 /// API key patterns: (regex, description) — shared with history_scanner
-pub static API_KEY_PATTERNS: Lazy<Vec<(&Regex, &str)>> = Lazy::new(|| vec![
-    (&AWS_KEY, "AWS Access Key ID"),
-    (&AWS_SECRET, "AWS Secret Access Key"),
-    (&GITHUB_TOKEN, "GitHub Personal Access Token"),
-    (&GITHUB_OAUTH, "GitHub OAuth Token"),
-    (&ANTHROPIC_KEY, "Anthropic API Key"),
-    (&OPENAI_KEY, "OpenAI API Key"),
-    (&GOOGLE_API, "Google API Key"),
-    (&SENDGRID_KEY, "SendGrid API Key"),
-    (&SLACK_TOKEN, "Slack Token"),
-    (&STRIPE_KEY, "Stripe API Key"),
-    (&TWILIO_KEY, "Twilio API Key"),
-    (&JWT_TOKEN, "JWT Token"),
-    (&NPM_TOKEN, "NPM Auth Token"),
-]);
+pub static API_KEY_PATTERNS: Lazy<Vec<(&Regex, &str)>> = Lazy::new(|| {
+    vec![
+        (&AWS_KEY, "AWS Access Key ID"),
+        (&AWS_SECRET, "AWS Secret Access Key"),
+        (&GITHUB_TOKEN, "GitHub Personal Access Token"),
+        (&GITHUB_OAUTH, "GitHub OAuth Token"),
+        (&ANTHROPIC_KEY, "Anthropic API Key"),
+        (&OPENAI_KEY, "OpenAI API Key"),
+        (&GOOGLE_API, "Google API Key"),
+        (&SENDGRID_KEY, "SendGrid API Key"),
+        (&SLACK_TOKEN, "Slack Token"),
+        (&STRIPE_KEY, "Stripe API Key"),
+        (&TWILIO_KEY, "Twilio API Key"),
+        (&JWT_TOKEN, "JWT Token"),
+        (&NPM_TOKEN, "NPM Auth Token"),
+    ]
+});
 
 /// Sensitive filenames (exact match or glob-like)
 const SENSITIVE_FILES: &[(&str, Severity, &str)] = &[
     ("id_rsa", Severity::Critical, "SSH Private Key"),
     ("id_ecdsa", Severity::Critical, "SSH Private Key (ECDSA)"),
-    ("id_ed25519", Severity::Critical, "SSH Private Key (Ed25519)"),
+    (
+        "id_ed25519",
+        Severity::Critical,
+        "SSH Private Key (Ed25519)",
+    ),
     ("id_dsa", Severity::Critical, "SSH Private Key (DSA)"),
     (".htpasswd", Severity::Critical, "Apache Password File"),
     ("credentials.json", Severity::Warning, "Credentials File"),
-    ("service-account.json", Severity::Warning, "Service Account Credentials"),
+    (
+        "service-account.json",
+        Severity::Warning,
+        "Service Account Credentials",
+    ),
     ("keystore.jks", Severity::Warning, "Java Keystore"),
     (".git-credentials", Severity::Critical, "Git Credentials"),
     (".netrc", Severity::Warning, "Netrc Credentials"),
@@ -196,14 +219,25 @@ pub fn scan_directory_with_progress(
             continue;
         }
         files_scanned += 1;
-        if let Some(cb) = &on_progress { cb(files_scanned); }
+        if let Some(cb) = &on_progress {
+            cb(files_scanned);
+        }
         let file_path = entry.path();
 
         // Skip ignored files
-        if common::is_ignored(file_path, path, &ignore_patterns) { continue; }
+        if common::is_ignored(file_path, path, &ignore_patterns) {
+            continue;
+        }
 
         // Skip binary files by extension
-        if common::BINARY_EXT.contains(&file_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase().as_str()) {
+        if common::BINARY_EXT.contains(
+            &file_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_lowercase()
+                .as_str(),
+        ) {
             continue;
         }
 
@@ -238,41 +272,62 @@ fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
 /// Determine context from file path
 fn detect_context(path: &Path) -> FindingContext {
     let path_str = path.display().to_string().to_lowercase();
-    let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
+    let file_name = path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_lowercase();
 
     // Test files
-    if file_name.contains(".test.") || file_name.contains(".spec.")
-        || file_name.contains("_test.") || file_name.contains("_spec.")
-        || path_str.contains("/tests/") || path_str.contains("/__tests__/")
-        || path_str.contains("/test/") || path_str.contains("/spec/")
-        || file_name.starts_with("test_") || file_name.starts_with("test-")
-        || path_str.contains("/smoke/") || path_str.contains("/fixtures/")
+    if file_name.contains(".test.")
+        || file_name.contains(".spec.")
+        || file_name.contains("_test.")
+        || file_name.contains("_spec.")
+        || path_str.contains("/tests/")
+        || path_str.contains("/__tests__/")
+        || path_str.contains("/test/")
+        || path_str.contains("/spec/")
+        || file_name.starts_with("test_")
+        || file_name.starts_with("test-")
+        || path_str.contains("/smoke/")
+        || path_str.contains("/fixtures/")
     {
         return FindingContext::Test;
     }
 
     // Documentation
-    if file_name.ends_with(".md") || file_name.ends_with(".rst")
-        || file_name.ends_with(".txt") || file_name.ends_with(".adoc")
-        || path_str.contains("/docs/") || path_str.contains("/documentation/")
+    if file_name.ends_with(".md")
+        || file_name.ends_with(".rst")
+        || file_name.ends_with(".txt")
+        || file_name.ends_with(".adoc")
+        || path_str.contains("/docs/")
+        || path_str.contains("/documentation/")
     {
         return FindingContext::Documentation;
     }
 
     // Build artifacts
-    if path_str.contains("/dist/") || path_str.contains("/build/")
-        || path_str.contains("/dist-") || path_str.contains("/.output/")
+    if path_str.contains("/dist/")
+        || path_str.contains("/build/")
+        || path_str.contains("/dist-")
+        || path_str.contains("/.output/")
     {
         return FindingContext::BuildArtifact;
     }
 
     // Config files
-    if file_name.starts_with('.') || file_name.ends_with(".json")
-        || file_name.ends_with(".toml") || file_name.ends_with(".yaml")
-        || file_name.ends_with(".yml") || file_name.ends_with(".ini")
-        || file_name.ends_with(".cfg") || file_name.ends_with(".conf")
-        || path_str.contains("/config/") || path_str.contains("/scripts/")
-        || file_name.contains("config") || file_name == "seed.ts"
+    if file_name.starts_with('.')
+        || file_name.ends_with(".json")
+        || file_name.ends_with(".toml")
+        || file_name.ends_with(".yaml")
+        || file_name.ends_with(".yml")
+        || file_name.ends_with(".ini")
+        || file_name.ends_with(".cfg")
+        || file_name.ends_with(".conf")
+        || path_str.contains("/config/")
+        || path_str.contains("/scripts/")
+        || file_name.contains("config")
+        || file_name == "seed.ts"
         || file_name == "seed.js"
     {
         return FindingContext::Config;
@@ -284,7 +339,9 @@ fn detect_context(path: &Path) -> FindingContext {
 /// Check if a URL contains a safe domain (not credentials)
 fn is_safe_url(url: &str) -> bool {
     let lower = url.to_lowercase();
-    common::SAFE_URL_DOMAINS.iter().any(|domain| lower.contains(domain))
+    common::SAFE_URL_DOMAINS
+        .iter()
+        .any(|domain| lower.contains(domain))
 }
 
 /// Find the project (nearest .git parent) for a file
@@ -292,7 +349,8 @@ fn find_project(file_path: &Path, scan_root: &Path) -> (String, PathBuf) {
     let mut check = file_path.parent().unwrap_or(scan_root).to_path_buf();
     loop {
         if check.join(".git").exists() {
-            let name = check.file_name()
+            let name = check
+                .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| check.display().to_string());
             return (name, check);
@@ -302,7 +360,8 @@ fn find_project(file_path: &Path, scan_root: &Path) -> (String, PathBuf) {
         }
     }
     // No git parent found — use scan root
-    let name = scan_root.file_name()
+    let name = scan_root
+        .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "unknown".into());
     (name, scan_root.to_path_buf())
@@ -318,11 +377,15 @@ fn check_filename(path: &Path, project_name: &str, project_path: &Path) -> Vec<S
     for (name, severity, desc) in SENSITIVE_FILES {
         if file_name.as_ref() == *name {
             findings.push(SecretFinding {
-                file_path: path.to_path_buf(), line_number: 0,
-                category: FindingCategory::SensitiveFile, severity: *severity,
-                context: ctx.clone(), description: desc.to_string(),
+                file_path: path.to_path_buf(),
+                line_number: 0,
+                category: FindingCategory::SensitiveFile,
+                severity: *severity,
+                context: ctx.clone(),
+                description: desc.to_string(),
                 redacted_match: file_name.to_string(),
-                project_name: project_name.to_string(), project_path: project_path.to_path_buf(),
+                project_name: project_name.to_string(),
+                project_path: project_path.to_path_buf(),
             });
         }
     }
@@ -332,11 +395,15 @@ fn check_filename(path: &Path, project_name: &str, project_path: &Path) -> Vec<S
         for (sensitive_ext, severity, desc) in SENSITIVE_EXTENSIONS {
             if ext.eq_ignore_ascii_case(sensitive_ext) {
                 findings.push(SecretFinding {
-                    file_path: path.to_path_buf(), line_number: 0,
-                    category: FindingCategory::PrivateKey, severity: *severity,
-                    context: ctx.clone(), description: desc.to_string(),
+                    file_path: path.to_path_buf(),
+                    line_number: 0,
+                    category: FindingCategory::PrivateKey,
+                    severity: *severity,
+                    context: ctx.clone(),
+                    description: desc.to_string(),
                     redacted_match: file_name.to_string(),
-                    project_name: project_name.to_string(), project_path: project_path.to_path_buf(),
+                    project_name: project_name.to_string(),
+                    project_path: project_path.to_path_buf(),
                 });
             }
         }
@@ -344,29 +411,40 @@ fn check_filename(path: &Path, project_name: &str, project_path: &Path) -> Vec<S
 
     // .env files — info level
     if (file_name == ".env" || file_name.starts_with(".env."))
-        && !file_name.contains("example") && !file_name.contains("sample") && !file_name.contains("template")
+        && !file_name.contains("example")
+        && !file_name.contains("sample")
+        && !file_name.contains("template")
     {
         findings.push(SecretFinding {
-            file_path: path.to_path_buf(), line_number: 0,
-            category: FindingCategory::EnvFile, severity: Severity::Info,
+            file_path: path.to_path_buf(),
+            line_number: 0,
+            category: FindingCategory::EnvFile,
+            severity: Severity::Info,
             context: FindingContext::Config,
             description: "Environment file (may contain secrets)".into(),
             redacted_match: file_name.to_string(),
-            project_name: project_name.to_string(), project_path: project_path.to_path_buf(),
+            project_name: project_name.to_string(),
+            project_path: project_path.to_path_buf(),
         });
     }
 
     // Known credential config files
     for config_file in CREDENTIAL_CONFIG_FILES {
-        let config_name = Path::new(config_file).file_name().unwrap_or_default().to_string_lossy();
+        let config_name = Path::new(config_file)
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy();
         if file_name.as_ref() == config_name.as_ref() {
             findings.push(SecretFinding {
-                file_path: path.to_path_buf(), line_number: 0,
-                category: FindingCategory::Credential, severity: Severity::Warning,
+                file_path: path.to_path_buf(),
+                line_number: 0,
+                category: FindingCategory::Credential,
+                severity: Severity::Warning,
                 context: FindingContext::Config,
                 description: format!("Config file that may contain credentials ({})", config_file),
                 redacted_match: file_name.to_string(),
-                project_name: project_name.to_string(), project_path: project_path.to_path_buf(),
+                project_name: project_name.to_string(),
+                project_path: project_path.to_path_buf(),
             });
         }
     }
@@ -390,7 +468,13 @@ fn check_content(path: &Path, project_name: &str, project_path: &Path) -> Vec<Se
     let adjust_severity = |base: Severity| -> Severity {
         match ctx {
             FindingContext::Test | FindingContext::Documentation => Severity::Info,
-            FindingContext::Config => if base == Severity::Critical { Severity::Warning } else { base },
+            FindingContext::Config => {
+                if base == Severity::Critical {
+                    Severity::Warning
+                } else {
+                    base
+                }
+            }
             _ => base,
         }
     };
@@ -398,22 +482,36 @@ fn check_content(path: &Path, project_name: &str, project_path: &Path) -> Vec<Se
     for (line_num, line) in content.lines().enumerate() {
         let trimmed = line.trim();
 
-        if is_rust && trimmed.contains("#[cfg(test)]") { in_test_block = true; }
-        if in_test_block { continue; }
+        if is_rust && trimmed.contains("#[cfg(test)]") {
+            in_test_block = true;
+        }
+        if in_test_block {
+            continue;
+        }
 
-        if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with("//") { continue; }
-        if is_test_code(trimmed) { continue; }
-        if common::is_likely_false_positive(trimmed) { continue; }
+        if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with("//") {
+            continue;
+        }
+        if is_test_code(trimmed) {
+            continue;
+        }
+        if common::is_likely_false_positive(trimmed) {
+            continue;
+        }
 
         // API key patterns
         for (pattern, desc) in API_KEY_PATTERNS.iter() {
             if let Some(m) = pattern.find(trimmed) {
                 findings.push(SecretFinding {
-                    file_path: path.to_path_buf(), line_number: line_num + 1,
-                    category: FindingCategory::ApiKey, severity: adjust_severity(Severity::Critical),
-                    context: ctx.clone(), description: desc.to_string(),
+                    file_path: path.to_path_buf(),
+                    line_number: line_num + 1,
+                    category: FindingCategory::ApiKey,
+                    severity: adjust_severity(Severity::Critical),
+                    context: ctx.clone(),
+                    description: desc.to_string(),
                     redacted_match: common::redact(m.as_str()),
-                    project_name: project_name.to_string(), project_path: project_path.to_path_buf(),
+                    project_name: project_name.to_string(),
+                    project_path: project_path.to_path_buf(),
                 });
             }
         }
@@ -421,11 +519,15 @@ fn check_content(path: &Path, project_name: &str, project_path: &Path) -> Vec<Se
         // Private key content — skip if it's inside quotes (string literal / regex pattern)
         if PRIVATE_KEY_CONTENT.is_match(trimmed) && !is_key_reference(trimmed) {
             findings.push(SecretFinding {
-                file_path: path.to_path_buf(), line_number: line_num + 1,
-                category: FindingCategory::PrivateKey, severity: adjust_severity(Severity::Critical),
-                context: ctx.clone(), description: "Private Key content".into(),
+                file_path: path.to_path_buf(),
+                line_number: line_num + 1,
+                category: FindingCategory::PrivateKey,
+                severity: adjust_severity(Severity::Critical),
+                context: ctx.clone(),
+                description: "Private Key content".into(),
                 redacted_match: "-----BEGIN PRIVATE KEY-----".into(),
-                project_name: project_name.to_string(), project_path: project_path.to_path_buf(),
+                project_name: project_name.to_string(),
+                project_path: project_path.to_path_buf(),
             });
         }
 
@@ -433,11 +535,15 @@ fn check_content(path: &Path, project_name: &str, project_path: &Path) -> Vec<Se
         if let Some(m) = URL_WITH_PASS.find(trimmed) {
             if !is_safe_url(m.as_str()) {
                 findings.push(SecretFinding {
-                    file_path: path.to_path_buf(), line_number: line_num + 1,
-                    category: FindingCategory::EmbeddedPassword, severity: adjust_severity(Severity::Critical),
-                    context: ctx.clone(), description: "URL with embedded credentials".into(),
+                    file_path: path.to_path_buf(),
+                    line_number: line_num + 1,
+                    category: FindingCategory::EmbeddedPassword,
+                    severity: adjust_severity(Severity::Critical),
+                    context: ctx.clone(),
+                    description: "URL with embedded credentials".into(),
                     redacted_match: redact_url(m.as_str()),
-                    project_name: project_name.to_string(), project_path: project_path.to_path_buf(),
+                    project_name: project_name.to_string(),
+                    project_path: project_path.to_path_buf(),
                 });
             }
         }
@@ -445,11 +551,15 @@ fn check_content(path: &Path, project_name: &str, project_path: &Path) -> Vec<Se
         // Generic secret assignments
         if GENERIC_SECRET.is_match(trimmed) {
             findings.push(SecretFinding {
-                file_path: path.to_path_buf(), line_number: line_num + 1,
-                category: FindingCategory::Credential, severity: adjust_severity(Severity::Warning),
-                context: ctx.clone(), description: "Hardcoded credential assignment".into(),
+                file_path: path.to_path_buf(),
+                line_number: line_num + 1,
+                category: FindingCategory::Credential,
+                severity: adjust_severity(Severity::Warning),
+                context: ctx.clone(),
+                description: "Hardcoded credential assignment".into(),
                 redacted_match: redact_generic(trimmed),
-                project_name: project_name.to_string(), project_path: project_path.to_path_buf(),
+                project_name: project_name.to_string(),
+                project_path: project_path.to_path_buf(),
             });
         }
     }
@@ -461,20 +571,29 @@ fn check_content(path: &Path, project_name: &str, project_path: &Path) -> Vec<Se
 fn is_key_reference(line: &str) -> bool {
     // Inside string literal: r"-----BEGIN", "-----BEGIN", '-----BEGIN'
     let trimmed = line.trim();
-    trimmed.contains("r\"-----") || trimmed.contains("r#\"-----")
-        || trimmed.contains("\"-----BEGIN") || trimmed.contains("'-----BEGIN")
-        || trimmed.contains("Regex::new") || trimmed.contains("regex!")
-        || trimmed.contains("contains(") || trimmed.contains("is_match")
-        || trimmed.contains("static ") || trimmed.contains("const ")
+    trimmed.contains("r\"-----")
+        || trimmed.contains("r#\"-----")
+        || trimmed.contains("\"-----BEGIN")
+        || trimmed.contains("'-----BEGIN")
+        || trimmed.contains("Regex::new")
+        || trimmed.contains("regex!")
+        || trimmed.contains("contains(")
+        || trimmed.contains("is_match")
+        || trimmed.contains("static ")
+        || trimmed.contains("const ")
 }
 
 /// Check if a line is test/fixture code writing fake secrets
 fn is_test_code(line: &str) -> bool {
     let lower = line.to_lowercase();
-    lower.contains("fs::write") || lower.contains("assert!")
-        || lower.contains("assert_eq!") || lower.contains("assert_ne!")
-        || lower.contains("expect(") || lower.contains(".to_contain(")
-        || lower.contains("mock") || lower.contains("fixture")
+    lower.contains("fs::write")
+        || lower.contains("assert!")
+        || lower.contains("assert_eq!")
+        || lower.contains("assert_ne!")
+        || lower.contains("expect(")
+        || lower.contains(".to_contain(")
+        || lower.contains("mock")
+        || lower.contains("fixture")
         || lower.contains("fn test_")
 }
 
@@ -508,32 +627,51 @@ fn group_by_project(findings: Vec<SecretFinding>) -> Vec<AuditResult> {
 
     let mut groups: BTreeMap<PathBuf, (String, Vec<SecretFinding>)> = BTreeMap::new();
     for f in findings {
-        let entry = groups.entry(f.project_path.clone())
+        let entry = groups
+            .entry(f.project_path.clone())
             .or_insert_with(|| (f.project_name.clone(), Vec::new()));
         entry.1.push(f);
     }
 
-    let mut results: Vec<AuditResult> = groups.into_iter().map(|(path, (name, mut findings))| {
-        findings.sort_by(|a, b| a.context.cmp(&b.context)
-            .then(a.severity.cmp(&b.severity))
-            .then(a.file_path.cmp(&b.file_path))
-            .then(a.line_number.cmp(&b.line_number)));
-        let critical = findings.iter().filter(|f| f.severity == Severity::Critical).count();
-        let warning = findings.iter().filter(|f| f.severity == Severity::Warning).count();
-        let info = findings.iter().filter(|f| f.severity == Severity::Info).count();
-        AuditResult {
-            project_name: name,
-            project_path: path,
-            findings,
-            critical_count: critical,
-            warning_count: warning,
-            info_count: info,
-        }
-    }).collect();
+    let mut results: Vec<AuditResult> = groups
+        .into_iter()
+        .map(|(path, (name, mut findings))| {
+            findings.sort_by(|a, b| {
+                a.context
+                    .cmp(&b.context)
+                    .then(a.severity.cmp(&b.severity))
+                    .then(a.file_path.cmp(&b.file_path))
+                    .then(a.line_number.cmp(&b.line_number))
+            });
+            let critical = findings
+                .iter()
+                .filter(|f| f.severity == Severity::Critical)
+                .count();
+            let warning = findings
+                .iter()
+                .filter(|f| f.severity == Severity::Warning)
+                .count();
+            let info = findings
+                .iter()
+                .filter(|f| f.severity == Severity::Info)
+                .count();
+            AuditResult {
+                project_name: name,
+                project_path: path,
+                findings,
+                critical_count: critical,
+                warning_count: warning,
+                info_count: info,
+            }
+        })
+        .collect();
 
     // Sort: most critical first
-    results.sort_by(|a, b| b.critical_count.cmp(&a.critical_count)
-        .then(b.warning_count.cmp(&a.warning_count)));
+    results.sort_by(|a, b| {
+        b.critical_count
+            .cmp(&a.critical_count)
+            .then(b.warning_count.cmp(&a.warning_count))
+    });
     results
 }
 
@@ -558,11 +696,17 @@ mod tests {
     fn test_github_token_detection() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("script.sh");
-        fs::write(&file, "GITHUB_TOKEN=ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij\n").unwrap();
+        fs::write(
+            &file,
+            "GITHUB_TOKEN=ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij\n",
+        )
+        .unwrap();
         fs::create_dir_all(dir.path().join(".git")).unwrap();
         let results = scan_directory(dir.path());
         let all_findings: Vec<_> = results.iter().flat_map(|r| &r.findings).collect();
-        assert!(all_findings.iter().any(|f| f.description.contains("GitHub")));
+        assert!(all_findings
+            .iter()
+            .any(|f| f.description.contains("GitHub")));
     }
 
     #[test]
@@ -573,7 +717,9 @@ mod tests {
         fs::create_dir_all(dir.path().join(".git")).unwrap();
         let results = scan_directory(dir.path());
         let all_findings: Vec<_> = results.iter().flat_map(|r| &r.findings).collect();
-        assert!(all_findings.iter().any(|f| f.severity == Severity::Info && f.category == FindingCategory::EnvFile));
+        assert!(all_findings
+            .iter()
+            .any(|f| f.severity == Severity::Info && f.category == FindingCategory::EnvFile));
     }
 
     #[test]
@@ -584,7 +730,9 @@ mod tests {
         fs::create_dir_all(dir.path().join(".git")).unwrap();
         let results = scan_directory(dir.path());
         let all_findings: Vec<_> = results.iter().flat_map(|r| &r.findings).collect();
-        assert!(!all_findings.iter().any(|f| f.category == FindingCategory::EnvFile));
+        assert!(!all_findings
+            .iter()
+            .any(|f| f.category == FindingCategory::EnvFile));
     }
 
     #[test]
@@ -595,15 +743,26 @@ mod tests {
         fs::create_dir_all(dir.path().join(".git")).unwrap();
         let results = scan_directory(dir.path());
         let all_findings: Vec<_> = results.iter().flat_map(|r| &r.findings).collect();
-        assert!(all_findings.iter().any(|f| f.severity == Severity::Critical && f.category == FindingCategory::PrivateKey));
+        assert!(
+            all_findings
+                .iter()
+                .any(|f| f.severity == Severity::Critical
+                    && f.category == FindingCategory::PrivateKey)
+        );
     }
 
     #[test]
     fn test_false_positive_filter() {
-        assert!(common::is_likely_false_positive("api_key = 'your_api_key_here'"));
+        assert!(common::is_likely_false_positive(
+            "api_key = 'your_api_key_here'"
+        ));
         assert!(common::is_likely_false_positive("password = 'changeme'"));
-        assert!(common::is_likely_false_positive("# example: token = sk-xxx"));
-        assert!(!common::is_likely_false_positive("AWS_SECRET=wJalrXUtnFEMI/K7MDENG/bPxRfi"));
+        assert!(common::is_likely_false_positive(
+            "# example: token = sk-xxx"
+        ));
+        assert!(!common::is_likely_false_positive(
+            "AWS_SECRET=wJalrXUtnFEMI/K7MDENG/bPxRfi"
+        ));
     }
 
     #[test]
@@ -650,11 +809,17 @@ mod tests {
     fn test_url_with_password() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("deploy.sh");
-        fs::write(&file, "curl https://admin:supersecret@api.internal.io/data\n").unwrap();
+        fs::write(
+            &file,
+            "curl https://admin:supersecret@api.internal.io/data\n",
+        )
+        .unwrap();
         fs::create_dir_all(dir.path().join(".git")).unwrap();
         let results = scan_directory(dir.path());
         let all_findings: Vec<_> = results.iter().flat_map(|r| &r.findings).collect();
-        assert!(all_findings.iter().any(|f| f.category == FindingCategory::EmbeddedPassword));
+        assert!(all_findings
+            .iter()
+            .any(|f| f.category == FindingCategory::EmbeddedPassword));
     }
 
     #[test]
@@ -665,17 +830,25 @@ mod tests {
         fs::create_dir_all(dir.path().join(".git")).unwrap();
         let results = scan_directory(dir.path());
         let all_findings: Vec<_> = results.iter().flat_map(|r| &r.findings).collect();
-        assert!(all_findings.iter().any(|f| f.category == FindingCategory::Credential));
+        assert!(all_findings
+            .iter()
+            .any(|f| f.category == FindingCategory::Credential));
     }
 
     #[test]
     fn test_private_key_content() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("key.txt");
-        fs::write(&file, "-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----\n").unwrap();
+        fs::write(
+            &file,
+            "-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----\n",
+        )
+        .unwrap();
         fs::create_dir_all(dir.path().join(".git")).unwrap();
         let results = scan_directory(dir.path());
         let all_findings: Vec<_> = results.iter().flat_map(|r| &r.findings).collect();
-        assert!(all_findings.iter().any(|f| f.category == FindingCategory::PrivateKey));
+        assert!(all_findings
+            .iter()
+            .any(|f| f.category == FindingCategory::PrivateKey));
     }
 }

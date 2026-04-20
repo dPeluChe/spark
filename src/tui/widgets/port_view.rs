@@ -1,8 +1,8 @@
-use ratatui::prelude::*;
-use ratatui::widgets::*;
+use crate::scanner::port_scanner::{self, Runtime};
 use crate::tui::model::*;
 use crate::tui::styles::*;
-use crate::scanner::port_scanner::{self, Runtime};
+use ratatui::prelude::*;
+use ratatui::widgets::*;
 
 /// Color for a runtime badge
 fn runtime_color(runtime: &Runtime) -> Color {
@@ -65,7 +65,7 @@ fn extract_short_path(project_dir: &Option<String>) -> String {
 pub fn render_ports(frame: &mut Frame, area: Rect, model: &PortScannerModel) {
     let chunks = Layout::vertical([
         Constraint::Length(3), // header
-        Constraint::Min(5),   // port table
+        Constraint::Min(5),    // port table
         Constraint::Length(1), // help
     ])
     .split(area);
@@ -84,23 +84,37 @@ pub fn render_ports(frame: &mut Frame, area: Rect, model: &PortScannerModel) {
 }
 
 fn render_header(frame: &mut Frame, area: Rect, model: &PortScannerModel) {
-    let dev_count = model.ports.iter().filter(|p| port_scanner::is_dev_server(p)).count();
+    let dev_count = model
+        .ports
+        .iter()
+        .filter(|p| port_scanner::is_dev_server(p))
+        .count();
     let sys_count = model.ports.len().saturating_sub(dev_count);
 
-    let mut runtime_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut runtime_counts: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
     for p in &model.ports {
         if port_scanner::is_dev_server(p) {
-            *runtime_counts.entry(p.runtime.short_label().to_string()).or_default() += 1;
+            *runtime_counts
+                .entry(p.runtime.short_label().to_string())
+                .or_default() += 1;
         }
     }
     let mut rt_parts: Vec<(String, usize)> = runtime_counts.into_iter().collect();
     rt_parts.sort_by_key(|b| std::cmp::Reverse(b.1));
-    let runtime_summary: String = rt_parts.iter().map(|(k, v)| format!("{}:{}", k, v)).collect::<Vec<_>>().join(" ");
+    let runtime_summary: String = rt_parts
+        .iter()
+        .map(|(k, v)| format!("{}:{}", k, v))
+        .collect::<Vec<_>>()
+        .join(" ");
 
     let status = if model.scanning {
         Span::styled("scanning...", Style::default().fg(YELLOW).italic())
     } else {
-        Span::styled(format!("{} listening", model.ports.len()), Style::default().fg(GRAY))
+        Span::styled(
+            format!("{} listening", model.ports.len()),
+            Style::default().fg(GRAY),
+        )
     };
 
     let header = Paragraph::new(vec![
@@ -109,7 +123,10 @@ fn render_header(frame: &mut Frame, area: Rect, model: &PortScannerModel) {
             Span::raw("  "),
             status,
             Span::raw("  "),
-            Span::styled(format!("{} dev", dev_count), Style::default().fg(GREEN).bold()),
+            Span::styled(
+                format!("{} dev", dev_count),
+                Style::default().fg(GREEN).bold(),
+            ),
             Span::raw("  "),
             Span::styled(format!("{} system", sys_count), Style::default().fg(GRAY)),
             Span::raw("  "),
@@ -136,9 +153,15 @@ fn render_scanning(frame: &mut Frame, area: Rect) {
     let lines = vec![
         Line::from(""),
         Line::from(""),
-        Line::from(Span::styled("  Analyzing listening ports...", Style::default().fg(YELLOW))),
+        Line::from(Span::styled(
+            "  Analyzing listening ports...",
+            Style::default().fg(YELLOW),
+        )),
         Line::from(""),
-        Line::from(Span::styled("  Resolving processes and project paths", Style::default().fg(GRAY))),
+        Line::from(Span::styled(
+            "  Resolving processes and project paths",
+            Style::default().fg(GRAY),
+        )),
     ];
     frame.render_widget(Paragraph::new(lines).alignment(Alignment::Center), inner);
 }
@@ -155,9 +178,15 @@ fn render_empty(frame: &mut Frame, area: Rect) {
     let lines = vec![
         Line::from(""),
         Line::from(""),
-        Line::from(Span::styled("  No listening ports detected", Style::default().fg(GRAY))),
+        Line::from(Span::styled(
+            "  No listening ports detected",
+            Style::default().fg(GRAY),
+        )),
         Line::from(""),
-        Line::from(Span::styled("  Press [r] to rescan", Style::default().fg(TERM_GRAY))),
+        Line::from(Span::styled(
+            "  Press [r] to rescan",
+            Style::default().fg(TERM_GRAY),
+        )),
     ];
     frame.render_widget(Paragraph::new(lines).alignment(Alignment::Center), inner);
 }
@@ -178,13 +207,19 @@ fn render_port_table(frame: &mut Frame, area: Rect, model: &PortScannerModel) {
     // Build display list with section headers
     let mut display_items: Vec<DisplayItem> = Vec::new();
     if !dev_indices.is_empty() {
-        display_items.push(DisplayItem::Section(format!(" Dev Servers ({})", dev_indices.len())));
+        display_items.push(DisplayItem::Section(format!(
+            " Dev Servers ({})",
+            dev_indices.len()
+        )));
         for &i in &dev_indices {
             display_items.push(DisplayItem::Port(i));
         }
     }
     if !sys_indices.is_empty() {
-        display_items.push(DisplayItem::Section(format!(" System & Apps ({})", sys_indices.len())));
+        display_items.push(DisplayItem::Section(format!(
+            " System & Apps ({})",
+            sys_indices.len()
+        )));
         for &i in &sys_indices {
             display_items.push(DisplayItem::Port(i));
         }
@@ -204,20 +239,18 @@ fn render_port_table(frame: &mut Frame, area: Rect, model: &PortScannerModel) {
     let rows: Vec<Row> = display_items
         .iter()
         .map(|item| match item {
-            DisplayItem::Section(title) => {
-                Row::new(vec![
-                    Cell::from(""),
-                    Cell::from(""),
-                    Cell::from(""),
-                    Cell::from(""),
-                    Cell::from(Span::styled(
-                        title.clone(),
-                        Style::default().fg(CYAN).bold().italic(),
-                    )),
-                    Cell::from(""),
-                ])
-                .style(Style::default().bg(Color::Rgb(25, 25, 35)))
-            }
+            DisplayItem::Section(title) => Row::new(vec![
+                Cell::from(""),
+                Cell::from(""),
+                Cell::from(""),
+                Cell::from(""),
+                Cell::from(Span::styled(
+                    title.clone(),
+                    Style::default().fg(CYAN).bold().italic(),
+                )),
+                Cell::from(""),
+            ])
+            .style(Style::default().bg(Color::Rgb(25, 25, 35))),
             DisplayItem::Port(idx) => {
                 let i = *idx;
                 let port_info = &model.ports[i];
@@ -257,18 +290,14 @@ fn render_port_table(frame: &mut Frame, area: Rect, model: &PortScannerModel) {
                         .style(port_style),
                     Cell::from(format!(" {} ", rt_label))
                         .style(Style::default().fg(WHITE).bg(rt_color).bold()),
-                    Cell::from(format!("{}", port_info.pid))
-                        .style(Style::default().fg(TERM_GRAY)),
-                    Cell::from(port_info.process_name.clone())
-                        .style(process_style),
-                    Cell::from(project)
-                        .style(if is_devport {
-                            Style::default().fg(GREEN)
-                        } else {
-                            Style::default().fg(TERM_GRAY)
-                        }),
-                    Cell::from(path)
-                        .style(Style::default().fg(TERM_GRAY)),
+                    Cell::from(format!("{}", port_info.pid)).style(Style::default().fg(TERM_GRAY)),
+                    Cell::from(port_info.process_name.clone()).style(process_style),
+                    Cell::from(project).style(if is_devport {
+                        Style::default().fg(GREEN)
+                    } else {
+                        Style::default().fg(TERM_GRAY)
+                    }),
+                    Cell::from(path).style(Style::default().fg(TERM_GRAY)),
                 ])
                 .style(row_style)
             }
@@ -278,11 +307,11 @@ fn render_port_table(frame: &mut Frame, area: Rect, model: &PortScannerModel) {
     let table = Table::new(
         rows,
         [
-            Constraint::Length(16),  // Port
-            Constraint::Length(6),   // Lang
-            Constraint::Length(8),   // PID
-            Constraint::Length(14),  // Process
-            Constraint::Length(22),  // Project
+            Constraint::Length(16), // Port
+            Constraint::Length(6),  // Lang
+            Constraint::Length(8),  // PID
+            Constraint::Length(14), // Process
+            Constraint::Length(22), // Project
             Constraint::Min(20),    // Path
         ],
     )
@@ -308,7 +337,8 @@ fn render_help(frame: &mut Frame, area: Rect, model: &PortScannerModel) {
             selected_count
         )
     } else {
-        " [ENTER] Details  [SPACE] Select  [x] Kill  [X] Kill all dev  [r] Rescan  [TAB] Switch".to_string()
+        " [ENTER] Details  [SPACE] Select  [x] Kill  [X] Kill all dev  [r] Rescan  [TAB] Switch"
+            .to_string()
     };
     let help = Paragraph::new(Span::styled(help_text, Style::default().fg(GRAY)));
     frame.render_widget(help, area);
@@ -353,7 +383,10 @@ pub fn render_action_modal(frame: &mut Frame, area: Rect, model: &PortScannerMod
         Line::from(vec![
             Span::styled("  Process:  ", Style::default().fg(PURPLE)),
             Span::styled(&port_info.process_name, Style::default().fg(WHITE)),
-            Span::styled(format!("  (PID {})", port_info.pid), Style::default().fg(GRAY)),
+            Span::styled(
+                format!("  (PID {})", port_info.pid),
+                Style::default().fg(GRAY),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  Runtime:  ", Style::default().fg(PURPLE)),
@@ -385,7 +418,10 @@ pub fn render_action_modal(frame: &mut Frame, area: Rect, model: &PortScannerMod
     ]));
     lines.push(Line::from(vec![
         Span::styled("  [o] ", Style::default().fg(BLUE).bold()),
-        Span::styled("Open project folder in terminal", Style::default().fg(WHITE)),
+        Span::styled(
+            "Open project folder in terminal",
+            Style::default().fg(WHITE),
+        ),
     ]));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
@@ -398,12 +434,7 @@ pub fn render_action_modal(frame: &mut Frame, area: Rect, model: &PortScannerMod
 }
 
 /// Render kill confirmation modal
-pub fn render_kill_confirm(
-    frame: &mut Frame,
-    area: Rect,
-    count: usize,
-    ports: &str,
-) {
+pub fn render_kill_confirm(frame: &mut Frame, area: Rect, count: usize, ports: &str) {
     let modal_area = center_modal(frame, area, 55, 10);
 
     let block = Block::default()
@@ -427,10 +458,7 @@ pub fn render_kill_confirm(
         )),
         Line::from(Span::styled(ports, Style::default().fg(YELLOW).bold())),
         Line::from(""),
-        Line::from(Span::styled(
-            "Proceed? (y/N)",
-            Style::default().fg(WHITE),
-        )),
+        Line::from(Span::styled("Proceed? (y/N)", Style::default().fg(WHITE))),
     ];
 
     let paragraph = Paragraph::new(lines).alignment(Alignment::Center);

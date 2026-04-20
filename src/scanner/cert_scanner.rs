@@ -12,8 +12,8 @@ use x509_parser::prelude::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CertStatus {
     Expired,
-    Expiring30,  // <= 30 days
-    Expiring90,  // <= 90 days
+    Expiring30, // <= 30 days
+    Expiring90, // <= 90 days
     Valid,
 }
 
@@ -76,8 +76,17 @@ const KEY_EXTENSIONS: &[&str] = &["key", "p12", "pfx", "jks"];
 
 /// Directories to skip
 const SKIP_DIRS: &[&str] = &[
-    "node_modules", ".git", "target", "dist", "build", ".venv", "venv",
-    "__pycache__", ".next", "vendor", ".cargo",
+    "node_modules",
+    ".git",
+    "target",
+    "dist",
+    "build",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".next",
+    "vendor",
+    ".cargo",
 ];
 
 /// Scan a directory for certificate files and parse them.
@@ -88,17 +97,23 @@ pub fn scan_directory_certs(path: &Path) -> Vec<CertInfo> {
         .max_depth(6)
         .into_iter()
         .filter_entry(|e| {
-            if !e.file_type().is_dir() { return true; }
+            if !e.file_type().is_dir() {
+                return true;
+            }
             let name = e.file_name().to_string_lossy();
             !SKIP_DIRS.contains(&name.as_ref())
         })
         .filter_map(|e| e.ok())
     {
-        if !entry.file_type().is_file() { continue; }
+        if !entry.file_type().is_file() {
+            continue;
+        }
         let file_path = entry.path();
 
         let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        if !CERT_EXTENSIONS.contains(&ext.to_lowercase().as_str()) { continue; }
+        if !CERT_EXTENSIONS.contains(&ext.to_lowercase().as_str()) {
+            continue;
+        }
 
         certs.extend(parse_cert_file(file_path));
     }
@@ -109,15 +124,19 @@ pub fn scan_directory_certs(path: &Path) -> Vec<CertInfo> {
 
 /// Scan macOS system Keychain for certificates
 pub fn scan_keychain() -> Vec<CertInfo> {
-    if !cfg!(target_os = "macos") { return Vec::new(); }
+    if !cfg!(target_os = "macos") {
+        return Vec::new();
+    }
 
     let mut certs = Vec::new();
 
     // Export all certs from System keychain as PEM
     let keychains = [
         "/Library/Keychains/System.keychain",
-        &format!("{}/Library/Keychains/login.keychain-db",
-            std::env::var("HOME").unwrap_or_default()),
+        &format!(
+            "{}/Library/Keychains/login.keychain-db",
+            std::env::var("HOME").unwrap_or_default()
+        ),
     ];
 
     for keychain in &keychains {
@@ -130,11 +149,17 @@ pub fn scan_keychain() -> Vec<CertInfo> {
         };
 
         let pem_data = String::from_utf8_lossy(&output.stdout);
-        let keychain_name = if keychain.contains("login") { "Login" } else { "System" };
+        let keychain_name = if keychain.contains("login") {
+            "Login"
+        } else {
+            "System"
+        };
 
         // Split PEM blocks and parse each
         for pem_block in pem_data.split("-----BEGIN CERTIFICATE-----") {
-            if !pem_block.contains("-----END CERTIFICATE-----") { continue; }
+            if !pem_block.contains("-----END CERTIFICATE-----") {
+                continue;
+            }
             let full_pem = format!("-----BEGIN CERTIFICATE-----{}", pem_block);
 
             if let Some(cert) = parse_pem_string(&full_pem, keychain_name) {
@@ -164,7 +189,9 @@ pub fn parse_cert_file(path: &Path) -> Vec<CertInfo> {
                     certs.push(cert_to_info(&cert, CertSource::File(path.to_path_buf())));
                 }
             }
-            if !certs.is_empty() { return certs; }
+            if !certs.is_empty() {
+                return certs;
+            }
         }
     }
 
@@ -181,9 +208,20 @@ fn parse_pem_string(pem_str: &str, keychain_name: &str) -> Option<CertInfo> {
     let pem = Pem::iter_from_buffer(pem_str.as_bytes()).next()?.ok()?;
     let (_, cert) = X509Certificate::from_der(&pem.contents).ok()?;
     let subject = cert.subject().to_string();
-    Some(cert_to_info(&cert, CertSource::Keychain(format!("{} — {}", keychain_name,
-        subject.split("CN=").nth(1).unwrap_or(&subject)
-            .split(',').next().unwrap_or(&subject)))))
+    Some(cert_to_info(
+        &cert,
+        CertSource::Keychain(format!(
+            "{} — {}",
+            keychain_name,
+            subject
+                .split("CN=")
+                .nth(1)
+                .unwrap_or(&subject)
+                .split(',')
+                .next()
+                .unwrap_or(&subject)
+        )),
+    ))
 }
 
 /// Convert x509 cert to our CertInfo struct
@@ -212,8 +250,15 @@ fn cert_to_info(cert: &X509Certificate, source: CertSource) -> CertInfo {
     let serial = cert.serial.to_str_radix(16);
 
     CertInfo {
-        subject, issuer, not_before, not_after,
-        days_remaining, status, source, is_self_signed, serial,
+        subject,
+        issuer,
+        not_before,
+        not_after,
+        days_remaining,
+        status,
+        source,
+        is_self_signed,
+        serial,
     }
 }
 
@@ -239,15 +284,27 @@ pub fn full_scan(path: Option<&Path>) -> CertScanResult {
         certs.extend(scan_keychain());
     }
 
-    let expired = certs.iter().filter(|c| c.status == CertStatus::Expired).count();
-    let expiring = certs.iter().filter(|c| matches!(c.status, CertStatus::Expiring30 | CertStatus::Expiring90)).count();
-    let valid = certs.iter().filter(|c| c.status == CertStatus::Valid).count();
+    let expired = certs
+        .iter()
+        .filter(|c| c.status == CertStatus::Expired)
+        .count();
+    let expiring = certs
+        .iter()
+        .filter(|c| matches!(c.status, CertStatus::Expiring30 | CertStatus::Expiring90))
+        .count();
+    let valid = certs
+        .iter()
+        .filter(|c| c.status == CertStatus::Valid)
+        .count();
 
     // Sort: expired first, then by days remaining
     certs.sort_by_key(|c| (c.status, c.days_remaining));
 
     CertScanResult {
-        certs, expired_count: expired, expiring_count: expiring, valid_count: valid,
+        certs,
+        expired_count: expired,
+        expiring_count: expiring,
+        valid_count: valid,
     }
 }
 
@@ -268,9 +325,20 @@ pub fn scan_home_for_keys() -> Vec<LooseKeyFile> {
 
     // Dirs to skip in home scan
     let home_skip: &[&str] = &[
-        "Library", "Applications", ".Trash", ".cache", ".npm", ".cargo",
-        "node_modules", ".git", "target", "dist", "build", ".venv",
-        ".local/share", ".local/lib",
+        "Library",
+        "Applications",
+        ".Trash",
+        ".cache",
+        ".npm",
+        ".cargo",
+        "node_modules",
+        ".git",
+        "target",
+        "dist",
+        "build",
+        ".venv",
+        ".local/share",
+        ".local/lib",
     ];
 
     let mut files = Vec::new();
@@ -279,14 +347,23 @@ pub fn scan_home_for_keys() -> Vec<LooseKeyFile> {
         .max_depth(5)
         .into_iter()
         .filter_entry(|e| {
-            if !e.file_type().is_dir() { return true; }
+            if !e.file_type().is_dir() {
+                return true;
+            }
             let name = e.file_name().to_string_lossy();
-            let rel = e.path().strip_prefix(&home).unwrap_or(e.path()).display().to_string();
+            let rel = e
+                .path()
+                .strip_prefix(&home)
+                .unwrap_or(e.path())
+                .display()
+                .to_string();
             !SKIP_DIRS.contains(&name.as_ref()) && !home_skip.iter().any(|s| rel.starts_with(s))
         })
         .filter_map(|e| e.ok())
     {
-        if !entry.file_type().is_file() { continue; }
+        if !entry.file_type().is_file() {
+            continue;
+        }
         let file_path = entry.path();
         let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("");
         let ext_lower = ext.to_lowercase();
@@ -295,7 +372,15 @@ pub fn scan_home_for_keys() -> Vec<LooseKeyFile> {
             "certificate"
         } else if KEY_EXTENSIONS.contains(&ext_lower.as_str()) {
             "private key"
-        } else if file_path.file_name().map(|n| n.to_string_lossy().starts_with("id_rsa") || n.to_string_lossy().starts_with("id_ed25519") || n.to_string_lossy().starts_with("id_ecdsa")).unwrap_or(false) {
+        } else if file_path
+            .file_name()
+            .map(|n| {
+                n.to_string_lossy().starts_with("id_rsa")
+                    || n.to_string_lossy().starts_with("id_ed25519")
+                    || n.to_string_lossy().starts_with("id_ecdsa")
+            })
+            .unwrap_or(false)
+        {
             "SSH key"
         } else {
             continue;

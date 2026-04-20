@@ -1,8 +1,8 @@
-use ratatui::prelude::*;
-use ratatui::widgets::*;
 use crate::tui::model::*;
 use crate::tui::styles::*;
 use crate::utils::fs::format_size;
+use ratatui::prelude::*;
+use ratatui::widgets::*;
 
 /// Render detailed view — container or regular repo
 pub fn render_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) {
@@ -22,7 +22,7 @@ fn render_container_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) 
     let repo = &model.repos[model.cursor];
 
     let chunks = Layout::vertical([
-        Constraint::Length(3),  // header
+        Constraint::Length(3), // header
         Constraint::Min(5),    // child repo table
         Constraint::Length(1), // help
     ])
@@ -36,7 +36,11 @@ fn render_container_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) 
         path_str
     };
 
-    let total_artifacts: u64 = model.container_children.iter().map(|r| r.artifact_size).sum();
+    let total_artifacts: u64 = model
+        .container_children
+        .iter()
+        .map(|r| r.artifact_size)
+        .sum();
 
     let header = Paragraph::new(vec![
         Line::from(vec![
@@ -79,19 +83,28 @@ fn render_container_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) 
         Cell::from("").style(Style::default().fg(CYAN).bold()),
     ]);
 
-    let rows: Vec<Row> = model.container_children.iter().enumerate()
+    let rows: Vec<Row> = model
+        .container_children
+        .iter()
+        .enumerate()
         .skip(scroll_offset)
         .map(|(i, child)| {
             let is_selected = model.container_cursor == i;
             let grade_style = health_grade_style(&child.health_grade);
 
-            let last_commit = child.last_commit_date
+            let last_commit = child
+                .last_commit_date
                 .map(|d| {
                     let days = (chrono::Utc::now() - d).num_days();
-                    if days < 1 { "today".into() }
-                    else if days < 30 { format!("{}d", days) }
-                    else if days < 365 { format!("{}mo", days / 30) }
-                    else { format!("{}y", days / 365) }
+                    if days < 1 {
+                        "today".into()
+                    } else if days < 30 {
+                        format!("{}d", days)
+                    } else if days < 365 {
+                        format!("{}mo", days / 30)
+                    } else {
+                        format!("{}y", days / 365)
+                    }
                 })
                 .unwrap_or_else(|| "-".into());
 
@@ -107,16 +120,29 @@ fn render_container_detail(frame: &mut Frame, area: Rect, model: &ScannerModel) 
                 Cell::from(format!("{} {}{}", cursor, child.name, ws)),
                 Cell::from(format!("{}{}", child.health_grade, child.health_score))
                     .style(grade_style),
-                Cell::from(child.branch.clone())
-                    .style(Style::default().fg(PURPLE)),
+                Cell::from(child.branch.clone()).style(Style::default().fg(PURPLE)),
                 Cell::from(last_commit),
-                Cell::from(if child.artifact_size > 0 { format_size(child.artifact_size) } else { "-".into() })
-                    .style(if child.artifact_size > 100_000_000 { Style::default().fg(RED) }
-                        else if child.artifact_size > 10_000_000 { Style::default().fg(YELLOW) }
-                        else { Style::default() }),
+                Cell::from(if child.artifact_size > 0 {
+                    format_size(child.artifact_size)
+                } else {
+                    "-".into()
+                })
+                .style(if child.artifact_size > 100_000_000 {
+                    Style::default().fg(RED)
+                } else if child.artifact_size > 10_000_000 {
+                    Style::default().fg(YELLOW)
+                } else {
+                    Style::default()
+                }),
                 Cell::from(dirty).style(Style::default().fg(YELLOW)),
-            ]).style(if is_selected { Style::default().bg(DARK_BG) } else { Style::default() })
-        }).collect();
+            ])
+            .style(if is_selected {
+                Style::default().bg(DARK_BG)
+            } else {
+                Style::default()
+            })
+        })
+        .collect();
 
     let scroll_info = format!(
         " {}/{} ",
@@ -193,7 +219,10 @@ pub fn render_child_delete_confirm(frame: &mut Frame, area: Rect, model: &Scanne
     };
 
     let mut lines = vec![
-        Line::from(Span::styled("DELETE REPOSITORY", Style::default().fg(RED).bold())),
+        Line::from(Span::styled(
+            "DELETE REPOSITORY",
+            Style::default().fg(RED).bold(),
+        )),
         Line::from(""),
         Line::from(vec![
             Span::styled("  Repo: ", Style::default().fg(PURPLE)),
@@ -219,15 +248,22 @@ pub fn render_child_delete_confirm(frame: &mut Frame, area: Rect, model: &Scanne
         Style::default().fg(YELLOW),
     )));
     lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled("  Delete? (y/N)", Style::default().fg(WHITE))));
+    lines.push(Line::from(Span::styled(
+        "  Delete? (y/N)",
+        Style::default().fg(WHITE),
+    )));
 
     frame.render_widget(Paragraph::new(lines).alignment(Alignment::Center), inner);
 }
 
-fn render_repo_detail(frame: &mut Frame, area: Rect, repo: &crate::scanner::repo_scanner::RepoInfo) {
+fn render_repo_detail(
+    frame: &mut Frame,
+    area: Rect,
+    repo: &crate::scanner::repo_scanner::RepoInfo,
+) {
     let chunks = Layout::vertical([
-        Constraint::Length(3),  // header
-        Constraint::Length(7),  // info block
+        Constraint::Length(3), // header
+        Constraint::Length(7), // info block
         Constraint::Min(5),    // artifacts
         Constraint::Length(1), // help
     ])
@@ -278,7 +314,10 @@ fn render_repo_detail(frame: &mut Frame, area: Rect, repo: &crate::scanner::repo
         ]),
         Line::from(vec![
             Span::styled("  Remote:  ", Style::default().fg(PURPLE)),
-            Span::styled(remote_info, Style::default().fg(if repo.has_remote { GREEN } else { RED })),
+            Span::styled(
+                remote_info,
+                Style::default().fg(if repo.has_remote { GREEN } else { RED }),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  Commit:  ", Style::default().fg(PURPLE)),
@@ -286,7 +325,10 @@ fn render_repo_detail(frame: &mut Frame, area: Rect, repo: &crate::scanner::repo
         ]),
         Line::from(vec![
             Span::styled("  Status:  ", Style::default().fg(PURPLE)),
-            Span::styled(git_status_text, Style::default().fg(if repo.is_dirty { YELLOW } else { GREEN })),
+            Span::styled(
+                git_status_text,
+                Style::default().fg(if repo.is_dirty { YELLOW } else { GREEN }),
+            ),
         ]),
     ];
 
@@ -322,7 +364,11 @@ fn render_repo_detail(frame: &mut Frame, area: Rect, repo: &crate::scanner::repo
                 ),
                 Span::styled(
                     format_size(artifact.size),
-                    Style::default().fg(if artifact.size > 100_000_000 { RED } else { WHITE }),
+                    Style::default().fg(if artifact.size > 100_000_000 {
+                        RED
+                    } else {
+                        WHITE
+                    }),
                 ),
             ]));
         }
@@ -331,7 +377,10 @@ fn render_repo_detail(frame: &mut Frame, area: Rect, repo: &crate::scanner::repo
     let artifact_title = if repo.artifacts.is_empty() {
         " Artifacts (none) ".to_string()
     } else {
-        format!(" Artifacts: {} recoverable ", format_size(repo.artifact_size))
+        format!(
+            " Artifacts: {} recoverable ",
+            format_size(repo.artifact_size)
+        )
     };
 
     let artifacts = Paragraph::new(artifact_lines).block(
@@ -339,7 +388,10 @@ fn render_repo_detail(frame: &mut Frame, area: Rect, repo: &crate::scanner::repo
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(YELLOW))
-            .title(Span::styled(artifact_title, Style::default().fg(YELLOW).bold())),
+            .title(Span::styled(
+                artifact_title,
+                Style::default().fg(YELLOW).bold(),
+            )),
     );
     frame.render_widget(artifacts, chunks[2]);
 

@@ -2,14 +2,14 @@ use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
 
 use crate::config::SparkConfig;
-use crate::core::types::*;
 use crate::core::inventory::get_inventory;
-use crate::scanner::repo_scanner::{RepoInfo, DiscoveredDir};
+use crate::core::types::*;
+use crate::scanner::dep_scanner::DepVulnerability;
 use crate::scanner::port_scanner::PortInfo;
 use crate::scanner::repo_manager::ManagedRepo;
-use crate::scanner::system_cleaner::{CleanableItem, CleanCategory};
+use crate::scanner::repo_scanner::{DiscoveredDir, RepoInfo};
 use crate::scanner::secret_scanner::AuditResult;
-use crate::scanner::dep_scanner::DepVulnerability;
+use crate::scanner::system_cleaner::{CleanCategory, CleanableItem};
 
 /// Top-level application mode
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -371,7 +371,11 @@ impl ScannerModel {
                 SortField::Health => a.health_score.cmp(&b.health_score),
                 SortField::ArtifactSize => a.artifact_size.cmp(&b.artifact_size),
             };
-            if ascending { cmp } else { cmp.reverse() }
+            if ascending {
+                cmp
+            } else {
+                cmp.reverse()
+            }
         });
         self.rebuild_group_order();
     }
@@ -468,16 +472,29 @@ impl SystemCleanerModel {
 
     /// Rebuild display_order after items change (includes category header sentinels)
     pub fn rebuild_display_order(&mut self) {
-        let categories = [CleanCategory::Docker, CleanCategory::VMs, CleanCategory::Cache, CleanCategory::Logs, CleanCategory::Downloads];
+        let categories = [
+            CleanCategory::Docker,
+            CleanCategory::VMs,
+            CleanCategory::Cache,
+            CleanCategory::Logs,
+            CleanCategory::Downloads,
+        ];
         let mut order = Vec::new();
         for cat in &categories {
-            let cat_indices: Vec<usize> = self.items.iter().enumerate()
+            let cat_indices: Vec<usize> = self
+                .items
+                .iter()
+                .enumerate()
                 .filter(|(_, i)| i.category == *cat)
                 .map(|(idx, _)| idx)
                 .collect();
-            if cat_indices.is_empty() { continue; }
+            if cat_indices.is_empty() {
+                continue;
+            }
             order.push(None); // category header row
-            for idx in cat_indices { order.push(Some(idx)); }
+            for idx in cat_indices {
+                order.push(Some(idx));
+            }
         }
         self.display_order = order;
         // Clamp cursor to valid item
@@ -488,10 +505,16 @@ impl SystemCleanerModel {
 
     /// Move selection up, skipping header rows
     pub fn move_up(&mut self) {
-        let dc = self.display_order.iter().position(|d| *d == Some(self.cursor)).unwrap_or(0);
+        let dc = self
+            .display_order
+            .iter()
+            .position(|d| *d == Some(self.cursor))
+            .unwrap_or(0);
         let mut i = dc;
         loop {
-            if i == 0 { break; }
+            if i == 0 {
+                break;
+            }
             i -= 1;
             if let Some(Some(idx)) = self.display_order.get(i) {
                 self.cursor = *idx;
@@ -502,7 +525,11 @@ impl SystemCleanerModel {
 
     /// Move selection down, skipping header rows
     pub fn move_down(&mut self) {
-        let dc = self.display_order.iter().position(|d| *d == Some(self.cursor)).unwrap_or(0);
+        let dc = self
+            .display_order
+            .iter()
+            .position(|d| *d == Some(self.cursor))
+            .unwrap_or(0);
         let mut i = dc + 1;
         while i < self.display_order.len() {
             if let Some(Some(idx)) = self.display_order.get(i) {
@@ -649,7 +676,11 @@ mod tests {
         assert!(m.filtered_indices.is_some());
         let indices = m.filtered_indices.as_ref().unwrap();
         assert!(!indices.is_empty());
-        assert!(m.items[indices[0]].tool.name.to_lowercase().contains("claude"));
+        assert!(m.items[indices[0]]
+            .tool
+            .name
+            .to_lowercase()
+            .contains("claude"));
     }
 
     #[test]

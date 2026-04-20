@@ -1,6 +1,6 @@
+use crate::tui::styles::*;
 use ratatui::prelude::*;
 use ratatui::widgets::*;
-use crate::tui::styles::*;
 
 /// Render the danger zone confirmation modal
 pub fn render_danger_modal(frame: &mut Frame, area: Rect) {
@@ -64,10 +64,7 @@ pub fn render_clean_confirm_modal(
         )),
         Line::from("Files will be moved to trash (recoverable)."),
         Line::from(""),
-        Line::from(Span::styled(
-            "Proceed? (y/N)",
-            Style::default().fg(WHITE),
-        )),
+        Line::from(Span::styled("Proceed? (y/N)", Style::default().fg(WHITE))),
     ];
 
     let paragraph = Paragraph::new(lines).alignment(Alignment::Center);

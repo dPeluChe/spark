@@ -1,5 +1,5 @@
-use std::path::{Path, PathBuf};
 use crate::utils::fs::dir_size;
+use std::path::{Path, PathBuf};
 
 /// Type of build artifact or dependency cache
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,10 +75,18 @@ pub struct ArtifactInfo {
 type ArtifactCheck = (&'static str, fn() -> ArtifactKind, Option<&'static str>);
 const ARTIFACT_CHECKS: &[ArtifactCheck] = &[
     // JavaScript / Node
-    ("node_modules", || ArtifactKind::NodeModules, Some("package.json")),
+    (
+        "node_modules",
+        || ArtifactKind::NodeModules,
+        Some("package.json"),
+    ),
     (".next", || ArtifactKind::DotNext, Some("package.json")),
     ("dist", || ArtifactKind::Dist, None),
-    (".parcel-cache", || ArtifactKind::ParcelCache, Some("package.json")),
+    (
+        ".parcel-cache",
+        || ArtifactKind::ParcelCache,
+        Some("package.json"),
+    ),
     // Python
     (".venv", || ArtifactKind::PythonVenv, None),
     ("venv", || ArtifactKind::PythonVenv, None),
@@ -102,7 +110,11 @@ const ARTIFACT_CHECKS: &[ArtifactCheck] = &[
     // Generic
     ("build", || ArtifactKind::BuildDir, None),
     ("coverage", || ArtifactKind::Coverage, None),
-    (".nyc_output", || ArtifactKind::Coverage, Some("package.json")),
+    (
+        ".nyc_output",
+        || ArtifactKind::Coverage,
+        Some("package.json"),
+    ),
     ("tmp", || ArtifactKind::TempDir, None),
 ];
 
@@ -143,14 +155,12 @@ pub fn find_artifacts(repo_path: &Path) -> Vec<ArtifactInfo> {
         if kind == ArtifactKind::DotNetObj || kind == ArtifactKind::DotNetBin {
             let has_csproj = std::fs::read_dir(repo_path)
                 .map(|entries| {
-                    entries
-                        .filter_map(|e| e.ok())
-                        .any(|e| {
-                            e.path()
-                                .extension()
-                                .map(|ext| ext == "csproj" || ext == "fsproj")
-                                .unwrap_or(false)
-                        })
+                    entries.filter_map(|e| e.ok()).any(|e| {
+                        e.path()
+                            .extension()
+                            .map(|ext| ext == "csproj" || ext == "fsproj")
+                            .unwrap_or(false)
+                    })
                 })
                 .unwrap_or(false);
             if !has_csproj {

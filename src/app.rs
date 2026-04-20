@@ -51,11 +51,10 @@ pub async fn run(
         terminal.draw(|frame| view::draw(frame, &app))?;
 
         // Poll events with tick rate
-        let has_event = tokio::task::spawn_blocking(move || {
-            event::poll(tick_rate).unwrap_or(false)
-        })
-        .await
-        .unwrap_or(false);
+        let has_event =
+            tokio::task::spawn_blocking(move || event::poll(tick_rate).unwrap_or(false))
+                .await
+                .unwrap_or(false);
 
         if has_event {
             let ev = event::read();
@@ -85,8 +84,7 @@ pub async fn run(
                         Action::DiscoverDirs => {
                             let tx2 = tx.clone();
                             tokio::spawn(async move {
-                                let dirs =
-                                    crate::scanner::repo_scanner::discover_project_dirs();
+                                let dirs = crate::scanner::repo_scanner::discover_project_dirs();
                                 let _ = tx2.send(AppMessage::DiscoveredDirs { dirs });
                             });
                         }
@@ -94,7 +92,8 @@ pub async fn run(
                             let tx2 = tx.clone();
                             let max_depth = app.config.max_scan_depth;
                             let count = dirs.len();
-                            let first = dirs.first()
+                            let first = dirs
+                                .first()
                                 .and_then(|d| d.file_name())
                                 .map(|n| n.to_string_lossy().to_string())
                                 .unwrap_or_default();
@@ -106,8 +105,10 @@ pub async fn run(
                             app.show_toast(label, false);
 
                             tokio::spawn(async move {
-                                let (progress_tx, mut progress_rx) =
-                                    mpsc::unbounded_channel::<crate::scanner::repo_scanner::ScanProgressMsg>();
+                                let (progress_tx, mut progress_rx) = mpsc::unbounded_channel::<
+                                    crate::scanner::repo_scanner::ScanProgressMsg,
+                                >(
+                                );
                                 let tx3 = tx2.clone();
 
                                 // Forward progress from blocking thread to TUI
@@ -124,12 +125,14 @@ pub async fn run(
                                 // Run scan on blocking thread so progress can flow
                                 let repos = tokio::task::spawn_blocking(move || {
                                     let rt = tokio::runtime::Handle::current();
-                                    rt.block_on(
-                                        crate::scanner::repo_scanner::scan_directories(
-                                            &dirs, max_depth, progress_tx,
-                                        )
-                                    )
-                                }).await.unwrap_or_default();
+                                    rt.block_on(crate::scanner::repo_scanner::scan_directories(
+                                        &dirs,
+                                        max_depth,
+                                        progress_tx,
+                                    ))
+                                })
+                                .await
+                                .unwrap_or_default();
 
                                 let _ = progress_forwarder.await;
                                 let _ = tx2.send(AppMessage::ScanComplete { repos });
@@ -156,8 +159,7 @@ pub async fn run(
                             let tx2 = tx.clone();
                             let use_trash = app.config.use_trash;
                             tokio::spawn(async move {
-                                let action =
-                                    crate::scanner::cleaner::CleanAction::TrashRepo(path);
+                                let action = crate::scanner::cleaner::CleanAction::TrashRepo(path);
                                 let result =
                                     crate::scanner::cleaner::execute_clean(&action, use_trash);
                                 let _ = tx2.send(AppMessage::CleanResult {
@@ -173,10 +175,11 @@ pub async fn run(
                             app.port_scanner.scanning = true;
                             let tx2 = tx.clone();
                             tokio::spawn(async move {
-                                let ports =
-                                    tokio::task::spawn_blocking(crate::scanner::port_scanner::scan_ports)
-                                        .await
-                                        .unwrap_or_default();
+                                let ports = tokio::task::spawn_blocking(
+                                    crate::scanner::port_scanner::scan_ports,
+                                )
+                                .await
+                                .unwrap_or_default();
                                 let _ = tx2.send(AppMessage::PortScanResult { ports });
                             });
                         }
@@ -201,7 +204,10 @@ pub async fn run(
                                 let key = repo.path.display().to_string();
                                 if let Some((status_str, ts)) = cache.get(&key) {
                                     if crate::scanner::repo_manager::is_cache_valid(*ts) {
-                                        repo.status = crate::scanner::repo_manager::string_to_status(status_str);
+                                        repo.status =
+                                            crate::scanner::repo_manager::string_to_status(
+                                                status_str,
+                                            );
                                         continue;
                                     }
                                 }
@@ -209,8 +215,11 @@ pub async fn run(
                             }
 
                             // Check uncached repos one by one in background
-                            let paths: Vec<(usize, std::path::PathBuf)> = uncached_indices.iter()
-                                .filter_map(|&i| app.repo_manager.repos.get(i).map(|r| (i, r.path.clone())))
+                            let paths: Vec<(usize, std::path::PathBuf)> = uncached_indices
+                                .iter()
+                                .filter_map(|&i| {
+                                    app.repo_manager.repos.get(i).map(|r| (i, r.path.clone()))
+                                })
                                 .collect();
 
                             let tx2 = tx.clone();
@@ -221,9 +230,11 @@ pub async fn run(
                                         crate::scanner::repo_manager::check_repo_status(&path_clone)
                                     })
                                     .await
-                                    .unwrap_or(crate::scanner::repo_manager::RepoStatus::Error(
-                                        "Task failed".into(),
-                                    ));
+                                    .unwrap_or(
+                                        crate::scanner::repo_manager::RepoStatus::Error(
+                                            "Task failed".into(),
+                                        ),
+                                    );
 
                                     // Save to cache
                                     let key = path.display().to_string();
@@ -232,7 +243,8 @@ pub async fn run(
                                         &crate::scanner::repo_manager::status_to_string(&status),
                                     );
 
-                                    let _ = tx2.send(AppMessage::RepoStatusResult { index: i, status });
+                                    let _ =
+                                        tx2.send(AppMessage::RepoStatusResult { index: i, status });
                                 }
                             });
                         }
@@ -288,8 +300,10 @@ pub async fn run(
                             let tx2 = tx.clone();
                             tokio::spawn(async move {
                                 let items = tokio::task::spawn_blocking(
-                                    crate::scanner::system_cleaner::scan_system
-                                ).await.unwrap_or_default();
+                                    crate::scanner::system_cleaner::scan_system,
+                                )
+                                .await
+                                .unwrap_or_default();
                                 let _ = tx2.send(AppMessage::SystemScanResult { items });
                             });
                         }
@@ -300,14 +314,21 @@ pub async fn run(
                                 let tx2 = tx.clone();
                                 tokio::spawn(async move {
                                     let result = tokio::task::spawn_blocking(move || {
-                                        crate::scanner::system_cleaner::execute_clean(&item, is_dry_run)
-                                    }).await.unwrap_or(Err("Task failed".into()));
+                                        crate::scanner::system_cleaner::execute_clean(
+                                            &item, is_dry_run,
+                                        )
+                                    })
+                                    .await
+                                    .unwrap_or(Err("Task failed".into()));
                                     let (success, recovered, error) = match result {
                                         Ok(r) => (true, r, None),
                                         Err(e) => (false, 0, Some(e)),
                                     };
                                     let _ = tx2.send(AppMessage::SystemCleanItemResult {
-                                        index, recovered, success, error,
+                                        index,
+                                        recovered,
+                                        success,
+                                        error,
                                     });
                                 });
                             }
@@ -319,14 +340,21 @@ pub async fn run(
                                     let tx2 = tx.clone();
                                     tokio::spawn(async move {
                                         let result = tokio::task::spawn_blocking(move || {
-                                            crate::scanner::system_cleaner::execute_clean(&item, is_dry_run)
-                                        }).await.unwrap_or(Err("Task failed".into()));
+                                            crate::scanner::system_cleaner::execute_clean(
+                                                &item, is_dry_run,
+                                            )
+                                        })
+                                        .await
+                                        .unwrap_or(Err("Task failed".into()));
                                         let (success, recovered, error) = match result {
                                             Ok(r) => (true, r, None),
                                             Err(e) => (false, 0, Some(e)),
                                         };
                                         let _ = tx2.send(AppMessage::SystemCleanItemResult {
-                                            index, recovered, success, error,
+                                            index,
+                                            recovered,
+                                            success,
+                                            error,
                                         });
                                     });
                                 }
@@ -341,20 +369,27 @@ pub async fn run(
                                 let path2 = path.clone();
                                 let results = tokio::task::spawn_blocking(move || {
                                     crate::scanner::secret_scanner::scan_directory(&path2)
-                                }).await.unwrap_or_default();
+                                })
+                                .await
+                                .unwrap_or_default();
                                 // Also run dep scan (async)
                                 let dep_vulns = {
                                     let path3 = path.clone();
                                     let deps = tokio::task::spawn_blocking(move || {
                                         crate::scanner::dep_scanner::parse_dependencies(&path3)
-                                    }).await.unwrap_or_default();
+                                    })
+                                    .await
+                                    .unwrap_or_default();
                                     if !deps.is_empty() {
-                                        crate::scanner::dep_scanner::check_vulnerabilities(&deps).await.vulnerabilities
+                                        crate::scanner::dep_scanner::check_vulnerabilities(&deps)
+                                            .await
+                                            .vulnerabilities
                                     } else {
                                         Vec::new()
                                     }
                                 };
-                                let _ = tx2.send(AppMessage::AuditScanResult { results, dep_vulns });
+                                let _ =
+                                    tx2.send(AppMessage::AuditScanResult { results, dep_vulns });
                             });
                         }
                         Action::LoadContainerChildren(path) => {
@@ -362,13 +397,20 @@ pub async fn run(
                             tokio::spawn(async move {
                                 let children = tokio::task::spawn_blocking(move || {
                                     crate::scanner::repo_scanner::scan_container_children(&path)
-                                }).await.unwrap_or_default();
+                                })
+                                .await
+                                .unwrap_or_default();
                                 let _ = tx2.send(AppMessage::ContainerChildrenResult { children });
                             });
                         }
                         Action::OpenDir(path) => {
-                            let cmd = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
-                            let name = path.file_name()
+                            let cmd = if cfg!(target_os = "macos") {
+                                "open"
+                            } else {
+                                "xdg-open"
+                            };
+                            let name = path
+                                .file_name()
                                 .map(|n| n.to_string_lossy().to_string())
                                 .unwrap_or_else(|| path.display().to_string());
                             match std::process::Command::new(cmd).arg(&path).spawn() {
@@ -418,7 +460,8 @@ pub async fn run(
                             let key = repo.path.display().to_string();
                             if let Some((status_str, ts)) = cache.get(&key) {
                                 if crate::scanner::repo_manager::is_cache_valid(*ts) {
-                                    repo.status = crate::scanner::repo_manager::string_to_status(status_str);
+                                    repo.status =
+                                        crate::scanner::repo_manager::string_to_status(status_str);
                                     continue;
                                 }
                             }
@@ -432,14 +475,19 @@ pub async fn run(
                                     let p = path.clone();
                                     let status = tokio::task::spawn_blocking(move || {
                                         crate::scanner::repo_manager::check_repo_status(&p)
-                                    }).await.unwrap_or(
-                                        crate::scanner::repo_manager::RepoStatus::Error("Task failed".into())
+                                    })
+                                    .await
+                                    .unwrap_or(
+                                        crate::scanner::repo_manager::RepoStatus::Error(
+                                            "Task failed".into(),
+                                        ),
                                     );
                                     crate::scanner::repo_manager::save_status_to_cache(
                                         &path.display().to_string(),
                                         &crate::scanner::repo_manager::status_to_string(&status),
                                     );
-                                    let _ = tx2.send(AppMessage::RepoStatusResult { index: i, status });
+                                    let _ =
+                                        tx2.send(AppMessage::RepoStatusResult { index: i, status });
                                 }
                             });
                         }
@@ -521,10 +569,7 @@ fn spawn_remote_checks(
 
             let status = if local == "MISSING" {
                 crate::core::types::ToolStatus::Missing
-            } else if remote != "Unknown"
-                && remote != "Checking..."
-                && remote != local
-            {
+            } else if remote != "Unknown" && remote != "Checking..." && remote != local {
                 crate::core::types::ToolStatus::Outdated
             } else {
                 crate::core::types::ToolStatus::Installed
