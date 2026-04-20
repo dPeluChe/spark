@@ -1,14 +1,24 @@
 {
   "name": "@dpeluche/spark",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "SPARK — Developer Operations Platform. Manage repos, scan health, clean artifacts, monitor ports, update dev tools.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/dPeluChe/spark"
   },
-  "homepage": "https://github.com/dPeluChe/spark#readme",
-  "author": "dPeluChe",
+  "homepage": "https://dpeluche.github.io/spark/",
+  "author": {
+    "name": "Iteris",
+    "url": "https://iteris.tech"
+  },
+  "contributors": [
+    {
+      "name": "dPeluChe",
+      "email": "antonio@dpeluche.dev",
+      "url": "https://dpeluche.dev"
+    }
+  ],
   "bin": {
     "spark": "bin/spark"
   },
@@ -40,8 +50,8 @@
     "system-maintenance"
   ],
   "optionalDependencies": {
-    "@dpeluche/spark-cli-darwin-arm64": "0.5.0",
-    "@dpeluche/spark-cli-darwin-x64": "0.5.0",
-    "@dpeluche/spark-cli-linux-x64": "0.5.0"
+    "@dpeluche/spark-cli-darwin-arm64": "0.5.1",
+    "@dpeluche/spark-cli-darwin-x64": "0.5.1",
+    "@dpeluche/spark-cli-linux-x64": "0.5.1"
   }
 }

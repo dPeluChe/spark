@@ -334,3 +334,5 @@ Inspirado en [ghq](https://github.com/x-motemen/ghq), [mole](https://github.com/
 ---
 
 **SPARK** v0.5.1 — Licencia MIT
+
+Un producto de [Iteris](https://iteris.tech) · Publicado y mantenido por [@dPeluChe](https://github.com/dPeluChe)
