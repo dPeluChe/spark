@@ -1,117 +1,99 @@
-# SPARK - Installation Guide
+# SPARK — Installation Guide
 
-## Quick Start
+## Install
 
-### Prerequisites
-- **Rust toolchain** (rustc + cargo, install via [rustup](https://rustup.rs))
-- **macOS or Linux** (macOS primary, Linux supported)
-- Terminal with 256 color support
+| Method | Command |
+|--------|---------|
+| **npm** (recommended) | `npm install -g @dpeluche/spark` |
+| **npx** (no install) | `npx @dpeluche/spark` |
+| **curl** | `curl -fsSL https://raw.githubusercontent.com/dPeluChe/spark/main/scripts/install.sh \| sh` |
+| **cargo** | `cargo install --git https://github.com/dPeluChe/spark` |
+| **Binary** | [GitHub Releases](https://github.com/dPeluChe/spark/releases) — macOS arm64/x64, Linux x64 |
 
-### Installation from Source
-
-```bash
-# 1. Clone the repository
-cd /path/to/labs-spark
-
-# 2. Build the release binary
-cargo build --release
-
-# 3. Install to local bin
-mkdir -p ~/.local/bin
-cp target/release/spark ~/.local/bin/spark
-
-# 4. Verify installation
-spark
-```
-
-### Shell Configuration
-
-Add to your `~/.zshrc`:
+After installing, run setup:
 
 ```bash
-alias spark='~/.local/bin/spark'
-```
-
-Then reload:
-
-```bash
-source ~/.zshrc
+spark init    # shell integration (spark-cd), completions, config
+spark doctor  # validate everything is working
+spark         # open the TUI
 ```
 
 ---
 
-## Running SPARK
+## Build from source
 
-### Basic Usage
+For contributors or if you want the latest unreleased code:
 
 ```bash
-spark
+git clone https://github.com/dPeluChe/spark.git
+cd spark
+cargo build --release
+cargo install --path .    # installs to ~/.cargo/bin/spark (already in PATH via rustup)
 ```
 
-This launches the interactive TUI dashboard in Updater mode.
-
-### CLI Options
+Verify:
 
 ```bash
-spark --scan-only    # Start directly in Scanner mode
-spark --dry-run      # Preview updates without executing
+spark --version
+spark doctor
+```
+
+---
+
+## Shell setup
+
+`spark init` handles everything:
+- Adds `spark-cd` function to your shell rc (zsh/bash/fish)
+- Generates completions
+- Creates `~/.config/spark/config.toml` with defaults
+
+`spark-cd` lets you navigate to managed repos:
+
+```bash
+spark-cd zed        # cd to the zed repo
+spark-cd api        # cd to any repo matching 'api'
 ```
 
 ---
 
 ## Configuration
 
-SPARK reads from `~/.config/spark/config.toml`. See [config.example.toml](../config.example.toml) for all options.
+Config file: `~/.config/spark/config.toml`  
+macOS alternate: `~/Library/Application Support/spark/config.toml`
 
----
+See [config.example.toml](../../config.example.toml) for all options. Key fields:
 
-## Updating SPARK
-
-```bash
-cd /path/to/labs-spark
-cargo build --release
-cp target/release/spark ~/.local/bin/spark
+```toml
+repos_root = "~/repos"          # root for managed repos (ghq-compatible)
+stale_threshold_days = 90       # days before a repo is considered stale
+use_trash = true                # use OS trash instead of permanent delete
+max_scan_depth = 6              # recursion depth for repo scanner
 ```
 
 ---
 
 ## Troubleshooting
 
-### Issue: "command not found: spark"
+**`spark: command not found`**  
+The binary isn't in PATH. Prefer reinstalling via npm (`npm install -g @dpeluche/spark`) which places the binary in npm's global bin (already in PATH). If building from source, use `cargo install --path .` — rustup adds `~/.cargo/bin` to PATH automatically.
 
-Ensure `~/.local/bin` is in your PATH:
+**`spark: platform binary not found`**  
+npm wrapper couldn't find the platform binary. Run `npm install -g @dpeluche/spark` again to re-download. Check `spark doctor` for details.
 
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
+**`spark doctor` fails a check**  
+`spark doctor` reports what's missing with suggestions. Most issues are fixed by running `spark init` again.
 
-### Issue: "could not open a new TTY"
-
-SPARK requires an interactive terminal. Don't pipe or run in non-interactive contexts.
-
-### Issue: Binary won't execute
-
-```bash
-chmod +x ~/.local/bin/spark
-```
+**TUI won't open / display is garbled**  
+SPARK requires a real interactive terminal with 256-color support. Don't pipe or run in non-interactive contexts (CI, `ssh -t` required for remote sessions).
 
 ---
 
-## Uninstallation
+## Uninstall
 
 ```bash
-rm ~/.local/bin/spark
-rm -rf ~/.config/spark/     # Remove config (optional)
+npm uninstall -g @dpeluche/spark   # if installed via npm
+# or
+cargo uninstall spark              # if installed via cargo
+
+rm -rf ~/.config/spark/            # remove config and cache (optional)
 ```
-
----
-
-## Build Dependencies
-
-All managed by Cargo. Key crates:
-- `ratatui` - TUI framework
-- `tokio` - Async runtime
-- `git2` - Git operations (requires libgit2/cmake)
-- `crossterm` - Terminal manipulation
-
-Run `cargo build` and Cargo handles everything.
