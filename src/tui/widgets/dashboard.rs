@@ -1,17 +1,17 @@
-use ratatui::prelude::*;
-use ratatui::widgets::*;
-use crate::core::types::*;
 use crate::core::changelogs::get_changelog_url;
+use crate::core::types::*;
 use crate::tui::model::*;
 use crate::tui::styles::*;
+use ratatui::prelude::*;
+use ratatui::widgets::*;
 
 /// Render the main updater dashboard
 pub fn render_dashboard(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
     let chunks = Layout::vertical([
-        Constraint::Length(1),  // header
-        Constraint::Length(1),  // spacing
+        Constraint::Length(1), // header
+        Constraint::Length(1), // spacing
         Constraint::Min(10),   // grid
-        Constraint::Length(2),  // help bar
+        Constraint::Length(2), // help bar
     ])
     .split(area);
 
@@ -21,7 +21,7 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
     let grid_area = if model.state == UpdaterState::Search || !model.search_query.is_empty() {
         let search_chunks = Layout::vertical([
             Constraint::Length(2), // search bar
-            Constraint::Min(8),   // grid
+            Constraint::Min(8),    // grid
         ])
         .split(chunks[2]);
         render_search_bar(frame, search_chunks[0], model);
@@ -122,16 +122,27 @@ pub fn render_preview(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
         Style::default().fg(GRAY),
     )));
 
-    let paragraph = Paragraph::new(lines)
-        .block(Block::default().padding(Padding::new(2, 2, 1, 1)));
+    let paragraph = Paragraph::new(lines).block(Block::default().padding(Padding::new(2, 2, 1, 1)));
     frame.render_widget(paragraph, area);
 }
 
 fn render_header(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
     let checked = model.checked.len();
-    let installed = model.items.iter().filter(|i| i.status == ToolStatus::Installed).count();
-    let outdated = model.items.iter().filter(|i| i.status == ToolStatus::Outdated).count();
-    let missing = model.items.iter().filter(|i| i.status == ToolStatus::Missing).count();
+    let installed = model
+        .items
+        .iter()
+        .filter(|i| i.status == ToolStatus::Installed)
+        .count();
+    let outdated = model
+        .items
+        .iter()
+        .filter(|i| i.status == ToolStatus::Outdated)
+        .count();
+    let missing = model
+        .items
+        .iter()
+        .filter(|i| i.status == ToolStatus::Missing)
+        .count();
 
     let text = match model.state {
         UpdaterState::Updating => format!(" UPDATING ({} remaining)... ", model.updating_remaining),
@@ -141,9 +152,15 @@ fn render_header(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
                 format!(" TOOL UPDATER  Scanning {}...", model.loading_count)
             } else {
                 let mut status = format!(" TOOL UPDATER  {} tools", model.items.len());
-                if outdated > 0 { status.push_str(&format!("  {} outdated", outdated)); }
-                if missing > 0 { status.push_str(&format!("  {} missing", missing)); }
-                if checked > 0 { status.push_str(&format!("  {} selected", checked)); }
+                if outdated > 0 {
+                    status.push_str(&format!("  {} outdated", outdated));
+                }
+                if missing > 0 {
+                    status.push_str(&format!("  {} missing", missing));
+                }
+                if checked > 0 {
+                    status.push_str(&format!("  {} selected", checked));
+                }
                 if outdated == 0 && missing == 0 && installed > 0 {
                     status.push_str("  all up to date");
                 }
@@ -186,8 +203,14 @@ fn render_search_bar(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
 
 fn render_grid(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
     let categories = [
-        Category::Sys, Category::Code, Category::Ide, Category::Term,
-        Category::Prod, Category::Infra, Category::Runtime, Category::Utils,
+        Category::Sys,
+        Category::Code,
+        Category::Ide,
+        Category::Term,
+        Category::Prod,
+        Category::Infra,
+        Category::Runtime,
+        Category::Utils,
     ];
 
     let header = Row::new(vec![
@@ -200,18 +223,26 @@ fn render_grid(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
     let mut rows: Vec<Row> = Vec::new();
 
     for cat in &categories {
-        let cat_items: Vec<(usize, &ToolState)> = model.items.iter().enumerate()
+        let cat_items: Vec<(usize, &ToolState)> = model
+            .items
+            .iter()
+            .enumerate()
             .filter(|(i, item)| item.tool.category == *cat && model.is_item_visible(*i))
             .collect();
-        if cat_items.is_empty() { continue; }
+        if cat_items.is_empty() {
+            continue;
+        }
 
         // Category header row
         rows.push(
             Row::new(vec![
                 Cell::from(format!("  {} ({})", cat.label(), cat_items.len()))
                     .style(Style::default().fg(PURPLE).bold()),
-                Cell::from(""), Cell::from(""), Cell::from(""),
-            ]).style(Style::default().bg(Color::Rgb(25, 25, 35)))
+                Cell::from(""),
+                Cell::from(""),
+                Cell::from(""),
+            ])
+            .style(Style::default().bg(Color::Rgb(25, 25, 35))),
         );
 
         for (i, item) in cat_items {
@@ -220,7 +251,11 @@ fn render_grid(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
             let cursor = if is_selected { ">" } else { " " };
             let checkbox = if is_checked { "x" } else { " " };
 
-            let row_style = if is_selected { Style::default().bg(DARK_BG) } else { Style::default() };
+            let row_style = if is_selected {
+                Style::default().bg(DARK_BG)
+            } else {
+                Style::default()
+            };
 
             let name_style = if is_selected {
                 Style::default().fg(WHITE).bold()
@@ -244,21 +279,29 @@ fn render_grid(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
                 item.local_version.clone()
             };
 
-            let remote_ver = if item.remote_version == "..." || item.remote_version == "Checking..." || item.remote_version == "Unknown" {
+            let remote_ver = if item.remote_version == "..."
+                || item.remote_version == "Checking..."
+                || item.remote_version == "Unknown"
+            {
                 "-".into()
             } else {
                 item.remote_version.clone()
             };
 
-            rows.push(Row::new(vec![
-                Cell::from(format!("{} [{}] {}", cursor, checkbox, item.tool.name)).style(name_style),
-                Cell::from(local_ver).style(Style::default().fg(GRAY)),
-                Cell::from(remote_ver).style(
-                    if item.status == ToolStatus::Outdated { Style::default().fg(YELLOW) }
-                    else { Style::default().fg(GRAY) }
-                ),
-                Cell::from(status_text).style(status_style),
-            ]).style(row_style));
+            rows.push(
+                Row::new(vec![
+                    Cell::from(format!("{} [{}] {}", cursor, checkbox, item.tool.name))
+                        .style(name_style),
+                    Cell::from(local_ver).style(Style::default().fg(GRAY)),
+                    Cell::from(remote_ver).style(if item.status == ToolStatus::Outdated {
+                        Style::default().fg(YELLOW)
+                    } else {
+                        Style::default().fg(GRAY)
+                    }),
+                    Cell::from(status_text).style(status_style),
+                ])
+                .style(row_style),
+            );
         }
     }
 
@@ -267,28 +310,43 @@ fn render_grid(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
     let mut cursor_pos = 0usize;
     let mut found = false;
     for (ri, _) in rows.iter().enumerate() {
-        if found { break; }
+        if found {
+            break;
+        }
         // Count actual tool rows to match cursor
         cursor_pos = ri;
     }
     // Simple scroll: find cursor position in rows
     let mut row_idx = 0usize;
     for cat in &categories {
-        let cat_items: Vec<(usize, &ToolState)> = model.items.iter().enumerate()
+        let cat_items: Vec<(usize, &ToolState)> = model
+            .items
+            .iter()
+            .enumerate()
             .filter(|(i, item)| item.tool.category == *cat && model.is_item_visible(*i))
             .collect();
-        if cat_items.is_empty() { continue; }
+        if cat_items.is_empty() {
+            continue;
+        }
         row_idx += 1; // header
         for (i, _) in &cat_items {
-            if *i == model.cursor { found = true; cursor_pos = row_idx; break; }
+            if *i == model.cursor {
+                found = true;
+                cursor_pos = row_idx;
+                break;
+            }
             row_idx += 1;
         }
-        if found { break; }
+        if found {
+            break;
+        }
     }
 
     let scroll_offset = if cursor_pos >= visible_height {
         cursor_pos - visible_height + 1
-    } else { 0 };
+    } else {
+        0
+    };
 
     let scrolled: Vec<Row> = rows.into_iter().skip(scroll_offset).collect();
     let scroll_info = format!(" {}/{} ", model.cursor + 1, model.items.len());
@@ -296,10 +354,10 @@ fn render_grid(frame: &mut Frame, area: Rect, model: &UpdaterModel) {
     let table = Table::new(
         scrolled,
         [
-            Constraint::Min(15),       // Tool name
-            Constraint::Length(21),    // Installed version
-            Constraint::Length(21),    // Latest version
-            Constraint::Length(14),    // Status
+            Constraint::Min(15),    // Tool name
+            Constraint::Length(21), // Installed version
+            Constraint::Length(21), // Latest version
+            Constraint::Length(14), // Status
         ],
     )
     .header(header)

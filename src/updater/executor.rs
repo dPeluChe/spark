@@ -14,14 +14,21 @@ pub async fn update_tool(tool: &Tool) -> Result<(), String> {
             update_npm(tool, timeout).await
         }
         UpdateMethod::Omz => update_omz(timeout).await,
-        UpdateMethod::Toad => update_script(
-            "curl -fsSL https://batrachian.ai/install | sh",
-            "toad",
-            timeout,
-        )
-        .await,
+        UpdateMethod::Toad => {
+            update_script(
+                "curl -fsSL https://batrachian.ai/install | sh",
+                "toad",
+                timeout,
+            )
+            .await
+        }
         UpdateMethod::Droid => {
-            update_script("curl -fsSL https://app.factory.ai/cli | sh", "droid", timeout).await
+            update_script(
+                "curl -fsSL https://app.factory.ai/cli | sh",
+                "droid",
+                timeout,
+            )
+            .await
         }
         UpdateMethod::Opencode => update_opencode(timeout).await,
         UpdateMethod::Manual => Err("Manual update required (check vendor portal)".into()),
@@ -73,7 +80,10 @@ async fn update_omz(timeout: Duration) -> Result<(), String> {
 
 async fn update_opencode(timeout: Duration) -> Result<(), String> {
     // Try built-in upgrade first
-    if run_with_timeout("opencode", &["upgrade"], timeout).await.is_ok() {
+    if run_with_timeout("opencode", &["upgrade"], timeout)
+        .await
+        .is_ok()
+    {
         return Ok(());
     }
     // Fallback to install script

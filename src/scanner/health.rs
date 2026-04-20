@@ -1,5 +1,5 @@
-use chrono::{DateTime, Utc};
 use crate::scanner::repo_scanner::HealthGrade;
+use chrono::{DateTime, Utc};
 
 /// Calculate health score (0-100) and grade for a repository
 pub fn calculate_health(

@@ -249,7 +249,8 @@ pub fn list_managed_repos(root: &Path) -> Vec<ManagedRepo> {
     }
 
     repos.sort_by(|a, b| {
-        a.host.cmp(&b.host)
+        a.host
+            .cmp(&b.host)
             .then(a.owner.cmp(&b.owner))
             .then(a.name.cmp(&b.name))
     });
@@ -327,7 +328,11 @@ fn get_last_commit_date(path: &Path) -> Option<String> {
         .and_then(|o| {
             if o.status.success() {
                 let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                if s.is_empty() { None } else { Some(s) }
+                if s.is_empty() {
+                    None
+                } else {
+                    Some(s)
+                }
             } else {
                 None
             }
@@ -376,7 +381,10 @@ pub fn save_status_to_cache(repo_path: &str, status: &str) {
 
     let cache_file = cache_path();
     let _ = std::fs::create_dir_all(cache_file.parent().unwrap_or(Path::new("/tmp")));
-    let _ = std::fs::write(cache_file, serde_json::to_string(&cache).unwrap_or_default());
+    let _ = std::fs::write(
+        cache_file,
+        serde_json::to_string(&cache).unwrap_or_default(),
+    );
 }
 
 /// Check if a cached entry is still valid
@@ -403,9 +411,15 @@ pub fn status_to_string(status: &RepoStatus) -> String {
 
 /// Convert cached string back to RepoStatus
 pub fn string_to_status(s: &str) -> RepoStatus {
-    if s == "up_to_date" { return RepoStatus::UpToDate; }
-    if s == "dirty" { return RepoStatus::Dirty; }
-    if s == "checking" { return RepoStatus::Checking; }
+    if s == "up_to_date" {
+        return RepoStatus::UpToDate;
+    }
+    if s == "dirty" {
+        return RepoStatus::Dirty;
+    }
+    if s == "checking" {
+        return RepoStatus::Checking;
+    }
     if let Some(n) = s.strip_prefix("behind:") {
         return RepoStatus::Behind(n.parse().unwrap_or(0));
     }
@@ -441,8 +455,7 @@ mod tests {
 
     #[test]
     fn test_parse_https_url() {
-        let (host, owner, name) =
-            parse_git_url("https://github.com/user/repo.git").unwrap();
+        let (host, owner, name) = parse_git_url("https://github.com/user/repo.git").unwrap();
         assert_eq!(host, "github.com");
         assert_eq!(owner, "user");
         assert_eq!(name, "repo");

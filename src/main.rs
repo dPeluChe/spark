@@ -2,18 +2,18 @@ mod app;
 mod cli;
 mod config;
 mod core;
-mod updater;
 mod scanner;
 mod tui;
+mod updater;
 mod utils;
 
-use std::io;
 use clap::Parser;
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::prelude::*;
+use std::io;
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {

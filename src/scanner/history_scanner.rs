@@ -3,9 +3,9 @@
 //! Walks the commit history and scans diffs for secrets that may have been
 //! committed and later removed. Uses the same regex patterns as secret_scanner.
 
-use std::path::Path;
+use super::secret_scanner::{FindingCategory, FindingContext, SecretFinding, Severity};
 use std::collections::HashSet;
-use super::secret_scanner::{SecretFinding, FindingCategory, FindingContext, Severity};
+use std::path::Path;
 
 /// Maximum commits to scan (prevents very long scans on large repos)
 const MAX_COMMITS: usize = 500;
@@ -38,7 +38,8 @@ pub fn scan_history(repo_path: &Path) -> Vec<HistoryFinding> {
     }
     revwalk.set_sorting(git2::Sort::TIME).ok();
 
-    let project_name = repo_path.file_name()
+    let project_name = repo_path
+        .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
 
@@ -46,7 +47,9 @@ pub fn scan_history(repo_path: &Path) -> Vec<HistoryFinding> {
     let mut seen: HashSet<String> = HashSet::new();
 
     for (count, oid) in revwalk.filter_map(|r| r.ok()).enumerate() {
-        if count >= MAX_COMMITS { break; }
+        if count >= MAX_COMMITS {
+            break;
+        }
 
         let commit = match repo.find_commit(oid) {
             Ok(c) => c,
@@ -81,22 +84,35 @@ pub fn scan_history(repo_path: &Path) -> Vec<HistoryFinding> {
             None,
             Some(&mut |_delta, _hunk, line| {
                 // Only scan added lines
-                if line.origin() != '+' { return true; }
+                if line.origin() != '+' {
+                    return true;
+                }
 
                 let content = match std::str::from_utf8(line.content()) {
                     Ok(s) => s.trim(),
                     Err(_) => return true,
                 };
 
-                if content.is_empty() || content.len() < 8 { return true; }
+                if content.is_empty() || content.len() < 8 {
+                    return true;
+                }
 
                 // Run secret patterns on the line
                 for matched in check_line_patterns(content) {
-                    let fingerprint = format!("{}:{}:{}", matched.0, short_sha, &matched.2[..matched.2.len().min(20)]);
-                    if seen.contains(&fingerprint) { continue; }
+                    let fingerprint = format!(
+                        "{}:{}:{}",
+                        matched.0,
+                        short_sha,
+                        &matched.2[..matched.2.len().min(20)]
+                    );
+                    if seen.contains(&fingerprint) {
+                        continue;
+                    }
                     seen.insert(fingerprint);
 
-                    let file_path = _delta.new_file().path()
+                    let file_path = _delta
+                        .new_file()
+                        .path()
                         .map(|p| repo_path.join(p))
                         .unwrap_or_default();
 
@@ -128,8 +144,8 @@ pub fn scan_history(repo_path: &Path) -> Vec<HistoryFinding> {
 
 /// Check a single line against secret patterns (reuses patterns from secret_scanner).
 fn check_line_patterns(line: &str) -> Vec<(FindingCategory, Severity, String, String)> {
-    use super::secret_scanner::{API_KEY_PATTERNS, PRIVATE_KEY_CONTENT};
     use super::common;
+    use super::secret_scanner::{API_KEY_PATTERNS, PRIVATE_KEY_CONTENT};
 
     if common::is_likely_false_positive(line) {
         return Vec::new();
@@ -138,11 +154,21 @@ fn check_line_patterns(line: &str) -> Vec<(FindingCategory, Severity, String, St
     let mut results = Vec::new();
     for (pattern, desc) in API_KEY_PATTERNS.iter() {
         if let Some(m) = pattern.find(line) {
-            results.push((FindingCategory::ApiKey, Severity::Critical, common::redact(m.as_str()), desc.to_string()));
+            results.push((
+                FindingCategory::ApiKey,
+                Severity::Critical,
+                common::redact(m.as_str()),
+                desc.to_string(),
+            ));
         }
     }
     if PRIVATE_KEY_CONTENT.is_match(line) {
-        results.push((FindingCategory::PrivateKey, Severity::Critical, "-----BEGIN PRIVATE KEY-----".into(), "Private Key".into()));
+        results.push((
+            FindingCategory::PrivateKey,
+            Severity::Critical,
+            "-----BEGIN PRIVATE KEY-----".into(),
+            "Private Key".into(),
+        ));
     }
     results
 }

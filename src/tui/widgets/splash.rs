@@ -1,6 +1,6 @@
+use crate::tui::styles::*;
 use ratatui::prelude::*;
 use ratatui::widgets::*;
-use crate::tui::styles::*;
 
 /// Render the welcome screen with capabilities overview
 pub fn render_splash(frame: &mut Frame, area: Rect, tick: usize) {
@@ -44,7 +44,10 @@ pub fn render_splash(frame: &mut Frame, area: Rect, tick: usize) {
     let sep_width = area.width.min(50) as usize;
     let sep = Paragraph::new(vec![
         Line::from(""),
-        Line::from(Span::styled("─".repeat(sep_width), Style::default().fg(DARK_BG))),
+        Line::from(Span::styled(
+            "─".repeat(sep_width),
+            Style::default().fg(DARK_BG),
+        )),
     ])
     .alignment(Alignment::Center);
     frame.render_widget(sep, chunks[4]);
@@ -56,7 +59,8 @@ pub fn render_splash(frame: &mut Frame, area: Rect, tick: usize) {
             Constraint::Fill(1),
             Constraint::Length(cap_width),
             Constraint::Fill(1),
-        ]).split(chunks[5])[1]
+        ])
+        .split(chunks[5])[1]
     } else {
         chunks[5]
     };

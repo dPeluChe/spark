@@ -15,9 +15,17 @@ pub(crate) const LOG_AGE_DAYS: u64 = 7;
 
 /// Protected paths that must NEVER be deleted
 const PROTECTED_PATHS: &[&str] = &[
-    "/", "/System", "/bin", "/sbin", "/usr", "/etc",
-    "/var/db", "/Library/Extensions", "/private/var/db",
-    "/Applications", "/Library",
+    "/",
+    "/System",
+    "/bin",
+    "/sbin",
+    "/usr",
+    "/etc",
+    "/var/db",
+    "/Library/Extensions",
+    "/private/var/db",
+    "/Applications",
+    "/Library",
 ];
 
 /// A cleanable system resource
@@ -152,7 +160,11 @@ fn load_whitelist() -> Vec<PathBuf> {
             } else {
                 PathBuf::from(l)
             };
-            if expanded.is_absolute() { Some(expanded) } else { None }
+            if expanded.is_absolute() {
+                Some(expanded)
+            } else {
+                None
+            }
         })
         .collect()
 }
@@ -176,7 +188,11 @@ fn log_operation(action: &str, path: &str, size: u64, result: &str) {
     {
         let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
         let size_str = crate::utils::fs::format_size(size);
-        let _ = writeln!(f, "[{}] {} {} {} {}", timestamp, action, result, size_str, path);
+        let _ = writeln!(
+            f,
+            "[{}] {} {} {} {}",
+            timestamp, action, result, size_str, path
+        );
     }
 }
 
@@ -202,7 +218,8 @@ pub fn scan_system() -> Vec<CleanableItem> {
             CleanCategory::Logs => 3,
             CleanCategory::Downloads => 4,
         };
-        cat_order(&a.category).cmp(&cat_order(&b.category))
+        cat_order(&a.category)
+            .cmp(&cat_order(&b.category))
             .then(b.size.cmp(&a.size))
     });
     items
@@ -236,13 +253,10 @@ pub fn execute_clean(item: &CleanableItem, dry_run: bool) -> Result<u64, String>
                 return Err(format!("{} not found", cmd));
             }
 
-            let output = Command::new(cmd)
-                .args(args)
-                .output()
-                .map_err(|e| {
-                    log_operation("CLEAN", &item.detail, 0, "FAILED");
-                    format!("{}: {}", cmd, e)
-                })?;
+            let output = Command::new(cmd).args(args).output().map_err(|e| {
+                log_operation("CLEAN", &item.detail, 0, "FAILED");
+                format!("{}: {}", cmd, e)
+            })?;
 
             if output.status.success() {
                 log_operation("CLEAN", &item.detail, item.size, "REMOVED");
@@ -255,7 +269,12 @@ pub fn execute_clean(item: &CleanableItem, dry_run: bool) -> Result<u64, String>
         }
         CleanCommand::RemoveDir(path) => {
             if !is_safe_path(path) {
-                log_operation("CLEAN", &path.display().to_string(), 0, "BLOCKED_UNSAFE_PATH");
+                log_operation(
+                    "CLEAN",
+                    &path.display().to_string(),
+                    0,
+                    "BLOCKED_UNSAFE_PATH",
+                );
                 return Err(format!("Blocked: {} is a protected path", path.display()));
             }
             if !path.exists() {
@@ -271,7 +290,12 @@ pub fn execute_clean(item: &CleanableItem, dry_run: bool) -> Result<u64, String>
         }
         CleanCommand::RemoveFile(path) => {
             if !is_safe_path(path) {
-                log_operation("CLEAN", &path.display().to_string(), 0, "BLOCKED_UNSAFE_PATH");
+                log_operation(
+                    "CLEAN",
+                    &path.display().to_string(),
+                    0,
+                    "BLOCKED_UNSAFE_PATH",
+                );
                 return Err(format!("Blocked: {} is a protected path", path.display()));
             }
             if !path.exists() {
@@ -291,13 +315,25 @@ pub fn execute_clean(item: &CleanableItem, dry_run: bool) -> Result<u64, String>
 // Scan category implementations are in system_categories.rs
 use super::system_categories;
 
-fn scan_docker(whitelist: &[PathBuf]) -> Vec<CleanableItem> { system_categories::scan_docker(whitelist) }
-fn scan_caches(whitelist: &[PathBuf]) -> Vec<CleanableItem> { system_categories::scan_caches(whitelist) }
-fn scan_logs(whitelist: &[PathBuf]) -> Vec<CleanableItem> { system_categories::scan_logs(whitelist) }
-fn scan_vms(whitelist: &[PathBuf]) -> Vec<CleanableItem> { system_categories::scan_vms(whitelist) }
-fn scan_downloads(whitelist: &[PathBuf]) -> Vec<CleanableItem> { system_categories::scan_downloads(whitelist) }
+fn scan_docker(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
+    system_categories::scan_docker(whitelist)
+}
+fn scan_caches(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
+    system_categories::scan_caches(whitelist)
+}
+fn scan_logs(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
+    system_categories::scan_logs(whitelist)
+}
+fn scan_vms(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
+    system_categories::scan_vms(whitelist)
+}
+fn scan_downloads(whitelist: &[PathBuf]) -> Vec<CleanableItem> {
+    system_categories::scan_downloads(whitelist)
+}
 #[cfg(test)]
-fn parse_size_string(s: &str) -> u64 { system_categories::parse_size_string(s) }
+fn parse_size_string(s: &str) -> u64 {
+    system_categories::parse_size_string(s)
+}
 
 #[cfg(test)]
 mod tests {
@@ -391,4 +427,3 @@ mod tests {
         assert!(result.unwrap_err().contains("running"));
     }
 }
-

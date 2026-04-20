@@ -1,6 +1,6 @@
-use std::path::PathBuf;
-use chrono::{DateTime, Utc};
 use crate::scanner::space_analyzer::ArtifactInfo;
+use chrono::{DateTime, Utc};
+use std::path::PathBuf;
 
 /// Status of git in a repository
 #[derive(Debug, Clone)]
@@ -19,13 +19,13 @@ pub enum RepoGitStatus {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkspaceType {
     None,
-    Npm,        // package.json with "workspaces"
-    Pnpm,       // pnpm-workspace.yaml
-    Turborepo,  // turbo.json
-    Nx,         // nx.json
-    Lerna,      // lerna.json
-    Cargo,      // Cargo.toml with [workspace]
-    GoWork,     // go.work
+    Npm,       // package.json with "workspaces"
+    Pnpm,      // pnpm-workspace.yaml
+    Turborepo, // turbo.json
+    Nx,        // nx.json
+    Lerna,     // lerna.json
+    Cargo,     // Cargo.toml with [workspace]
+    GoWork,    // go.work
 }
 
 impl std::fmt::Display for WorkspaceType {
@@ -105,7 +105,8 @@ pub async fn scan_directories(
         }
 
         // Derive group name from scan root
-        let group = dir.file_name()
+        let group = dir
+            .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| dir.display().to_string());
 
@@ -115,7 +116,10 @@ pub async fn scan_directories(
             .filter_entry(|e| {
                 let name = e.file_name().to_string_lossy();
                 // Skip node_modules, .git internals, venvs during walk
-                !matches!(name.as_ref(), "node_modules" | ".venv" | "venv" | "__pycache__")
+                !matches!(
+                    name.as_ref(),
+                    "node_modules" | ".venv" | "venv" | "__pycache__"
+                )
             })
             .filter_map(|e| e.ok())
         {
@@ -126,7 +130,8 @@ pub async fn scan_directories(
                     if let Some(mut repo) = analyze_repo(parent) {
                         // Group = first 2 levels of relative path from scan root
                         let rel = parent.strip_prefix(dir).unwrap_or(parent);
-                        let components: Vec<String> = rel.components()
+                        let components: Vec<String> = rel
+                            .components()
                             .map(|c| c.as_os_str().to_string_lossy().to_string())
                             .collect();
 
@@ -156,7 +161,8 @@ pub async fn scan_directories(
     {
         let all_paths: Vec<PathBuf> = repos.iter().map(|r| r.path.clone()).collect();
         for repo in &mut repos {
-            let child_count = all_paths.iter()
+            let child_count = all_paths
+                .iter()
                 .filter(|p| *p != &repo.path && p.starts_with(&repo.path))
                 .count();
             repo.is_container = child_count > 0;
@@ -166,14 +172,17 @@ pub async fn scan_directories(
 
     // Remove ALL child repos of containers — even if the child is also a container.
     // They should only appear inside container detail view.
-    let container_paths: Vec<PathBuf> = repos.iter()
+    let container_paths: Vec<PathBuf> = repos
+        .iter()
         .filter(|r| r.is_container)
         .map(|r| r.path.clone())
         .collect();
 
     repos.retain(|r| {
         // Keep if no container is a parent of this repo
-        !container_paths.iter().any(|cp| r.path.starts_with(cp) && r.path != *cp)
+        !container_paths
+            .iter()
+            .any(|cp| r.path.starts_with(cp) && r.path != *cp)
     });
 
     repos
@@ -286,8 +295,13 @@ pub fn analyze_repo(path: &std::path::Path) -> Option<RepoInfo> {
     let last_modified = std::fs::metadata(path).ok().and_then(|m| m.modified().ok());
 
     // Health score
-    let (health_score, health_grade) =
-        calculate_health(last_commit_date, last_modified, has_remote, is_dirty, artifact_size);
+    let (health_score, health_grade) = calculate_health(
+        last_commit_date,
+        last_modified,
+        has_remote,
+        is_dirty,
+        artifact_size,
+    );
 
     // Detect workspace type
     let workspace = detect_workspace(path);
@@ -376,8 +390,14 @@ pub fn scan_container_children(container_path: &std::path::Path) -> Vec<RepoInfo
 
 /// Directories to always skip when discovering project dirs
 const SKIP_DIRS: &[&str] = &[
-    "Library", "Applications", "Music", "Movies", "Pictures",
-    "Public", "Downloads", "Documents",
+    "Library",
+    "Applications",
+    "Music",
+    "Movies",
+    "Pictures",
+    "Public",
+    "Downloads",
+    "Documents",
 ];
 
 /// A discovered directory with its repo count
@@ -436,4 +456,3 @@ fn count_git_repos(path: &std::path::Path, depth: usize) -> usize {
         .filter(|e| e.file_type().is_dir() && e.file_name() == ".git")
         .count()
 }
-

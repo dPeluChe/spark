@@ -21,7 +21,9 @@ pub struct SparkConfig {
 fn default_repos_root() -> PathBuf {
     // Try ghq root first, fall back to ~/repos
     detect_ghq_root().unwrap_or_else(|| {
-        dirs::home_dir().unwrap_or_else(|| PathBuf::from("~")).join("repos")
+        dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("~"))
+            .join("repos")
     })
 }
 

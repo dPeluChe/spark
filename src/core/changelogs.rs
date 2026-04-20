@@ -5,7 +5,9 @@ pub fn get_changelog_url(tool: &Tool) -> Option<String> {
     // Direct mapping for known tools
     let url = match tool.name.as_str() {
         // AI Development
-        "Claude CLI" => "https://www.npmjs.com/package/@anthropic-ai/claude-code?activeTab=versions",
+        "Claude CLI" => {
+            "https://www.npmjs.com/package/@anthropic-ai/claude-code?activeTab=versions"
+        }
         "Droid CLI" => "https://github.com/factory-ai/cli/releases",
         "Gemini CLI" => "https://github.com/google-gemini/gemini-cli/releases",
         "OpenCode" => "https://github.com/opencode-ai/opencode/releases",
@@ -78,10 +80,7 @@ pub fn get_changelog_url(tool: &Tool) -> Option<String> {
                     ));
                 }
                 UpdateMethod::BrewPkg => {
-                    return Some(format!(
-                        "https://formulae.brew.sh/formula/{}",
-                        tool.package
-                    ));
+                    return Some(format!("https://formulae.brew.sh/formula/{}", tool.package));
                 }
                 _ => return None,
             }

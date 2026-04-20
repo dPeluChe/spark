@@ -1,6 +1,6 @@
+use crate::tui::styles::*;
 use ratatui::prelude::*;
 use ratatui::widgets::*;
-use crate::tui::styles::*;
 
 /// Render an indeterminate progress bar animation
 pub fn render_indeterminate_bar(frame: &mut Frame, area: Rect, tick: usize) {
@@ -168,7 +168,10 @@ pub fn render_summary_overlay(
     if !failure_details.is_empty() {
         lines.push(Line::from(""));
         for detail in &failure_details {
-            lines.push(Line::from(Span::styled(detail.clone(), Style::default().fg(RED))));
+            lines.push(Line::from(Span::styled(
+                detail.clone(),
+                Style::default().fg(RED),
+            )));
         }
     }
 

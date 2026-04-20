@@ -1,8 +1,8 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::core::types::*;
 use crate::tui::model::*;
 use crate::tui::scanner_keys;
 use crate::utils::shell::debug_log;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 /// Side-effect actions dispatched from key/message handlers to the event loop
 pub enum Action {
@@ -58,14 +58,19 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Option<Action> {
         return handle_welcome_key(app, key);
     }
 
-    debug_log(&format!("KEY: {:?} | mode={:?} scanner_state={:?}", key.code, app.mode, app.scanner.state));
+    debug_log(&format!(
+        "KEY: {:?} | mode={:?} scanner_state={:?}",
+        key.code, app.mode, app.scanner.state
+    ));
 
     // Global: Tab cycles through views (Updater -> Scanner -> Repos -> Ports -> Updater)
     // Except during text input or active operations
     let in_text_input = app.mode == AppMode::Scanner
-        && matches!(app.scanner.state, ScannerState::RepoCloneInput | ScannerState::ScanAddPath);
-    let in_search = app.mode == AppMode::Updater
-        && app.updater.state == UpdaterState::Search;
+        && matches!(
+            app.scanner.state,
+            ScannerState::RepoCloneInput | ScannerState::ScanAddPath
+        );
+    let in_search = app.mode == AppMode::Updater && app.updater.state == UpdaterState::Search;
     let in_blocking = (app.mode == AppMode::Updater && app.updater.state == UpdaterState::Updating)
         || (app.mode == AppMode::Scanner && app.scanner.state == ScannerState::Scanning)
         || (app.mode == AppMode::Scanner && app.scanner.state == ScannerState::Cleaning)
@@ -74,47 +79,42 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Option<Action> {
     if key.code == KeyCode::Tab && !in_text_input && !in_search && !in_blocking {
         // Cycle: Scanner -> Repos -> Ports -> Updater -> Scanner
         // Scanner base states -> Repos
-        if app.mode == AppMode::Scanner && matches!(
-            app.scanner.state,
-            ScannerState::ScanConfig | ScannerState::ScanResults
-                | ScannerState::RepoDetail
-        ) {
+        if app.mode == AppMode::Scanner
+            && matches!(
+                app.scanner.state,
+                ScannerState::ScanConfig | ScannerState::ScanResults | ScannerState::RepoDetail
+            )
+        {
             app.scanner.state = ScannerState::RepoManager;
             return Some(Action::ListManagedRepos);
         }
         // Repos -> Ports
-        if app.mode == AppMode::Scanner && matches!(
-            app.scanner.state,
-            ScannerState::RepoManager | ScannerState::RepoCloneSummary
-        ) {
+        if app.mode == AppMode::Scanner
+            && matches!(
+                app.scanner.state,
+                ScannerState::RepoManager | ScannerState::RepoCloneSummary
+            )
+        {
             app.scanner.state = ScannerState::PortScan;
             return Some(Action::ScanPorts);
         }
         // Ports -> System
-        if app.mode == AppMode::Scanner && matches!(
-            app.scanner.state,
-            ScannerState::PortScan
-        ) {
+        if app.mode == AppMode::Scanner && matches!(app.scanner.state, ScannerState::PortScan) {
             app.scanner.state = ScannerState::SystemClean;
             return Some(Action::ScanSystem);
         }
         // System -> Audit
-        if app.mode == AppMode::Scanner && matches!(
-            app.scanner.state,
-            ScannerState::SystemClean
-        ) {
+        if app.mode == AppMode::Scanner && matches!(app.scanner.state, ScannerState::SystemClean) {
             app.scanner.state = ScannerState::SecretAudit;
             if app.audit.results.is_empty() {
-                let path = std::env::current_dir().unwrap_or_else(|_| app.config.repos_root.clone());
+                let path =
+                    std::env::current_dir().unwrap_or_else(|_| app.config.repos_root.clone());
                 return Some(Action::StartAudit(path));
             }
             return None;
         }
         // Audit -> Updater
-        if app.mode == AppMode::Scanner && matches!(
-            app.scanner.state,
-            ScannerState::SecretAudit
-        ) {
+        if app.mode == AppMode::Scanner && matches!(app.scanner.state, ScannerState::SecretAudit) {
             app.mode = AppMode::Updater;
             return None;
         }
@@ -266,11 +266,27 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
                 .push((index, bytes_recovered, success, error));
         }
         AppMessage::CleanAllComplete => {
-            let recovered: u64 = app.scanner.clean_results.iter().map(|(_, b, _, _)| *b).sum();
-            let ok = app.scanner.clean_results.iter().filter(|(_, _, s, _)| *s).count();
+            let recovered: u64 = app
+                .scanner
+                .clean_results
+                .iter()
+                .map(|(_, b, _, _)| *b)
+                .sum();
+            let ok = app
+                .scanner
+                .clean_results
+                .iter()
+                .filter(|(_, _, s, _)| *s)
+                .count();
             let fail = app.scanner.clean_results.len() - ok;
             if fail == 0 {
-                app.show_toast(format!("Cleaned {} recovered", crate::utils::fs::format_size(recovered)), false);
+                app.show_toast(
+                    format!(
+                        "Cleaned {} recovered",
+                        crate::utils::fs::format_size(recovered)
+                    ),
+                    false,
+                );
             } else {
                 app.show_toast(format!("Clean: {} ok, {} failed", ok, fail), true);
             }
@@ -286,8 +302,14 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
             app.scanner.checked.clear();
             app.scanner.clean_results.clear();
             // If cleaning was triggered from container child detail, return there
-            if !app.scanner.container_children.is_empty() && !app.scanner.repos.is_empty()
-                && app.scanner.repos.get(app.scanner.cursor).map(|r| r.is_container).unwrap_or(false)
+            if !app.scanner.container_children.is_empty()
+                && !app.scanner.repos.is_empty()
+                && app
+                    .scanner
+                    .repos
+                    .get(app.scanner.cursor)
+                    .map(|r| r.is_container)
+                    .unwrap_or(false)
             {
                 app.scanner.state = ScannerState::ContainerChildDetail;
             } else {
@@ -301,10 +323,17 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
             app.port_scanner.scanning = false;
             rebuild_port_display_order(&mut app.port_scanner);
         }
-        AppMessage::KillResult { pid, success, error } => {
+        AppMessage::KillResult {
+            pid,
+            success,
+            error,
+        } => {
             if success {
                 // Find name before removing
-                let name = app.port_scanner.ports.iter()
+                let name = app
+                    .port_scanner
+                    .ports
+                    .iter()
                     .find(|p| p.pid == pid)
                     .map(|p| {
                         let project = p.project_dir.as_deref().unwrap_or("");
@@ -346,7 +375,11 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
                 app.repo_manager.repos[index].status = status;
             }
         }
-        AppMessage::RepoPullResult { index, success, message } => {
+        AppMessage::RepoPullResult {
+            index,
+            success,
+            message,
+        } => {
             if index < app.repo_manager.repos.len() {
                 let name = app.repo_manager.repos[index].name.clone();
                 if success {
@@ -361,7 +394,11 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
             }
             app.repo_manager.checked.remove(&index);
         }
-        AppMessage::CloneResult { success, message, clone_path } => {
+        AppMessage::CloneResult {
+            success,
+            message,
+            clone_path,
+        } => {
             app.repo_manager.cloning = false;
             if success {
                 let url = app.repo_manager.clone_input.clone();
@@ -380,11 +417,8 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_default();
 
-                let alias_cmd = format!(
-                    "alias {}='cd {}'",
-                    repo_name.replace('-', "_"),
-                    short_path
-                );
+                let alias_cmd =
+                    format!("alias {}='cd {}'", repo_name.replace('-', "_"), short_path);
 
                 app.repo_manager.last_clone = Some(CloneSummary {
                     repo_path: path,
@@ -394,8 +428,12 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
                     short_path,
                 });
 
-                let cloned_name = app.repo_manager.last_clone.as_ref()
-                    .map(|c| c.repo_name.clone()).unwrap_or_default();
+                let cloned_name = app
+                    .repo_manager
+                    .last_clone
+                    .as_ref()
+                    .map(|c| c.repo_name.clone())
+                    .unwrap_or_default();
                 app.repo_manager.clone_input.clear();
                 app.repo_manager.clone_error = None;
                 app.scanner.state = ScannerState::RepoCloneSummary;
@@ -412,12 +450,25 @@ pub fn handle_message(app: &mut App, msg: AppMessage) -> Option<Action> {
             app.system_cleaner.scanning = false;
             app.system_cleaner.rebuild_display_order();
         }
-        AppMessage::SystemCleanItemResult { index, recovered, success, error } => {
+        AppMessage::SystemCleanItemResult {
+            index,
+            recovered,
+            success,
+            error,
+        } => {
             if success {
-                let name = app.system_cleaner.items.get(index)
-                    .map(|i| i.name.clone()).unwrap_or_default();
+                let name = app
+                    .system_cleaner
+                    .items
+                    .get(index)
+                    .map(|i| i.name.clone())
+                    .unwrap_or_default();
                 app.show_toast(
-                    format!("Cleaned {} ({})", name, crate::utils::fs::format_size(recovered)),
+                    format!(
+                        "Cleaned {} ({})",
+                        name,
+                        crate::utils::fs::format_size(recovered)
+                    ),
                     false,
                 );
                 // Remove cleaned item and rebuild display order

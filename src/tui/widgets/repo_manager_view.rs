@@ -1,16 +1,16 @@
-use ratatui::prelude::*;
-use ratatui::widgets::*;
+use crate::scanner::repo_manager::RepoStatus;
 use crate::tui::model::*;
 use crate::tui::styles::*;
-use crate::scanner::repo_manager::RepoStatus;
 use crate::utils::fs::format_size;
 use chrono;
+use ratatui::prelude::*;
+use ratatui::widgets::*;
 
 /// Render the repo manager view
 pub fn render_repo_manager(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
     let chunks = Layout::vertical([
         Constraint::Length(3), // header
-        Constraint::Min(5),   // repo table
+        Constraint::Min(5),    // repo table
         Constraint::Length(2), // help
     ])
     .split(area);
@@ -24,11 +24,24 @@ fn render_header(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
     let behind_count = model
         .repos
         .iter()
-        .filter(|r| matches!(r.status, RepoStatus::Behind(_) | RepoStatus::Diverged { .. }))
+        .filter(|r| {
+            matches!(
+                r.status,
+                RepoStatus::Behind(_) | RepoStatus::Diverged { .. }
+            )
+        })
         .count();
 
-    let dirty_count = model.repos.iter().filter(|r| r.status == RepoStatus::Dirty).count();
-    let checking_count = model.repos.iter().filter(|r| r.status == RepoStatus::Checking).count();
+    let dirty_count = model
+        .repos
+        .iter()
+        .filter(|r| r.status == RepoStatus::Dirty)
+        .count();
+    let checking_count = model
+        .repos
+        .iter()
+        .filter(|r| r.status == RepoStatus::Checking)
+        .count();
 
     // Get last check time from cache file
     let cache_path = dirs::config_dir()
@@ -62,21 +75,39 @@ fn render_header(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
                 Style::default().fg(WHITE).bg(GREEN).bold(),
             ),
             Span::raw("  "),
-            Span::styled(format!("{} repos", model.repos.len()), Style::default().fg(GRAY)),
+            Span::styled(
+                format!("{} repos", model.repos.len()),
+                Style::default().fg(GRAY),
+            ),
             if behind_count > 0 {
-                Span::styled(format!("  {} need pull", behind_count), Style::default().fg(YELLOW).bold())
-            } else { Span::raw("") },
+                Span::styled(
+                    format!("  {} need pull", behind_count),
+                    Style::default().fg(YELLOW).bold(),
+                )
+            } else {
+                Span::raw("")
+            },
             if dirty_count > 0 {
                 Span::styled(format!("  {} dirty", dirty_count), Style::default().fg(RED))
-            } else { Span::raw("") },
+            } else {
+                Span::raw("")
+            },
             if checking_count > 0 {
-                Span::styled(format!("  {} checking...", checking_count), Style::default().fg(GRAY).italic())
-            } else { Span::raw("") },
+                Span::styled(
+                    format!("  {} checking...", checking_count),
+                    Style::default().fg(GRAY).italic(),
+                )
+            } else {
+                Span::raw("")
+            },
         ]),
         Line::from(vec![
             Span::styled(format!("Root: {}", root_short), Style::default().fg(GRAY)),
             if let Some(ref ts) = last_check {
-                Span::styled(format!("  Last check: {}", ts), Style::default().fg(TERM_GRAY))
+                Span::styled(
+                    format!("  Last check: {}", ts),
+                    Style::default().fg(TERM_GRAY),
+                )
             } else {
                 Span::raw("")
             },
@@ -163,23 +194,24 @@ fn render_repo_table(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
 
             let last_commit = repo.last_commit.as_deref().unwrap_or("-");
 
-            let size_str = if repo.size > 0 { format_size(repo.size) } else { "-".into() };
+            let size_str = if repo.size > 0 {
+                format_size(repo.size)
+            } else {
+                "-".into()
+            };
 
             Row::new(vec![
-                Cell::from(format!("{} [{}] {}", cursor, checkbox, repo.name))
-                    .style(if is_selected {
+                Cell::from(format!("{} [{}] {}", cursor, checkbox, repo.name)).style(
+                    if is_selected {
                         Style::default().fg(WHITE).bold()
                     } else {
                         Style::default().fg(GRAY)
-                    }),
-                Cell::from(repo.branch.clone())
-                    .style(Style::default().fg(PURPLE)),
-                Cell::from(format!("{} {}", status_icon, repo.status))
-                    .style(status_style),
-                Cell::from(size_str)
-                    .style(Style::default().fg(GRAY)),
-                Cell::from(last_commit)
-                    .style(Style::default().fg(TERM_GRAY)),
+                    },
+                ),
+                Cell::from(repo.branch.clone()).style(Style::default().fg(PURPLE)),
+                Cell::from(format!("{} {}", status_icon, repo.status)).style(status_style),
+                Cell::from(size_str).style(Style::default().fg(GRAY)),
+                Cell::from(last_commit).style(Style::default().fg(TERM_GRAY)),
                 Cell::from(format!("{}/{}", repo.host, repo.owner))
                     .style(Style::default().fg(GRAY)),
             ])
@@ -270,14 +302,17 @@ pub fn render_action_modal(frame: &mut Frame, area: Rect, model: &RepoManagerMod
         ]),
         Line::from(vec![
             Span::styled("  Status:  ", Style::default().fg(PURPLE)),
-            Span::styled(status_icon, Style::default().fg(match &repo.status {
-                RepoStatus::UpToDate => GREEN,
-                RepoStatus::Behind(_) => YELLOW,
-                RepoStatus::Ahead(_) => BLUE,
-                RepoStatus::Diverged { .. } => RED,
-                RepoStatus::Dirty => YELLOW,
-                _ => GRAY,
-            })),
+            Span::styled(
+                status_icon,
+                Style::default().fg(match &repo.status {
+                    RepoStatus::UpToDate => GREEN,
+                    RepoStatus::Behind(_) => YELLOW,
+                    RepoStatus::Ahead(_) => BLUE,
+                    RepoStatus::Diverged { .. } => RED,
+                    RepoStatus::Dirty => YELLOW,
+                    _ => GRAY,
+                }),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  Updated: ", Style::default().fg(PURPLE)),
@@ -285,7 +320,10 @@ pub fn render_action_modal(frame: &mut Frame, area: Rect, model: &RepoManagerMod
         ]),
         Line::from(vec![
             Span::styled("  Host:    ", Style::default().fg(PURPLE)),
-            Span::styled(format!("{}/{}", repo.host, repo.owner), Style::default().fg(GRAY)),
+            Span::styled(
+                format!("{}/{}", repo.host, repo.owner),
+                Style::default().fg(GRAY),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  Path:    ", Style::default().fg(PURPLE)),
@@ -306,13 +344,13 @@ pub fn render_action_modal(frame: &mut Frame, area: Rect, model: &RepoManagerMod
         ]),
         Line::from(vec![
             Span::styled("  [d] ", Style::default().fg(RED).bold()),
-            Span::styled("Delete repository and all files", Style::default().fg(WHITE)),
+            Span::styled(
+                "Delete repository and all files",
+                Style::default().fg(WHITE),
+            ),
         ]),
         Line::from(""),
-        Line::from(Span::styled(
-            "  [q] Close",
-            Style::default().fg(GRAY),
-        )),
+        Line::from(Span::styled("  [q] Close", Style::default().fg(GRAY))),
     ];
 
     let paragraph = Paragraph::new(lines);
@@ -327,9 +365,9 @@ pub fn render_clone_summary(frame: &mut Frame, area: Rect, model: &RepoManagerMo
     };
 
     let chunks = Layout::vertical([
-        Constraint::Length(3),  // header
+        Constraint::Length(3), // header
         Constraint::Min(10),   // content
-        Constraint::Length(2),  // help
+        Constraint::Length(2), // help
     ])
     .split(area);
 

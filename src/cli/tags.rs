@@ -1,8 +1,8 @@
 //! Repository tag management CLI commands.
 
+use super::TagAction;
 use crate::config;
 use crate::scanner::{repo_manager, repo_tags};
-use super::TagAction;
 
 pub fn cmd_tag(action: TagAction, config: &config::SparkConfig) {
     let mut tags = repo_tags::load_tags();
@@ -56,9 +56,9 @@ pub fn cmd_tag(action: TagAction, config: &config::SparkConfig) {
                 println!("  \x1b[1m{}\x1b[0m ({} repos)\n", tag_name, repo_keys.len());
                 for key in &repo_keys {
                     // Find matching repo for extra info
-                    let info = repos.iter().find(|r| {
-                        repo_tags::repo_key(&r.host, &r.owner, &r.name) == *key
-                    });
+                    let info = repos
+                        .iter()
+                        .find(|r| repo_tags::repo_key(&r.host, &r.owner, &r.name) == *key);
                     if let Some(r) = info {
                         let age = r.last_commit.as_deref().unwrap_or("-");
                         println!("    {}/{}  \x1b[90m{}\x1b[0m", r.owner, r.name, age);
@@ -107,10 +107,15 @@ pub fn cmd_tag(action: TagAction, config: &config::SparkConfig) {
 }
 
 /// Find a repo by name, owner/name, or host/owner/name
-fn find_repo<'a>(repos: &'a [repo_manager::ManagedRepo], query: &str) -> Option<&'a repo_manager::ManagedRepo> {
+fn find_repo<'a>(
+    repos: &'a [repo_manager::ManagedRepo],
+    query: &str,
+) -> Option<&'a repo_manager::ManagedRepo> {
     let q = query.to_lowercase();
     // Exact owner/name
-    repos.iter().find(|r| format!("{}/{}", r.owner, r.name).to_lowercase() == q)
+    repos
+        .iter()
+        .find(|r| format!("{}/{}", r.owner, r.name).to_lowercase() == q)
         // Exact name
         .or_else(|| repos.iter().find(|r| r.name.to_lowercase() == q))
         // Partial
@@ -119,7 +124,8 @@ fn find_repo<'a>(repos: &'a [repo_manager::ManagedRepo], query: &str) -> Option<
 
 fn suggest_repos(repos: &[repo_manager::ManagedRepo], query: &str) {
     let q = query.to_lowercase();
-    let matches: Vec<_> = repos.iter()
+    let matches: Vec<_> = repos
+        .iter()
         .filter(|r| r.name.to_lowercase().contains(&q) || r.owner.to_lowercase().contains(&q))
         .take(5)
         .collect();

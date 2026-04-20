@@ -83,16 +83,8 @@ pub struct PortInfo {
 
 /// Common dev server ports to highlight
 const DEV_PORTS: &[u16] = &[
-    3000, 3001, 3030, 3333,
-    4000, 4200, 4321,
-    5000, 5173, 5174, 5500,
-    6006,
-    8000, 8080, 8081, 8443,
-    8888, 8889,
-    9000, 9090,
-    9229,
-    19006,
-    24678,
+    3000, 3001, 3030, 3333, 4000, 4200, 4321, 5000, 5173, 5174, 5500, 6006, 8000, 8080, 8081, 8443,
+    8888, 8889, 9000, 9090, 9229, 19006, 24678,
 ];
 
 pub fn is_dev_port(port: u16) -> bool {
@@ -104,18 +96,35 @@ pub fn is_dev_server(info: &PortInfo) -> bool {
     // Known system runtimes
     if let Runtime::Other(ref name) = info.runtime {
         let n = name.to_lowercase();
-        if matches!(n.as_str(),
-            "macos" | "spotify" | "redis" | "postgresql" | "mysql"
-            | "mongodb" | "figma" | "dropbox" | "superset"
+        if matches!(
+            n.as_str(),
+            "macos"
+                | "spotify"
+                | "redis"
+                | "postgresql"
+                | "mysql"
+                | "mongodb"
+                | "figma"
+                | "dropbox"
+                | "superset"
         ) {
             return false;
         }
     }
     // Known system process names
     let proc = info.process_name.to_lowercase();
-    if matches!(proc.as_str(),
-        "controlce" | "rapportd" | "spotify" | "raycast" | "dropbox"
-        | "figma_age" | "zed" | "ollama" | "superset" | "stable"
+    if matches!(
+        proc.as_str(),
+        "controlce"
+            | "rapportd"
+            | "spotify"
+            | "raycast"
+            | "dropbox"
+            | "figma_age"
+            | "zed"
+            | "ollama"
+            | "superset"
+            | "stable"
     ) {
         return false;
     }
@@ -131,8 +140,13 @@ pub fn is_dev_server(info: &PortInfo) -> bool {
     }
     matches!(
         info.runtime,
-        Runtime::Node | Runtime::Python | Runtime::Go | Runtime::Rust
-        | Runtime::Ruby | Runtime::Bun | Runtime::Deno
+        Runtime::Node
+            | Runtime::Python
+            | Runtime::Go
+            | Runtime::Rust
+            | Runtime::Ruby
+            | Runtime::Bun
+            | Runtime::Deno
     ) || is_dev_port(info.port)
 }
 
@@ -162,30 +176,52 @@ fn scan_ports_lsof() -> Vec<PortInfo> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    struct RawEntry { port: u16, pid: u32, process_name: String }
+    struct RawEntry {
+        port: u16,
+        pid: u32,
+        process_name: String,
+    }
     let mut seen_ports: HashMap<u16, usize> = HashMap::new();
     let mut entries: Vec<RawEntry> = Vec::new();
 
     for line in stdout.lines().skip(1) {
         let fields: Vec<&str> = line.split_whitespace().collect();
-        if fields.len() < 9 { continue; }
+        if fields.len() < 9 {
+            continue;
+        }
 
         let process_name = fields[0].to_string();
-        let pid: u32 = match fields[1].parse() { Ok(p) => p, Err(_) => continue };
+        let pid: u32 = match fields[1].parse() {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
         let port: u16 = match fields[8].rsplit(':').next().and_then(|p| p.parse().ok()) {
-            Some(p) => p, None => continue,
+            Some(p) => p,
+            None => continue,
         };
 
         if let Some(&idx) = seen_ports.get(&port) {
-            if entries[idx].pid == pid { continue; } // IPv4/IPv6 dup
-            entries[idx] = RawEntry { port, pid, process_name };
+            if entries[idx].pid == pid {
+                continue;
+            } // IPv4/IPv6 dup
+            entries[idx] = RawEntry {
+                port,
+                pid,
+                process_name,
+            };
         } else {
             seen_ports.insert(port, entries.len());
-            entries.push(RawEntry { port, pid, process_name });
+            entries.push(RawEntry {
+                port,
+                pid,
+                process_name,
+            });
         }
     }
 
-    if entries.is_empty() { return Vec::new(); }
+    if entries.is_empty() {
+        return Vec::new();
+    }
 
     let mut unique_pids: Vec<u32> = entries.iter().map(|e| e.pid).collect();
     unique_pids.sort_unstable();
@@ -194,37 +230,62 @@ fn scan_ports_lsof() -> Vec<PortInfo> {
     let cmdlines = get_cmdlines_batch(&unique_pids);
     let cwds = get_cwds_batch(&unique_pids);
 
-    let mut results: Vec<PortInfo> = entries.into_iter().map(|e| {
-        let cmdline = cmdlines.get(&e.pid).cloned().unwrap_or_default();
-        let cwd = cwds.get(&e.pid).cloned();
-        let runtime = detect_runtime(&e.process_name, &cmdline);
-        let project_dir = resolve_project_dir(&cwd, &cmdline);
-        PortInfo { port: e.port, pid: e.pid, process_name: e.process_name, cmdline, cwd, runtime, project_dir }
-    }).collect();
+    let mut results: Vec<PortInfo> = entries
+        .into_iter()
+        .map(|e| {
+            let cmdline = cmdlines.get(&e.pid).cloned().unwrap_or_default();
+            let cwd = cwds.get(&e.pid).cloned();
+            let runtime = detect_runtime(&e.process_name, &cmdline);
+            let project_dir = resolve_project_dir(&cwd, &cmdline);
+            PortInfo {
+                port: e.port,
+                pid: e.pid,
+                process_name: e.process_name,
+                cmdline,
+                cwd,
+                runtime,
+                project_dir,
+            }
+        })
+        .collect();
 
     results.sort_by_key(|p| p.port);
     results
 }
 
 fn pid_list(pids: &[u32]) -> String {
-    pids.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",")
+    pids.iter()
+        .map(|p| p.to_string())
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 /// Batch: get command lines for all PIDs in one `ps` call
 fn get_cmdlines_batch(pids: &[u32]) -> HashMap<u32, String> {
-    if pids.is_empty() { return HashMap::new(); }
-    let output = match Command::new("ps").args(["-p", &pid_list(pids), "-o", "pid=,command="]).output() {
+    if pids.is_empty() {
+        return HashMap::new();
+    }
+    let output = match Command::new("ps")
+        .args(["-p", &pid_list(pids), "-o", "pid=,command="])
+        .output()
+    {
         Ok(o) if o.status.success() => o,
         _ => return HashMap::new(),
     };
     let mut map = HashMap::new();
     for line in String::from_utf8_lossy(&output.stdout).lines() {
         let line = line.trim();
-        if line.is_empty() { continue; }
+        if line.is_empty() {
+            continue;
+        }
         if let Some(idx) = line.find(|c: char| c.is_ascii_whitespace()) {
             if let Ok(pid) = line[..idx].trim().parse::<u32>() {
                 let cmd = line[idx..].trim().to_string();
-                let cmd = if cmd.len() > 120 { format!("{}...", super::common::safe_truncate(&cmd, 117)) } else { cmd };
+                let cmd = if cmd.len() > 120 {
+                    format!("{}...", super::common::safe_truncate(&cmd, 117))
+                } else {
+                    cmd
+                };
                 map.insert(pid, cmd);
             }
         }
@@ -234,8 +295,13 @@ fn get_cmdlines_batch(pids: &[u32]) -> HashMap<u32, String> {
 
 /// Batch: get working directories for all PIDs in one `lsof` call
 fn get_cwds_batch(pids: &[u32]) -> HashMap<u32, PathBuf> {
-    if pids.is_empty() { return HashMap::new(); }
-    let output = match Command::new("lsof").args(["-a", "-p", &pid_list(pids), "-d", "cwd", "-Fn"]).output() {
+    if pids.is_empty() {
+        return HashMap::new();
+    }
+    let output = match Command::new("lsof")
+        .args(["-a", "-p", &pid_list(pids), "-d", "cwd", "-Fn"])
+        .output()
+    {
         Ok(o) if o.status.success() => o,
         _ => return HashMap::new(),
     };
@@ -316,7 +382,13 @@ fn scan_ports_proc() -> Vec<PortInfo> {
                 let project_dir = resolve_project_dir(&cwd, &cmdline);
 
                 results.push(PortInfo {
-                    port, pid, process_name, cmdline, cwd, runtime, project_dir,
+                    port,
+                    pid,
+                    process_name,
+                    cmdline,
+                    cwd,
+                    runtime,
+                    project_dir,
                 });
             }
         }
@@ -359,12 +431,19 @@ pub fn detect_runtime(process_name: &str, cmdline: &str) -> Runtime {
     let name = process_name.to_lowercase();
     let cmd = cmdline.to_lowercase();
 
-    if name == "node" || name.starts_with("node ") || cmd.contains("node ")
-        || cmd.contains("ts-node") || cmd.contains("tsx ")
-        || cmd.contains("next ") || cmd.contains("vite")
-        || cmd.contains("webpack") || cmd.contains("esbuild")
-        || cmd.contains("npm ") || cmd.contains("npx ")
-        || cmd.contains("yarn ") || cmd.contains("pnpm ")
+    if name == "node"
+        || name.starts_with("node ")
+        || cmd.contains("node ")
+        || cmd.contains("ts-node")
+        || cmd.contains("tsx ")
+        || cmd.contains("next ")
+        || cmd.contains("vite")
+        || cmd.contains("webpack")
+        || cmd.contains("esbuild")
+        || cmd.contains("npm ")
+        || cmd.contains("npx ")
+        || cmd.contains("yarn ")
+        || cmd.contains("pnpm ")
     {
         return Runtime::Node;
     }
@@ -377,27 +456,44 @@ pub fn detect_runtime(process_name: &str, cmdline: &str) -> Runtime {
         return Runtime::Deno;
     }
 
-    if name.starts_with("python") || name == "uvicorn" || name == "gunicorn"
-        || name == "flask" || name == "django" || name == "celery"
-        || name == "jupyter" || name == "ipython"
-        || cmd.contains("python") || cmd.contains("uvicorn")
-        || cmd.contains("gunicorn") || cmd.contains("flask")
-        || cmd.contains("manage.py") || cmd.contains("jupyter")
+    if name.starts_with("python")
+        || name == "uvicorn"
+        || name == "gunicorn"
+        || name == "flask"
+        || name == "django"
+        || name == "celery"
+        || name == "jupyter"
+        || name == "ipython"
+        || cmd.contains("python")
+        || cmd.contains("uvicorn")
+        || cmd.contains("gunicorn")
+        || cmd.contains("flask")
+        || cmd.contains("manage.py")
+        || cmd.contains("jupyter")
     {
         return Runtime::Python;
     }
 
-    if name == "ruby" || name == "puma" || name == "unicorn" || name == "rails"
-        || cmd.contains("ruby") || cmd.contains("rails ")
-        || cmd.contains("puma") || cmd.contains("unicorn")
+    if name == "ruby"
+        || name == "puma"
+        || name == "unicorn"
+        || name == "rails"
+        || cmd.contains("ruby")
+        || cmd.contains("rails ")
+        || cmd.contains("puma")
+        || cmd.contains("unicorn")
         || cmd.contains("bundle exec")
     {
         return Runtime::Ruby;
     }
 
-    if name == "java" || name.starts_with("java ") || cmd.contains("java ")
-        || cmd.contains("spring") || cmd.contains("gradle")
-        || cmd.contains("mvn") || cmd.contains(".jar")
+    if name == "java"
+        || name.starts_with("java ")
+        || cmd.contains("java ")
+        || cmd.contains("spring")
+        || cmd.contains("gradle")
+        || cmd.contains("mvn")
+        || cmd.contains(".jar")
     {
         return Runtime::Java;
     }
@@ -406,14 +502,20 @@ pub fn detect_runtime(process_name: &str, cmdline: &str) -> Runtime {
         return Runtime::Dotnet;
     }
 
-    if name == "php" || name == "php-fpm" || cmd.contains("php ")
-        || cmd.contains("artisan") || cmd.contains("composer")
+    if name == "php"
+        || name == "php-fpm"
+        || cmd.contains("php ")
+        || cmd.contains("artisan")
+        || cmd.contains("composer")
     {
         return Runtime::Php;
     }
 
-    if name == "beam.smp" || name == "elixir" || cmd.contains("mix ")
-        || cmd.contains("phoenix") || cmd.contains("elixir")
+    if name == "beam.smp"
+        || name == "elixir"
+        || cmd.contains("mix ")
+        || cmd.contains("phoenix")
+        || cmd.contains("elixir")
     {
         return Runtime::Elixir;
     }
@@ -600,7 +702,10 @@ mod tests {
 
     #[test]
     fn test_detect_runtime_python() {
-        assert_eq!(detect_runtime("python3", "python3 manage.py runserver"), Runtime::Python);
+        assert_eq!(
+            detect_runtime("python3", "python3 manage.py runserver"),
+            Runtime::Python
+        );
     }
 
     #[test]

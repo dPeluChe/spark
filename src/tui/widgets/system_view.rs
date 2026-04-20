@@ -1,14 +1,14 @@
-use ratatui::prelude::*;
-use ratatui::widgets::*;
+use crate::scanner::system_cleaner::CleanCategory;
 use crate::tui::model::*;
 use crate::tui::styles::*;
 use crate::utils::fs::format_size;
-use crate::scanner::system_cleaner::CleanCategory;
+use ratatui::prelude::*;
+use ratatui::widgets::*;
 
 pub fn render_system_cleaner(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
     let chunks = Layout::vertical([
         Constraint::Length(3), // header
-        Constraint::Min(5),   // table
+        Constraint::Min(5),    // table
         Constraint::Length(1), // help
         Constraint::Length(1), // mole tip
     ])
@@ -30,43 +30,97 @@ pub fn render_system_cleaner(frame: &mut Frame, area: Rect, model: &SystemCleane
 
 fn render_header(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
     let total: u64 = model.items.iter().map(|i| i.size).sum();
-    let docker_count = model.items.iter().filter(|i| i.category == CleanCategory::Docker).count();
-    let vm_count = model.items.iter().filter(|i| i.category == CleanCategory::VMs).count();
-    let cache_count = model.items.iter().filter(|i| i.category == CleanCategory::Cache).count();
-    let log_count = model.items.iter().filter(|i| i.category == CleanCategory::Logs).count();
-    let dl_count = model.items.iter().filter(|i| i.category == CleanCategory::Downloads).count();
+    let docker_count = model
+        .items
+        .iter()
+        .filter(|i| i.category == CleanCategory::Docker)
+        .count();
+    let vm_count = model
+        .items
+        .iter()
+        .filter(|i| i.category == CleanCategory::VMs)
+        .count();
+    let cache_count = model
+        .items
+        .iter()
+        .filter(|i| i.category == CleanCategory::Cache)
+        .count();
+    let log_count = model
+        .items
+        .iter()
+        .filter(|i| i.category == CleanCategory::Logs)
+        .count();
+    let dl_count = model
+        .items
+        .iter()
+        .filter(|i| i.category == CleanCategory::Downloads)
+        .count();
 
     let status = if model.scanning {
         Span::styled("scanning...", Style::default().fg(YELLOW).italic())
     } else {
-        Span::styled(format!("{} items", model.items.len()), Style::default().fg(GRAY))
+        Span::styled(
+            format!("{} items", model.items.len()),
+            Style::default().fg(GRAY),
+        )
     };
 
     let header = Paragraph::new(vec![
         Line::from(vec![
-            Span::styled(" SYSTEM CLEANUP ", Style::default().fg(WHITE).bg(Color::Rgb(180, 80, 40)).bold()),
+            Span::styled(
+                " SYSTEM CLEANUP ",
+                Style::default()
+                    .fg(WHITE)
+                    .bg(Color::Rgb(180, 80, 40))
+                    .bold(),
+            ),
             Span::raw("  "),
             status,
             Span::raw("  "),
-            Span::styled(format!("{} reclaimable", format_size(total)), Style::default().fg(GREEN).bold()),
+            Span::styled(
+                format!("{} reclaimable", format_size(total)),
+                Style::default().fg(GREEN).bold(),
+            ),
         ]),
         Line::from(vec![
             Span::styled("Docker, caches, VMs, logs  ", Style::default().fg(GRAY)),
             if docker_count > 0 {
-                Span::styled(format!("Docker:{} ", docker_count), Style::default().fg(CYAN))
-            } else { Span::raw("") },
+                Span::styled(
+                    format!("Docker:{} ", docker_count),
+                    Style::default().fg(CYAN),
+                )
+            } else {
+                Span::raw("")
+            },
             if vm_count > 0 {
-                Span::styled(format!("VMs:{} ", vm_count), Style::default().fg(Color::Rgb(255, 100, 100)))
-            } else { Span::raw("") },
+                Span::styled(
+                    format!("VMs:{} ", vm_count),
+                    Style::default().fg(Color::Rgb(255, 100, 100)),
+                )
+            } else {
+                Span::raw("")
+            },
             if cache_count > 0 {
-                Span::styled(format!("Cache:{} ", cache_count), Style::default().fg(PURPLE))
-            } else { Span::raw("") },
+                Span::styled(
+                    format!("Cache:{} ", cache_count),
+                    Style::default().fg(PURPLE),
+                )
+            } else {
+                Span::raw("")
+            },
             if log_count > 0 {
                 Span::styled(format!("Logs:{} ", log_count), Style::default().fg(YELLOW))
-            } else { Span::raw("") },
+            } else {
+                Span::raw("")
+            },
             if dl_count > 0 {
-                Span::styled(format!("Downloads:{}", dl_count), Style::default().fg(Color::Rgb(100, 200, 100)))
-            } else { Span::raw("") },
+                Span::styled(
+                    format!("Downloads:{}", dl_count),
+                    Style::default().fg(Color::Rgb(100, 200, 100)),
+                )
+            } else {
+                Span::raw("")
+            },
         ]),
     ]);
     frame.render_widget(header, area);
@@ -83,9 +137,15 @@ fn render_scanning(frame: &mut Frame, area: Rect) {
     let lines = vec![
         Line::from(""),
         Line::from(""),
-        Line::from(Span::styled("  Scanning Docker, caches, logs...", Style::default().fg(YELLOW))),
+        Line::from(Span::styled(
+            "  Scanning Docker, caches, logs...",
+            Style::default().fg(YELLOW),
+        )),
         Line::from(""),
-        Line::from(Span::styled("  Checking brew, npm, pip, cargo, Docker", Style::default().fg(GRAY))),
+        Line::from(Span::styled(
+            "  Checking brew, npm, pip, cargo, Docker",
+            Style::default().fg(GRAY),
+        )),
     ];
     frame.render_widget(Paragraph::new(lines).alignment(Alignment::Center), inner);
 }
@@ -101,18 +161,33 @@ fn render_empty(frame: &mut Frame, area: Rect) {
     let lines = vec![
         Line::from(""),
         Line::from(""),
-        Line::from(Span::styled("  System is clean!", Style::default().fg(GREEN).bold())),
+        Line::from(Span::styled(
+            "  System is clean!",
+            Style::default().fg(GREEN).bold(),
+        )),
         Line::from(""),
-        Line::from(Span::styled("  No reclaimable caches, Docker resources, or large logs found.", Style::default().fg(GRAY))),
+        Line::from(Span::styled(
+            "  No reclaimable caches, Docker resources, or large logs found.",
+            Style::default().fg(GRAY),
+        )),
         Line::from(""),
-        Line::from(Span::styled("  Press [r] to rescan", Style::default().fg(TERM_GRAY))),
+        Line::from(Span::styled(
+            "  Press [r] to rescan",
+            Style::default().fg(TERM_GRAY),
+        )),
     ];
     frame.render_widget(Paragraph::new(lines).alignment(Alignment::Center), inner);
 }
 
 fn render_table(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
     // Group by category
-    let categories = [CleanCategory::Docker, CleanCategory::VMs, CleanCategory::Cache, CleanCategory::Logs, CleanCategory::Downloads];
+    let categories = [
+        CleanCategory::Docker,
+        CleanCategory::VMs,
+        CleanCategory::Cache,
+        CleanCategory::Logs,
+        CleanCategory::Downloads,
+    ];
 
     let header = Row::new(vec![
         Cell::from("  Item").style(Style::default().fg(Color::Rgb(180, 80, 40)).bold()),
@@ -125,7 +200,9 @@ fn render_table(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
     let mut rows: Vec<Row> = Vec::new();
 
     for cat in &categories {
-        let cat_items: Vec<(usize, &crate::scanner::system_cleaner::CleanableItem)> = model.items.iter()
+        let cat_items: Vec<(usize, &crate::scanner::system_cleaner::CleanableItem)> = model
+            .items
+            .iter()
             .enumerate()
             .filter(|(_, item)| item.category == *cat)
             .collect();
@@ -142,9 +219,12 @@ fn render_table(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
                     format!("  {} ({}, {})", cat, cat_items.len(), format_size(cat_size)),
                     Style::default().fg(cat_color(cat)).bold(),
                 )),
-                Cell::from(""), Cell::from(""), Cell::from(""), Cell::from(""),
+                Cell::from(""),
+                Cell::from(""),
+                Cell::from(""),
+                Cell::from(""),
             ])
-            .style(Style::default().bg(Color::Rgb(25, 25, 35)))
+            .style(Style::default().bg(Color::Rgb(25, 25, 35))),
         );
 
         for (i, item) in cat_items {
@@ -171,29 +251,43 @@ fn render_table(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
                 }
             };
 
-            rows.push(Row::new(vec![
-                Cell::from(format!("{} [{}] {}", cursor, checkbox, item.name)),
-                Cell::from(format!("{}", item.category))
-                    .style(Style::default().fg(cat_color(cat))),
-                Cell::from(if item.size > 0 { format_size(item.size) } else { "?".into() })
-                    .style(if item.size > 1_073_741_824 { Style::default().fg(RED).bold() }
-                        else if item.size > 100_000_000 { Style::default().fg(YELLOW) }
-                        else { Style::default() }),
-                Cell::from(risk_label).style(risk_style),
-                Cell::from(item.detail.clone())
-                    .style(Style::default().fg(GRAY)),
-            ]).style(row_style));
+            rows.push(
+                Row::new(vec![
+                    Cell::from(format!("{} [{}] {}", cursor, checkbox, item.name)),
+                    Cell::from(format!("{}", item.category))
+                        .style(Style::default().fg(cat_color(cat))),
+                    Cell::from(if item.size > 0 {
+                        format_size(item.size)
+                    } else {
+                        "?".into()
+                    })
+                    .style(if item.size > 1_073_741_824 {
+                        Style::default().fg(RED).bold()
+                    } else if item.size > 100_000_000 {
+                        Style::default().fg(YELLOW)
+                    } else {
+                        Style::default()
+                    }),
+                    Cell::from(risk_label).style(risk_style),
+                    Cell::from(item.detail.clone()).style(Style::default().fg(GRAY)),
+                ])
+                .style(row_style),
+            );
         }
     }
 
     // Scroll offset: use display_order for accurate visual row position
     let visible_height = area.height.saturating_sub(3) as usize;
-    let cursor_row_pos = model.display_order.iter()
+    let cursor_row_pos = model
+        .display_order
+        .iter()
         .position(|d| *d == Some(model.cursor))
         .unwrap_or(0);
     let scroll_offset = if cursor_row_pos >= visible_height {
         cursor_row_pos - visible_height + 1
-    } else { 0 };
+    } else {
+        0
+    };
 
     let scrolled_rows: Vec<Row> = rows.into_iter().skip(scroll_offset).collect();
     let scroll_info = format!(" {}/{} ", model.cursor + 1, model.items.len());
@@ -201,10 +295,10 @@ fn render_table(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
     let table = Table::new(
         scrolled_rows,
         [
-            Constraint::Min(18),      // Item
-            Constraint::Length(10),    // Type
-            Constraint::Length(10),    // Size
-            Constraint::Length(8),     // Risk
+            Constraint::Min(18),        // Item
+            Constraint::Length(10),     // Type
+            Constraint::Length(10),     // Size
+            Constraint::Length(8),      // Risk
             Constraint::Percentage(40), // Detail
         ],
     )
@@ -214,7 +308,10 @@ fn render_table(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(Color::Rgb(180, 80, 40)))
-            .title(Span::styled(" Cleanable Resources ", Style::default().fg(Color::Rgb(180, 80, 40)).bold()))
+            .title(Span::styled(
+                " Cleanable Resources ",
+                Style::default().fg(Color::Rgb(180, 80, 40)).bold(),
+            ))
             .title_bottom(Span::styled(scroll_info, Style::default().fg(GRAY))),
     );
     frame.render_widget(table, area);
@@ -346,7 +443,10 @@ fn render_mole_tip(frame: &mut Frame, area: Rect) {
         Paragraph::new(Line::from(vec![
             Span::styled("  Tip: ", Style::default().fg(TERM_GRAY)),
             Span::styled("tw93/mole", Style::default().fg(CYAN)),
-            Span::styled(" — native macOS app for deep system cleanup  ", Style::default().fg(TERM_GRAY)),
+            Span::styled(
+                " — native macOS app for deep system cleanup  ",
+                Style::default().fg(TERM_GRAY),
+            ),
             Span::styled("github.com/tw93/mole", Style::default().fg(GRAY)),
         ])),
         area,
@@ -355,7 +455,9 @@ fn render_mole_tip(frame: &mut Frame, area: Rect) {
 
 pub fn render_bulk_confirm(frame: &mut Frame, area: Rect, model: &SystemCleanerModel) {
     let count = model.checked.len();
-    let total: u64 = model.checked.iter()
+    let total: u64 = model
+        .checked
+        .iter()
         .filter_map(|i| model.items.get(*i))
         .map(|item| item.size)
         .sum();
@@ -378,7 +480,10 @@ pub fn render_bulk_confirm(frame: &mut Frame, area: Rect, model: &SystemCleanerM
         Line::from(""),
         Line::from(vec![
             Span::styled("  Items: ", Style::default().fg(PURPLE)),
-            Span::styled(format!("{} selected", count), Style::default().fg(WHITE).bold()),
+            Span::styled(
+                format!("{} selected", count),
+                Style::default().fg(WHITE).bold(),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  Total: ", Style::default().fg(PURPLE)),
