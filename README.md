@@ -282,9 +282,14 @@ max_scan_depth = 6
 ## For AI Agents
 
 ```bash
-spark agent    # Integration tips
-spark ingest   # Generate LLM-ready context digest (via trs)
+spark agent           # Integration tips
+spark ingest --all    # Batch LLM-ready digests for all managed repos (via trs)
+spark ingest          # List digests with fleet awareness
+trs ingest            # Single-repo digest from current dir (preferred for ad-hoc)
 ```
+
+Digests are stored in `~/.trs/ingest/` — shared with `trs`, single source of truth.
+See [docs/dev/TRS_INTEGRATION.md](docs/dev/TRS_INTEGRATION.md) for the division of responsibilities.
 
 Add to your `CLAUDE.md` or `.cursorrules`:
 

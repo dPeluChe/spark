@@ -113,7 +113,7 @@ The data layer — all scanning, analysis, and mutation:
 - **cleaner.rs**: Trash-based or permanent deletion of artifacts/repos
 - **repo_manager.rs**: ghq-style clone to `{root}/{host}/{owner}/{name}`, pull, status checks, 4h cache
 - **repo_tags.rs**: Persistent tagging system — repos can have multiple tags, stored in config
-- **repo_ingest.rs**: Generates LLM-ready markdown context digests for a set of repos
+- **repo_ingest.rs**: Thin fleet-level wrapper over `trs ingest`. TRS owns generation + storage (`~/.trs/ingest/`, shared). SPARK adds batch mode (`--all` with `trs --fresh`) and fleet-aware listing. See [TRS_INTEGRATION.md](TRS_INTEGRATION.md).
 - **port_scanner.rs**: Batched `lsof`/`ps` on macOS, `/proc/net/tcp` on Linux; detects runtime (Node, Python, Go, Rust, etc.)
 - **system_cleaner.rs**: Docker, dev caches, VMs, logs — with path blocklist, app-aware checks, operation log
 - **system_categories.rs**: Category definitions and risk levels for system cleanup items
