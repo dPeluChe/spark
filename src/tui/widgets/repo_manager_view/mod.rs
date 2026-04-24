@@ -1,17 +1,22 @@
+//! Repo Manager tab: header, repo table, action modal.
+//! Clone flow (URL input + post-clone summary) split into `clone.rs`.
+
+mod clone;
+
+pub use clone::{render_clone_input, render_clone_summary};
+
 use crate::scanner::repo_manager::RepoStatus;
 use crate::tui::model::*;
 use crate::tui::styles::*;
 use crate::utils::fs::format_size;
-use chrono;
 use ratatui::prelude::*;
 use ratatui::widgets::*;
 
-/// Render the repo manager view
 pub fn render_repo_manager(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
     let chunks = Layout::vertical([
-        Constraint::Length(3), // header
-        Constraint::Min(5),    // repo table
-        Constraint::Length(2), // help
+        Constraint::Length(3),
+        Constraint::Min(5),
+        Constraint::Length(2),
     ])
     .split(area);
 
@@ -43,7 +48,6 @@ fn render_header(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
         .filter(|r| r.status == RepoStatus::Checking)
         .count();
 
-    // Get last check time from cache file
     let cache_path = dirs::config_dir()
         .unwrap_or_default()
         .join("spark")
@@ -159,64 +163,7 @@ fn render_repo_table(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
         .repos
         .iter()
         .enumerate()
-        .map(|(i, repo)| {
-            let is_selected = model.cursor == i;
-            let is_checked = model.checked.contains(&i);
-
-            let cursor = if is_selected { "❯" } else { " " };
-            let checkbox = if is_checked { "✔" } else { " " };
-
-            let status_style = match &repo.status {
-                RepoStatus::UpToDate => Style::default().fg(GREEN),
-                RepoStatus::Behind(_) => Style::default().fg(YELLOW).bold(),
-                RepoStatus::Ahead(_) => Style::default().fg(BLUE),
-                RepoStatus::Diverged { .. } => Style::default().fg(RED).bold(),
-                RepoStatus::Dirty => Style::default().fg(YELLOW),
-                RepoStatus::Error(_) => Style::default().fg(RED),
-                RepoStatus::Checking => Style::default().fg(GRAY),
-            };
-
-            let status_icon = match &repo.status {
-                RepoStatus::UpToDate => "✓",
-                RepoStatus::Behind(_) => "↓",
-                RepoStatus::Ahead(_) => "↑",
-                RepoStatus::Diverged { .. } => "↕",
-                RepoStatus::Dirty => "●",
-                RepoStatus::Error(_) => "✘",
-                RepoStatus::Checking => "⟳",
-            };
-
-            let row_style = if is_selected {
-                Style::default().bg(DARK_BG)
-            } else {
-                Style::default()
-            };
-
-            let last_commit = repo.last_commit.as_deref().unwrap_or("-");
-
-            let size_str = if repo.size > 0 {
-                format_size(repo.size)
-            } else {
-                "-".into()
-            };
-
-            Row::new(vec![
-                Cell::from(format!("{} [{}] {}", cursor, checkbox, repo.name)).style(
-                    if is_selected {
-                        Style::default().fg(WHITE).bold()
-                    } else {
-                        Style::default().fg(GRAY)
-                    },
-                ),
-                Cell::from(repo.branch.clone()).style(Style::default().fg(PURPLE)),
-                Cell::from(format!("{} {}", status_icon, repo.status)).style(status_style),
-                Cell::from(size_str).style(Style::default().fg(GRAY)),
-                Cell::from(last_commit).style(Style::default().fg(TERM_GRAY)),
-                Cell::from(format!("{}/{}", repo.host, repo.owner))
-                    .style(Style::default().fg(GRAY)),
-            ])
-            .style(row_style)
-        })
+        .map(|(i, repo)| build_repo_row(model, i, repo))
         .collect();
 
     let table = Table::new(
@@ -244,6 +191,65 @@ fn render_repo_table(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
     frame.render_widget(table, area);
 }
 
+fn build_repo_row<'a>(
+    model: &'a RepoManagerModel,
+    i: usize,
+    repo: &'a crate::scanner::repo_manager::ManagedRepo,
+) -> Row<'a> {
+    let is_selected = model.cursor == i;
+    let is_checked = model.checked.contains(&i);
+
+    let cursor = if is_selected { "❯" } else { " " };
+    let checkbox = if is_checked { "✔" } else { " " };
+
+    let status_style = match &repo.status {
+        RepoStatus::UpToDate => Style::default().fg(GREEN),
+        RepoStatus::Behind(_) => Style::default().fg(YELLOW).bold(),
+        RepoStatus::Ahead(_) => Style::default().fg(BLUE),
+        RepoStatus::Diverged { .. } => Style::default().fg(RED).bold(),
+        RepoStatus::Dirty => Style::default().fg(YELLOW),
+        RepoStatus::Error(_) => Style::default().fg(RED),
+        RepoStatus::Checking => Style::default().fg(GRAY),
+    };
+
+    let status_icon = match &repo.status {
+        RepoStatus::UpToDate => "✓",
+        RepoStatus::Behind(_) => "↓",
+        RepoStatus::Ahead(_) => "↑",
+        RepoStatus::Diverged { .. } => "↕",
+        RepoStatus::Dirty => "●",
+        RepoStatus::Error(_) => "✘",
+        RepoStatus::Checking => "⟳",
+    };
+
+    let row_style = if is_selected {
+        Style::default().bg(DARK_BG)
+    } else {
+        Style::default()
+    };
+
+    let last_commit = repo.last_commit.as_deref().unwrap_or("-");
+    let size_str = if repo.size > 0 {
+        format_size(repo.size)
+    } else {
+        "-".into()
+    };
+
+    Row::new(vec![
+        Cell::from(format!("{} [{}] {}", cursor, checkbox, repo.name)).style(if is_selected {
+            Style::default().fg(WHITE).bold()
+        } else {
+            Style::default().fg(GRAY)
+        }),
+        Cell::from(repo.branch.clone()).style(Style::default().fg(PURPLE)),
+        Cell::from(format!("{} {}", status_icon, repo.status)).style(status_style),
+        Cell::from(size_str).style(Style::default().fg(GRAY)),
+        Cell::from(last_commit).style(Style::default().fg(TERM_GRAY)),
+        Cell::from(format!("{}/{}", repo.host, repo.owner)).style(Style::default().fg(GRAY)),
+    ])
+    .style(row_style)
+}
+
 fn render_help(frame: &mut Frame, area: Rect, _model: &RepoManagerModel) {
     let help = Paragraph::new(Span::styled(
         "[ENTER] Actions • [c] Clone • [SPACE] Select • [u] Pull • [U] Pull All Behind • [r] Refresh • [TAB] Switch",
@@ -252,7 +258,6 @@ fn render_help(frame: &mut Frame, area: Rect, _model: &RepoManagerModel) {
     frame.render_widget(help, area);
 }
 
-/// Render action modal for the currently selected repo
 pub fn render_action_modal(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
     let repo = match model.repos.get(model.cursor) {
         Some(r) => r,
@@ -354,194 +359,5 @@ pub fn render_action_modal(frame: &mut Frame, area: Rect, model: &RepoManagerMod
     ];
 
     let paragraph = Paragraph::new(lines);
-    frame.render_widget(paragraph, inner);
-}
-
-/// Render post-clone summary with path, alias suggestion, and agent tips
-pub fn render_clone_summary(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
-    let summary = match &model.last_clone {
-        Some(s) => s,
-        None => return,
-    };
-
-    let chunks = Layout::vertical([
-        Constraint::Length(3), // header
-        Constraint::Min(10),   // content
-        Constraint::Length(2), // help
-    ])
-    .split(area);
-
-    // Header
-    let header = Paragraph::new(vec![
-        Line::from(Span::styled(
-            " ✓ CLONE SUCCESSFUL ",
-            Style::default().fg(WHITE).bg(GREEN).bold(),
-        )),
-        Line::from(""),
-    ]);
-    frame.render_widget(header, chunks[0]);
-
-    // Content
-    let mut lines = vec![
-        Line::from(vec![
-            Span::styled("  Repository:  ", Style::default().fg(PURPLE).bold()),
-            Span::styled(&summary.repo_name, Style::default().fg(WHITE).bold()),
-        ]),
-        Line::from(vec![
-            Span::styled("  Remote:      ", Style::default().fg(PURPLE)),
-            Span::styled(&summary.remote_url, Style::default().fg(GRAY)),
-        ]),
-        Line::from(vec![
-            Span::styled("  Path:        ", Style::default().fg(PURPLE)),
-            Span::styled(&summary.short_path, Style::default().fg(CYAN).bold()),
-        ]),
-        Line::from(""),
-        Line::from(Span::styled(
-            "  Quick Access",
-            Style::default().fg(YELLOW).bold(),
-        )),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("  Shell alias: ", Style::default().fg(PURPLE)),
-            Span::styled(&summary.alias_cmd, Style::default().fg(WHITE)),
-        ]),
-        Line::from(vec![
-            Span::styled("  Add to:      ", Style::default().fg(PURPLE)),
-            Span::styled("~/.bashrc  or  ~/.zshrc", Style::default().fg(GRAY)),
-        ]),
-        Line::from(""),
-        Line::from(Span::styled(
-            "  For AI Agents (Claude Code, Cursor, etc.)",
-            Style::default().fg(YELLOW).bold(),
-        )),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("  CLAUDE.md:   ", Style::default().fg(PURPLE)),
-            Span::styled(
-                format!("Add to project: \"Repo path: {}\"", summary.short_path),
-                Style::default().fg(GRAY),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("  .cursorrules:", Style::default().fg(PURPLE)),
-            Span::styled(
-                format!("\"Project root: {}\"", summary.short_path),
-                Style::default().fg(GRAY),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("  cd command:  ", Style::default().fg(PURPLE)),
-            Span::styled(
-                format!("cd {}", summary.short_path),
-                Style::default().fg(WHITE),
-            ),
-        ]),
-        Line::from(""),
-        Line::from(Span::styled(
-            "  Spark Repo Manager",
-            Style::default().fg(YELLOW).bold(),
-        )),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("  Pull update: ", Style::default().fg(PURPLE)),
-            Span::styled(
-                "spark --scan-only  →  [G] Repos  →  [u] Pull",
-                Style::default().fg(GRAY),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("  Config root: ", Style::default().fg(PURPLE)),
-            Span::styled(
-                "repos_root in ~/.config/spark/config.toml",
-                Style::default().fg(GRAY),
-            ),
-        ]),
-    ];
-
-    // Add full path if different from short
-    if summary.repo_path != summary.short_path {
-        lines.push(Line::from(""));
-        lines.push(Line::from(vec![
-            Span::styled("  Full path:   ", Style::default().fg(PURPLE)),
-            Span::styled(&summary.repo_path, Style::default().fg(GRAY)),
-        ]));
-    }
-
-    let content = Paragraph::new(lines).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(GREEN)),
-    );
-    frame.render_widget(content, chunks[1]);
-
-    // Help
-    let help = Paragraph::new(Span::styled(
-        "[ENTER] Continue to Repo Manager",
-        Style::default().fg(GRAY),
-    ));
-    frame.render_widget(help, chunks[2]);
-}
-
-/// Render clone URL input overlay
-pub fn render_clone_input(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
-    let modal_area = center_modal(frame, area, 70, 10);
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Thick)
-        .border_style(Style::default().fg(GREEN))
-        .style(Style::default().bg(MODAL_BG));
-
-    let inner = block.inner(modal_area);
-    frame.render_widget(block, modal_area);
-
-    let mut lines = vec![
-        Line::from(Span::styled(
-            "CLONE REPOSITORY",
-            Style::default().fg(GREEN).bold(),
-        )),
-        Line::from(""),
-        Line::from(Span::styled(
-            "Enter git URL (SSH or HTTPS):",
-            Style::default().fg(GRAY),
-        )),
-        Line::from(""),
-    ];
-
-    // Input field
-    let input_display = if model.cloning {
-        format!("⟳ Cloning {}...", model.clone_input)
-    } else {
-        format!("{}█", model.clone_input)
-    };
-
-    lines.push(Line::from(Span::styled(
-        input_display,
-        Style::default().fg(WHITE).bg(DARK),
-    )));
-
-    // Error message
-    if let Some(err) = &model.clone_error {
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            err.clone(),
-            Style::default().fg(RED),
-        )));
-    } else {
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            "e.g. git@github.com:user/repo.git",
-            Style::default().fg(GRAY),
-        )));
-    }
-
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "[ENTER] Clone • [ESC] Cancel",
-        Style::default().fg(GRAY),
-    )));
-
-    let paragraph = Paragraph::new(lines).alignment(Alignment::Center);
     frame.render_widget(paragraph, inner);
 }
