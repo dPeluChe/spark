@@ -8,6 +8,16 @@ Pending tasks and improvements for the SPARK DevOps platform.
 
 ## High Priority
 
+### Refactor `spark ingest` to delegate to TRS `added: 2026-04-23`
+- TRS owns digest generation + storage; SPARK should only own fleet-level operations
+- Remove `-o` override in `repo_ingest::generate_ingest` → let TRS save to `~/.trs/ingest/`
+- Delegate `cmd_ingest_list` to `trs ingest --list` (or enrich instead of duplicate)
+- Delegate `cmd_ingest_read` to `trs ingest --read <name>`
+- Deprecate passthrough flags (`--budget`, `--changed`, `--since`, `--deps`, `--fresh`, `--compress`) on single-repo invocations — point users to `trs ingest` directly
+- Keep only `spark ingest --all` as the SPARK-specific primitive (batch over managed repos)
+- Update `README.md`, `npm/README.md`, `assets/spark.skill.md` to reflect new split
+- See [TRS_INTEGRATION.md](TRS_INTEGRATION.md) for full architectural rationale
+
 ### Updater: runtime version manager sub-panel `added: 2026-04-20`
 - Show installed versions per runtime (nvm ls, pyenv versions, rvm list, rustup toolchain list)
 - Accessible via Enter on a runtime tool in the updater table
