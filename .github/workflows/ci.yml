@@ -23,5 +23,6 @@ jobs:
       - name: Install OpenSSL (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y libssl-dev pkg-config
+      - run: cargo fmt --check
       - run: cargo test --verbose
-      - run: cargo clippy -- -D warnings
+      - run: cargo clippy --all-targets -- -D warnings

@@ -5,9 +5,9 @@ Code standards for contributing to SPARK. The pre-push hook enforces the mechani
 ## Automated checks (pre-push hook)
 
 ```bash
-cargo test                  # all tests must pass
-cargo clippy -- -D warnings # no warnings allowed
-cargo fmt -- --check        # formatting must match rustfmt defaults
+cargo fmt --check                        # formatting must match rustfmt defaults
+cargo clippy --all-targets -- -D warnings # no warnings, test code included
+cargo test                                # all tests must pass
 ```
 
 Run all three before opening a PR.
