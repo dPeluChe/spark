@@ -9,6 +9,7 @@
 | [dev/WORKFLOWS.md](dev/WORKFLOWS.md) | TUI state machines and user interaction flows |
 | [dev/INSTALLATION.md](dev/INSTALLATION.md) | Build and install instructions |
 | [dev/ADDING_TOOLS.md](dev/ADDING_TOOLS.md) | How to add tools to the Updater module |
+| [dev/TRS_INTEGRATION.md](dev/TRS_INTEGRATION.md) | SPARK ↔ TRS division of responsibilities and lessons learned |
 
 ## Task tracking
 

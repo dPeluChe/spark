@@ -61,7 +61,7 @@ spark-cd api        # cd to any repo matching 'api'
 Config file: `~/.config/spark/config.toml`  
 macOS alternate: `~/Library/Application Support/spark/config.toml`
 
-See [config.example.toml](../../config.example.toml) for all options. Key fields:
+Key fields (defaults shown):
 
 ```toml
 repos_root = "~/repos"          # root for managed repos (ghq-compatible)
