@@ -316,9 +316,9 @@ Usa `spark list` para ver el árbol completo de repos.
 ```bash
 git clone https://github.com/dPeluChe/spark.git
 cd spark
-cargo test                  # todos los tests deben pasar
-cargo clippy -- -D warnings # cero warnings
-cargo fmt -- --check        # formato debe coincidir
+cargo fmt --check                         # formato debe coincidir
+cargo clippy --all-targets -- -D warnings # cero warnings, incluye tests
+cargo test                                # todos los tests deben pasar
 ```
 
 Lee [CONTRIBUTING.md](CONTRIBUTING.md) para las guías de código, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para el mapa del codebase, y [docs/TASK_TODO.md](docs/TASK_TODO.md) para el roadmap.

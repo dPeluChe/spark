@@ -14,63 +14,108 @@ SPARK is a **Rust-based developer operations platform** delivered as a TUI (Term
 
 ```
 src/
-├── main.rs                     # Entry point, terminal setup, tokio runtime
-├── app.rs                      # Event loop, action dispatch via mpsc channels
-├── config.rs                   # SparkConfig from ~/.config/spark/config.toml
+├── main.rs                        # Entry point, terminal setup, tokio runtime
+├── config.rs                      # SparkConfig from ~/.config/spark/config.toml
+├── app/                           # Event loop + background task spawners
+│   ├── mod.rs                     # run(): draw, poll events, dispatch, tick
+│   ├── actions.rs                 # dispatch_action per Action variant
+│   └── spawn.rs                   # Updater spawn helpers (version checks, update)
 ├── core/
-│   ├── types.rs                # Tool, Category, UpdateMethod, ToolStatus enums
-│   ├── inventory.rs            # 55+ tools catalog with auto-assigned IDs
-│   └── changelogs.rs           # Changelog URL mappings with heuristic fallbacks
+│   ├── types.rs                   # Tool, Category, UpdateMethod, ToolStatus enums
+│   ├── changelogs.rs              # Changelog URL mappings + heuristic fallbacks
+│   └── inventory/                 # 55+ tools catalog (auto-assigned S-## IDs)
+│       ├── mod.rs                 # get_inventory() concatenates + assigns IDs
+│       ├── dev.rs                 # System + AI code tools + IDEs + terminals
+│       └── platform.rs            # Productivity + infra + runtimes + utilities
 ├── updater/
-│   ├── detector.rs             # Version detection (brew, npm, CLI, macOS apps)
-│   ├── version.rs              # Regex-based version parsing + tool-specific parsers
-│   └── executor.rs             # Update execution (brew upgrade, npm install -g, curl|sh)
+│   ├── detector.rs                # Async version detection (brew/npm cache warmup)
+│   ├── version.rs                 # Regex-based version parsing
+│   └── executor.rs                # Update execution with 10-minute timeout
 ├── scanner/
-│   ├── mod.rs                  # Module exports
-│   ├── common.rs               # Shared helpers (shorten_path, format_path)
-│   ├── repo_scanner.rs         # Git repo discovery via walkdir + analysis via git2
-│   ├── space_analyzer.rs       # Artifact detection (node_modules, venvs, target/, etc.)
-│   ├── health.rs               # Health scoring (0-100, grades A-F)
-│   ├── cleaner.rs              # Cleanup: trash, archive, delete artifacts
-│   ├── repo_manager.rs         # ghq-style clone, pull, status tracking + 4h cache
-│   ├── repo_tags.rs            # Repository tagging/grouping system
-│   ├── repo_ingest.rs          # LLM context digest generation (spark ingest)
-│   ├── port_scanner.rs         # Dev port discovery, runtime detection, process kill
-│   ├── system_cleaner.rs       # Docker, caches, VMs, logs cleanup + safety guards
-│   ├── system_categories.rs    # System cleanup category definitions and filters
-│   ├── secret_scanner.rs       # API keys, credentials, sensitive files detection
-│   ├── history_scanner.rs      # Git commit history scan via git2
-│   ├── code_patterns.rs        # OWASP Top 10:2025 pattern detection
-│   ├── dep_scanner.rs          # Dependency vulnerabilities (OSV.dev + npm audit)
-│   └── cert_scanner.rs         # SSL/TLS certificate scanning (x509-parser + Keychain)
+│   ├── mod.rs                     # Module exports
+│   ├── common.rs                  # Shared helpers (shorten_path, redact, ignore)
+│   ├── repo_scanner.rs            # Git repo discovery + analysis via git2
+│   ├── space_analyzer.rs          # Artifact detection (20+ types)
+│   ├── health.rs                  # Health scoring (0-100, grades A-F)
+│   ├── cleaner.rs                 # Trash-based or permanent deletion
+│   ├── repo_manager.rs            # ghq-style clone/pull/status + 4h cache
+│   ├── repo_tags.rs               # Persistent multi-tag system
+│   ├── repo_ingest.rs             # Thin wrapper over trs ingest (see TRS_INTEGRATION.md)
+│   ├── system_cleaner.rs          # Docker/caches/VMs/logs + safety guards
+│   ├── system_categories.rs       # Category definitions + risk levels
+│   ├── history_scanner.rs         # Git commit diff secrets via git2
+│   ├── cert_scanner.rs            # SSL/TLS cert scan (x509-parser + Keychain)
+│   ├── secret_scanner/            # Secrets + credentials detection
+│   │   ├── mod.rs                 # Types + scan_directory + integration tests
+│   │   ├── patterns.rs            # Regex statics + SENSITIVE_FILES/EXTENSIONS
+│   │   ├── context.rs             # detect_context (test/doc/config classifier)
+│   │   ├── filename.rs            # Sensitive filename + .env + credential configs
+│   │   └── content.rs             # Content scan (API keys, URLs, generic secrets)
+│   ├── code_patterns/             # OWASP Top 10:2025 pattern detection
+│   │   ├── mod.rs                 # Types + scan + classify_file + tests
+│   │   └── patterns.rs            # Regex statics + PATTERNS catalog
+│   ├── dep_scanner/               # Dependency vulnerabilities
+│   │   ├── mod.rs                 # Types + OSV.dev query + severity ordering
+│   │   └── parsers.rs             # package.json/lock, requirements.txt, Cargo.toml/lock
+│   └── port_scanner/              # Listening TCP ports + process info
+│       ├── mod.rs                 # Types, scan dispatcher, kill_process + tests
+│       ├── macos.rs               # lsof-based + batched ps/lsof metadata
+│       ├── linux.rs               # /proc/net/tcp + /proc/<pid>/fd inode matching
+│       └── runtime.rs             # Process/cmdline → Runtime, project dir resolution
 ├── tui/
-│   ├── model.rs                # All state models (App, ScannerModel, AuditModel, ...)
-│   ├── update.rs               # Key/message handling, Action dispatch
-│   ├── view.rs                 # Top-level render dispatcher + tab bar
-│   ├── styles.rs               # Color palette, ASCII art, spinner frames
-│   ├── scanner_keys/           # Key bindings split by tab
-│   │   ├── mod.rs              # Dispatcher — routes to correct tab handler
-│   │   ├── scanner_tab.rs      # Scanner/container/clean/delete keys
-│   │   ├── repo_tab.rs         # Repo manager keys
-│   │   ├── port_tab.rs         # Port scanner keys
-│   │   ├── system_tab.rs       # System cleanup keys
-│   │   └── audit_tab.rs        # Security audit keys
-│   └── widgets/                # UI components: splash, dashboard, scanner_view,
-│                               # repo_manager_view, port_view, system_view,
-│                               # audit_view, detail_panel, progress, modals
+│   ├── view.rs                    # Top-level render dispatcher + tab bar
+│   ├── styles.rs                  # Color palette, spinner frames, modal helpers
+│   ├── model/                     # All application state
+│   │   ├── mod.rs                 # Enums (AppMode, ScannerState, …) + Toast + App
+│   │   ├── updater.rs             # UpdaterModel
+│   │   ├── scanner.rs             # ScannerModel + PortScannerModel
+│   │   ├── repo.rs                # RepoManagerModel + CloneSummary
+│   │   ├── system.rs              # SystemCleanerModel
+│   │   └── audit.rs               # AuditModel
+│   ├── update/                    # Event dispatch: keys → Action, messages → state
+│   │   ├── mod.rs                 # Action enum + handle_key + welcome + tab cycle
+│   │   ├── messages.rs            # handle_message (AppMessage → state update)
+│   │   └── updater_keys.rs        # Updater tab key bindings
+│   ├── scanner_keys/              # Key bindings for non-updater tabs
+│   │   ├── mod.rs                 # Dispatcher
+│   │   ├── scanner_tab.rs         # Scanner/container/clean/delete keys
+│   │   ├── repo_tab.rs            # Repo manager keys
+│   │   ├── port_tab.rs            # Port scanner keys
+│   │   ├── system_tab.rs          # System cleanup keys
+│   │   └── audit_tab.rs           # Security audit keys
+│   └── widgets/                   # Pure rendering — splash, dashboard, progress,
+│       │                          # modal, detail_panel, port_view, …
+│       ├── scanner_view/          # mod.rs + config.rs + results.rs
+│       ├── repo_manager_view/     # mod.rs + clone.rs
+│       ├── audit_view/            # mod.rs + detail.rs + deps.rs
+│       └── system_view/           # mod.rs + table.rs + risk.rs
 ├── cli/
-│   ├── mod.rs                  # CLI definitions (clap), dispatcher, shared helpers
-│   ├── repos.rs                # clone, list, search, cd, rm, status, pull
-│   ├── ports.rs                # ps command (dev servers, kill)
-│   ├── audit.rs                # audit command (secrets + OWASP + deps output)
-│   ├── certs.rs                # certificate scanner CLI
-│   ├── tags.rs                 # tag management (add, remove, list, delete, rename)
-│   ├── ingest.rs               # spark ingest — LLM-ready context digest
-│   └── system.rs               # init, config, doctor, agent, completions, root
+│   ├── mod.rs                     # CLI definitions (clap), dispatcher, shared helpers
+│   ├── system.rs                  # init, config, doctor, agent, completions, root
+│   ├── certs.rs                   # Certificate scanner CLI
+│   ├── tags.rs                    # Tag management (add, remove, list, delete, rename)
+│   ├── ingest.rs                  # spark ingest — LLM-ready context digest
+│   ├── repos/                     # Repository management CLI
+│   │   ├── mod.rs                 # clone, list, search, cd, rm + tree print
+│   │   ├── status.rs              # spark status (cached + fresh check)
+│   │   └── pull.rs                # spark pull (single / all / tag)
+│   ├── ports/                     # spark ps — unified process + port inspector
+│   │   ├── mod.rs                 # Dispatcher by query/kill combinations
+│   │   ├── list.rs                # List ports grouped into dev/macOS/services/apps
+│   │   ├── search.rs              # Search processes by name + cross-ref ports
+│   │   ├── kill.rs                # Interactive + silent kill by port/PID/name
+│   │   └── ps_list.rs             # `ps aux` → structured PsEntry
+│   └── audit/                     # Security audit CLI
+│       ├── mod.rs                 # cmd_audit orchestration + phase runners + summary
+│       ├── secrets.rs             # Secrets & credentials render
+│       ├── history.rs             # Git history render
+│       ├── patterns.rs            # OWASP Top 10 render
+│       ├── deps.rs                # OSV.dev + npm audit render + `audit --deps`
+│       └── ignore.rs              # .sparkauditignore scaffold
 └── utils/
-    ├── mod.rs                  # Module exports
-    ├── shell.rs                # Async shell commands with timeouts + debug logging
-    └── fs.rs                   # dir_size, format_size, shorten_path, expand_tilde
+    ├── mod.rs                     # Module exports
+    ├── shell.rs                   # Async Command wrapper with timeout + debug log
+    └── fs.rs                      # dir_size, format_size, shorten_path, expand_tilde
 ```
 
 ---
@@ -232,9 +277,10 @@ Tests cover: version parsing, health scoring, config serialization/deserializati
 - `reqwest` — HTTP client (OSV.dev API)
 
 ### Utilities
-- `serde` / `toml` — Config serialization
-- `regex` / `once_cell` — Pattern matching
+- `serde` / `serde_json` / `toml` — Config + OSV/npm-audit JSON serialization
+- `regex` / `once_cell` — Pattern matching and lazy statics
 - `chrono` — Date/time for health scoring
 - `color-eyre` — Error reporting
 - `dirs` — Platform-specific directory paths (home, config, data)
-- `trash` — Safe deletion (send to OS trash)
+- `clap` / `clap_complete` — CLI argument parsing + shell completions
+- `walkdir` — Filesystem traversal

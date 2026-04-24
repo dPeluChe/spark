@@ -33,8 +33,8 @@ See [docs/dev/ADDING_TOOLS.md](docs/dev/ADDING_TOOLS.md). The short version: add
 ## Pull request checklist
 
 - [ ] `cargo test` passes
-- [ ] `cargo clippy -- -D warnings` clean
-- [ ] `cargo fmt -- --check` passes
+- [ ] `cargo clippy --all-targets -- -D warnings` clean
+- [ ] `cargo fmt --check` passes
 - [ ] New behavior has at least one test
 - [ ] PR description explains *why*, not just *what*
 - [ ] Screenshots/output for TUI changes

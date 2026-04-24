@@ -328,9 +328,9 @@ spark-cd zed    # cd to the zed repo
 ```bash
 git clone https://github.com/dPeluChe/spark.git
 cd spark
-cargo test                  # all tests must pass
-cargo clippy -- -D warnings # no warnings allowed
-cargo fmt -- --check        # formatting must match
+cargo fmt --check                         # formatting must match
+cargo clippy --all-targets -- -D warnings # no warnings, test code included
+cargo test                                # all tests must pass
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the codebase map, and [docs/TASK_TODO.md](docs/TASK_TODO.md) for the roadmap.
