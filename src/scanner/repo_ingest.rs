@@ -52,11 +52,6 @@ pub fn ingest_path(owner: &str, name: &str) -> PathBuf {
     ingest_dir().join(owner).join(format!("{}.md", name))
 }
 
-#[allow(dead_code)]
-pub fn has_ingest(owner: &str, name: &str) -> bool {
-    ingest_path(owner, name).exists()
-}
-
 pub fn ingest_info(owner: &str, name: &str) -> Option<IngestInfo> {
     let path = ingest_path(owner, name);
     let meta = std::fs::metadata(&path).ok()?;
@@ -204,11 +199,6 @@ mod tests {
             .map(|c| c.as_os_str().to_string_lossy().to_string())
             .collect();
         assert!(!components.iter().any(|c| c == "github.com"));
-    }
-
-    #[test]
-    fn test_has_ingest_nonexistent() {
-        assert!(!has_ingest("nobody", "nothing"));
     }
 
     #[test]
