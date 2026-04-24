@@ -59,63 +59,40 @@ spark completions <shell>  # Shell completions
 
 ## Architecture (Rust + Ratatui + tokio)
 
+Full source tree in [docs/dev/ARCHITECTURE.md](docs/dev/ARCHITECTURE.md). Summary:
+
 ```
 src/
-├── main.rs                    # Entry point, terminal setup
-├── app.rs                     # Event loop, action dispatch via mpsc channels
-├── config.rs                  # SparkConfig + ghq root detection
-├── cli/
-│   ├── mod.rs                 # CLI definitions (clap), dispatcher, shared helpers
-│   ├── repos.rs               # clone, list, search, cd, rm, status, pull
-│   ├── audit.rs               # audit command (secrets, history, OWASP, deps output)
-│   └── system.rs              # init, config, doctor, agent, completions, root
+├── main.rs                     # Entry point, terminal setup
+├── config.rs                   # SparkConfig + ghq root detection
+├── app/                        # Event loop + background task spawners
 ├── core/
-│   ├── types.rs               # Tool, ToolState, Category, UpdateMethod enums
-│   ├── inventory.rs           # 44+ tools catalog
-│   └── changelogs.rs          # Changelog URL mappings
-├── updater/
-│   ├── detector.rs            # Version detection (brew, npm, CLI, macOS apps)
-│   ├── version.rs             # Regex-based version parsing
-│   └── executor.rs            # Update execution
+│   ├── types.rs                # Tool, ToolState, Category, UpdateMethod
+│   ├── inventory/              # 55 tools catalog (dev + platform submodules)
+│   └── changelogs.rs           # Changelog URL mappings
+├── updater/                    # detector, version, executor
 ├── scanner/
-│   ├── repo_scanner.rs        # Git repo discovery + analysis via git2
-│   ├── space_analyzer.rs      # Artifact detection (20+ types)
-│   ├── health.rs              # Health scoring (0-100, grades A-F)
-│   ├── cleaner.rs             # Artifact cleanup (trash or delete)
-│   ├── repo_manager.rs        # ghq-style clone/pull/status + cache
-│   ├── port_scanner.rs        # Port discovery (batched lsof macOS, /proc Linux)
-│   ├── system_cleaner.rs      # Docker, caches, VMs, logs cleanup + safety
-│   ├── secret_scanner.rs      # API keys, credentials, sensitive files, .env detection
-│   ├── history_scanner.rs     # Git commit history scan via git2
-│   ├── code_patterns.rs       # OWASP Top 10:2025 pattern detection
-│   ├── dep_scanner.rs         # Dependency vulnerabilities (OSV.dev API + npm audit)
-│   ├── cert_scanner.rs        # SSL/TLS certificate scanning (x509-parser + macOS Keychain)
-│   └── repo_tags.rs           # Repository tagging/grouping system
+│   ├── common.rs, repo_scanner, space_analyzer, health, cleaner
+│   ├── repo_manager, repo_tags, repo_ingest   # Repo mgmt + TRS wrapper
+│   ├── system_cleaner, system_categories, history_scanner, cert_scanner
+│   ├── secret_scanner/         # patterns/context/filename/content
+│   ├── code_patterns/          # OWASP Top 10:2025 (mod + patterns)
+│   ├── dep_scanner/            # OSV.dev query + parsers (per ecosystem)
+│   └── port_scanner/           # mod + macos + linux + runtime
 ├── tui/
-│   ├── model.rs               # All state models + Toast notifications
-│   ├── update.rs              # Key/message handling, Action dispatch
-│   ├── scanner_keys/           # Key bindings split by tab
-│   │   ├── mod.rs             # Dispatcher
-│   │   ├── scanner_tab.rs     # Scanner/container/clean/delete keys
-│   │   ├── repo_tab.rs        # Repo manager keys
-│   │   ├── port_tab.rs        # Port scanner keys
-│   │   ├── system_tab.rs      # System cleanup keys
-│   │   └── audit_tab.rs       # Security audit keys
-│   ├── view.rs                # Tab bar + render dispatcher
-│   ├── styles.rs              # Color palette, ASCII art
-│   └── widgets/               # splash, dashboard, scanner_view, detail_panel,
-│                              # repo_manager_view, port_view, system_view,
-│                              # audit_view, progress, modal
+│   ├── view.rs, styles.rs
+│   ├── model/                  # enums + App + per-tab submodels
+│   ├── update/                 # Action + handle_key + handle_message
+│   ├── scanner_keys/           # Key bindings split by tab (non-Updater)
+│   └── widgets/                # Render fns; larger ones split into dirs:
+│                               # scanner_view/, repo_manager_view/,
+│                               # audit_view/, system_view/
 ├── cli/
-│   ├── mod.rs                 # CLI definitions (clap), dispatcher, shared helpers
-│   ├── repos.rs               # clone, list, search, cd, rm, status, pull
-│   ├── audit.rs               # audit command output (4 phases)
-│   ├── certs.rs               # certificate scanner CLI
-│   ├── tags.rs                # tag management CLI (add, remove, list, delete, rename)
-│   └── system.rs              # init, config, doctor, agent, completions, root
-└── utils/
-    ├── shell.rs               # Async commands + debug logging
-    └── fs.rs                  # dir_size, format_size, shorten_path, safe_truncate
+│   ├── mod.rs, system.rs, certs.rs, tags.rs, ingest.rs
+│   ├── repos/                  # mod + status + pull
+│   ├── ports/                  # mod + list + search + kill + ps_list
+│   └── audit/                  # mod + secrets + history + patterns + deps + ignore
+└── utils/                      # shell (async commands), fs (paths, sizes)
 ```
 
 ### Certificate Scanner (`spark certs`)
@@ -159,7 +136,7 @@ Context-aware severity: Source Code > Config > Test > Docs (findings in tests/do
 
 ```bash
 cargo run                  # Dev mode
-cargo test                 # 124 tests
+cargo test                 # 127 tests
 cargo build --release      # Optimized build
 ```
 
@@ -180,7 +157,7 @@ Key fields:
 npm install -g @dpeluche/spark
 
 # cargo
-cargo install --git https://github.com/dPeluChe/labs-spark
+cargo install --git https://github.com/dPeluChe/spark
 
 # source
 ./install.sh && spark init

@@ -8,16 +8,6 @@ Pending tasks and improvements for the SPARK DevOps platform.
 
 ## High Priority
 
-### Refactor `spark ingest` to delegate to TRS `added: 2026-04-23`
-- TRS owns digest generation + storage; SPARK should only own fleet-level operations
-- Remove `-o` override in `repo_ingest::generate_ingest` → let TRS save to `~/.trs/ingest/`
-- Delegate `cmd_ingest_list` to `trs ingest --list` (or enrich instead of duplicate)
-- Delegate `cmd_ingest_read` to `trs ingest --read <name>`
-- Deprecate passthrough flags (`--budget`, `--changed`, `--since`, `--deps`, `--fresh`, `--compress`) on single-repo invocations — point users to `trs ingest` directly
-- Keep only `spark ingest --all` as the SPARK-specific primitive (batch over managed repos)
-- Update `README.md`, `npm/README.md`, `assets/spark.skill.md` to reflect new split
-- See [TRS_INTEGRATION.md](TRS_INTEGRATION.md) for full architectural rationale
-
 ### Updater: runtime version manager sub-panel `added: 2026-04-20`
 - Show installed versions per runtime (nvm ls, pyenv versions, rvm list, rustup toolchain list)
 - Accessible via Enter on a runtime tool in the updater table
@@ -62,12 +52,12 @@ Pending tasks and improvements for the SPARK DevOps platform.
 - Pressing Enter on a non-container repo in ScanResults goes to RepoDetail
 - Could show richer info: recent commits, branch list, disk usage breakdown
 
-### Audit: AST-based parsing for code_patterns.rs `added: 2026-04-15`
-- Today `code_patterns.rs` uses pure regex for OWASP Top 10 detection
+### Audit: AST-based parsing for code patterns `added: 2026-04-15`
+- Today `scanner/code_patterns/` uses pure regex for OWASP Top 10 detection
 - Replace with layered strategy: AST parsing first (tree-sitter), regex fallback for unsupported langs
 - Benefit: fewer false positives (e.g. detections inside string literals or comments)
 - Inspiration: CodeFlow (github.com/braedonsaunders/codeflow) uses Acorn + Tree-Sitter WASM with regex fallback for 40+ languages
-- Tree-sitter already used in `spark ingest --compress` — leverage same crate
+- Tree-sitter is reachable indirectly via `trs -l aggressive` (compression), not a spark dep — AST parsing would add tree-sitter as a direct dep
 - Start with JS/TS and Python (highest false-positive risk), keep regex for Rust/Go
 
 ### Audit: more ecosystems `added: 2026-04-20`
