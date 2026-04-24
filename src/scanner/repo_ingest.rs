@@ -1,7 +1,14 @@
 //! Repository ingest: generate LLM-ready context files via trs.
 //!
-//! trs ingest is the sole backend — budget-aware, git-aware, agent-friendly.
-//! Output stored in ~/.config/spark/ingest/<host>/<owner>/<name>.md
+//! trs owns digest generation AND storage — SPARK delegates both, then
+//! enriches the catalog with fleet-level info (which managed repos have
+//! no digest yet, which are stale vs repo status cache).
+//!
+//! Storage: ~/.trs/ingest/<owner>/<name>.md (shared with TRS, single
+//! source of truth). Previously SPARK maintained a parallel catalog at
+//! ~/.config/spark/ingest — removed to eliminate duplication.
+//!
+//! See docs/dev/TRS_INTEGRATION.md for the full architectural rationale.
 //!
 //! Install trs: npm install -g @dpeluche/trs
 
@@ -33,27 +40,25 @@ pub fn is_trs_available() -> bool {
         .unwrap_or(false)
 }
 
+/// Shared storage location with TRS. Resolves `$HOME/.trs/ingest`.
 fn ingest_dir() -> PathBuf {
-    dirs::config_dir()
+    dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("spark")
+        .join(".trs")
         .join("ingest")
 }
 
-pub fn ingest_path(host: &str, owner: &str, name: &str) -> PathBuf {
-    ingest_dir()
-        .join(host)
-        .join(owner)
-        .join(format!("{}.md", name))
+pub fn ingest_path(owner: &str, name: &str) -> PathBuf {
+    ingest_dir().join(owner).join(format!("{}.md", name))
 }
 
 #[allow(dead_code)]
-pub fn has_ingest(host: &str, owner: &str, name: &str) -> bool {
-    ingest_path(host, owner, name).exists()
+pub fn has_ingest(owner: &str, name: &str) -> bool {
+    ingest_path(owner, name).exists()
 }
 
-pub fn ingest_info(host: &str, owner: &str, name: &str) -> Option<IngestInfo> {
-    let path = ingest_path(host, owner, name);
+pub fn ingest_info(owner: &str, name: &str) -> Option<IngestInfo> {
+    let path = ingest_path(owner, name);
     let meta = std::fs::metadata(&path).ok()?;
     let age = meta
         .modified()
@@ -84,11 +89,11 @@ impl IngestInfo {
     }
 }
 
-/// Generate ingest for a repo via trs.
-/// Returns the path where the digest was written.
+/// Run `trs ingest` inside the repo directory. TRS auto-detects owner/name
+/// from the git remote and writes to its own storage (~/.trs/ingest).
+/// Returns the resolved path where the digest was written.
 pub fn generate_ingest(
     repo_path: &Path,
-    host: &str,
     owner: &str,
     name: &str,
     opts: &IngestOptions,
@@ -99,17 +104,7 @@ pub fn generate_ingest(
         );
     }
 
-    let output_path = ingest_path(host, owner, name);
-    if let Some(parent) = output_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create ingest directory: {}", e))?;
-    }
-
     let mut args = vec!["ingest".to_string()];
-
-    // Write directly to spark's path — no shadow save in ~/.trs/ingest/
-    args.push("-o".into());
-    args.push(output_path.display().to_string());
 
     if let Some(ref budget) = opts.budget {
         args.push("--budget".into());
@@ -144,12 +139,12 @@ pub fn generate_ingest(
         return Err(format!("trs ingest failed: {}", stderr.trim()));
     }
 
-    // trs -o writes the file and returns the path on stdout
-    Ok(output_path)
+    Ok(ingest_path(owner, name))
 }
 
-/// List all existing ingest files
-pub fn list_ingests() -> Vec<(String, String, String, IngestInfo)> {
+/// List all existing digests from TRS's storage.
+/// Returns (owner, name, info) tuples sorted by owner then name.
+pub fn list_ingests() -> Vec<(String, String, IngestInfo)> {
     let base = ingest_dir();
     if !base.exists() {
         return Vec::new();
@@ -157,43 +152,32 @@ pub fn list_ingests() -> Vec<(String, String, String, IngestInfo)> {
 
     let mut results = Vec::new();
 
-    for host_entry in std::fs::read_dir(&base).into_iter().flatten().flatten() {
-        if !host_entry.path().is_dir() {
+    for owner_entry in std::fs::read_dir(&base).into_iter().flatten().flatten() {
+        if !owner_entry.path().is_dir() {
             continue;
         }
-        let host = host_entry.file_name().to_string_lossy().to_string();
+        let owner = owner_entry.file_name().to_string_lossy().to_string();
 
-        for owner_entry in std::fs::read_dir(host_entry.path())
+        for file_entry in std::fs::read_dir(owner_entry.path())
             .into_iter()
             .flatten()
             .flatten()
         {
-            if !owner_entry.path().is_dir() {
+            let path = file_entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("md") {
                 continue;
             }
-            let owner = owner_entry.file_name().to_string_lossy().to_string();
-
-            for file_entry in std::fs::read_dir(owner_entry.path())
-                .into_iter()
-                .flatten()
-                .flatten()
-            {
-                let path = file_entry.path();
-                if path.extension().and_then(|e| e.to_str()) != Some("md") {
-                    continue;
-                }
-                let name = path
-                    .file_stem()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_default();
-                if let Some(info) = ingest_info(&host, &owner, &name) {
-                    results.push((host.clone(), owner.clone(), name, info));
-                }
+            let name = path
+                .file_stem()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if let Some(info) = ingest_info(&owner, &name) {
+                results.push((owner.clone(), name, info));
             }
         }
     }
 
-    results.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
+    results.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
     results
 }
 
@@ -203,14 +187,28 @@ mod tests {
 
     #[test]
     fn test_ingest_path() {
-        let path = ingest_path("github.com", "user", "repo");
-        assert!(path.display().to_string().contains("github.com/user"));
-        assert!(path.display().to_string().ends_with("repo.md"));
+        let path = ingest_path("user", "repo");
+        let s = path.display().to_string();
+        assert!(s.contains(".trs"));
+        assert!(s.contains("ingest"));
+        assert!(s.contains("user"));
+        assert!(s.ends_with("repo.md"));
+    }
+
+    #[test]
+    fn test_ingest_path_no_host() {
+        // TRS layout is owner/name.md — no host segment
+        let path = ingest_path("user", "repo");
+        let components: Vec<_> = path
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().to_string())
+            .collect();
+        assert!(!components.iter().any(|c| c == "github.com"));
     }
 
     #[test]
     fn test_has_ingest_nonexistent() {
-        assert!(!has_ingest("nonexistent.com", "nobody", "nothing"));
+        assert!(!has_ingest("nobody", "nothing"));
     }
 
     #[test]
