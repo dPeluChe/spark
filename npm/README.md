@@ -55,7 +55,8 @@ spark root               # Show repos root
 spark doctor             # Validate installation health
 spark config             # Show/update config
 spark agent              # AI agent integration tips
-spark ingest             # LLM-ready context digest
+spark ingest --all       # LLM digests for all managed repos (wraps trs)
+spark ingest             # List digests with fleet awareness
 ```
 
 ## Links

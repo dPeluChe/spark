@@ -96,27 +96,33 @@ spark pull all --tag work     # pull tagged group
 ```
 
 ### LLM context for a repo
-Backend: **trs** (preferred, agent-friendly) → repomix (fallback if trs not installed).
+**TRS owns digest generation and storage** (`~/.trs/ingest/`). SPARK adds a fleet-level
+wrapper: resolves repo by name and runs trs inside the repo path. Shared storage — both
+tools see the same digests.
 
+**Fleet operations (SPARK):**
 ```bash
-spark ingest <repo>                    # full digest → ~/.config/spark/ingest/
-spark ingest <repo> --budget 32k       # fit to context window (trs)
-spark ingest <repo> --changed          # only uncommitted files — fast mid-session (trs)
-spark ingest <repo> --since HEAD~5     # only last 5 commits (trs)
-spark ingest <repo> --deps             # dependency graph only — no file content (trs)
-spark ingest <repo> --compress         # aggressive compression: trs -l aggressive (~93%)
-spark ingest <repo> --read             # print digest to stdout (pipe to LLM)
-spark ingest --all                     # batch all managed repos
-spark ingest                           # list existing digests with freshness status
+spark ingest --all                 # batch all managed repos (trs --fresh skips unchanged)
+spark ingest                       # list with fleet awareness (managed vs external)
+spark ingest <repo> --read         # print a managed repo's digest to stdout
+spark ingest <repo>                # generate digest for a managed repo by name (no cd)
 ```
 
-**Agent tip**: use `trs ingest` directly for quick one-off digests without spark's repo system:
+**Single-repo operations (TRS directly, preferred when inside a repo):**
 ```bash
-trs ingest                    # digest current directory
-trs ingest --budget 32k       # fit to budget
-trs ingest --changed          # only what you're working on right now
-trs ingest --deps             # just the import graph
+trs ingest                         # digest current directory
+trs ingest --list                  # full TRS catalog (includes external repos)
+trs ingest --read <name>           # read back a stored digest
+trs ingest --budget 32k            # fit to context window
+trs ingest --changed               # only uncommitted files — fast mid-session
+trs ingest --since HEAD~5          # only last 5 commits
+trs ingest --deps                  # dependency graph only — no file content
+trs ingest -l aggressive           # aggressive compression (~93% reduction)
+trs ingest --fresh                 # skip regen if HEAD unchanged
 ```
+
+**Rule of thumb:** many repos → `spark ingest --all`. One repo → `trs ingest` from inside.
+
 Check trs is installed: `which trs` — if missing: `npm install -g @dpeluche/trs`
 
 ---
@@ -128,9 +134,9 @@ Check trs is installed: `which trs` — if missing: `npm install -g @dpeluche/tr
 - **Status cache**: 4h cache for `spark status`. Press `r` in TUI or run `spark status` fresh.
 - **spark-cd**: shell function installed by `spark init` — needed for `spark-cd <name>` navigation.
 - **TUI tabs**: Scanner → Repos → Ports → System → Audit → Updater (TAB cycles, q goes back).
-- **Ingest output**: `~/.config/spark/ingest/<host>/<owner>/<repo>.md` — markdown for LLM context.
-- **Ingest backend**: trs preferred (`which trs`), repomix fallback. `--budget/--changed/--since/--deps` require trs.
-- **trs direct**: agents can call `trs ingest` directly for current-directory digests without spark's repo system.
+- **Ingest output**: `~/.trs/ingest/<owner>/<repo>.md` — shared storage with TRS, single source of truth.
+- **Ingest backend**: TRS is the sole backend (owns generation + storage). SPARK wraps it for fleet operations. See [docs/dev/TRS_INTEGRATION.md](https://github.com/dPeluChe/spark/blob/main/docs/dev/TRS_INTEGRATION.md).
+- **Fleet vs instance**: `spark ingest --all` for batch, `trs ingest` for single-repo/current-dir work.
 
 ## Installation check
 ```bash

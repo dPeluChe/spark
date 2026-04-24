@@ -79,7 +79,13 @@ pub fn cmd_ingest(
             "  SPARK Ingest — generating LLM context for {} repos\n",
             repos.len()
         );
-        let (mut ok, mut skipped, mut errors) = (0u32, 0u32, 0u32);
+        // --all uses trs --fresh: TRS skips regeneration if HEAD is unchanged.
+        // Git-based cache invalidation replaces spark's prior <24h mtime heuristic.
+        let batch_opts = IngestOptions {
+            fresh: true,
+            ..IngestOptions::default()
+        };
+        let (mut ok, mut errors) = (0u32, 0u32);
 
         for (i, repo) in repos.iter().enumerate() {
             eprint!(
@@ -90,28 +96,15 @@ pub fn cmd_ingest(
                 repo.name
             );
 
-            if let Some(info) = repo_ingest::ingest_info(&repo.host, &repo.owner, &repo.name) {
-                if info.age_secs.map(|a| a < 3600 * 24).unwrap_or(false) {
-                    skipped += 1;
-                    continue;
-                }
-            }
-
-            match repo_ingest::generate_ingest(
-                &repo.path,
-                &repo.host,
-                &repo.owner,
-                &repo.name,
-                &opts,
-            ) {
+            match repo_ingest::generate_ingest(&repo.path, &repo.owner, &repo.name, &batch_opts) {
                 Ok(_) => ok += 1,
                 Err(_) => errors += 1,
             }
         }
         eprintln!("\r{}\r", " ".repeat(60));
         println!(
-            "  {} generated, {} skipped (recent), {} errors",
-            ok, skipped, errors
+            "  {} processed (trs --fresh skipped unchanged), {} errors",
+            ok, errors
         );
     }
 }
@@ -149,10 +142,10 @@ fn generate_one(repo: &repo_manager::ManagedRepo, opts: &IngestOptions) {
 
     eprint!("  Analyzing {}/{}...", repo.owner, repo.name);
 
-    match repo_ingest::generate_ingest(&repo.path, &repo.host, &repo.owner, &repo.name, opts) {
+    match repo_ingest::generate_ingest(&repo.path, &repo.owner, &repo.name, opts) {
         Ok(path) => {
             eprintln!(" done\n");
-            let size = repo_ingest::ingest_info(&repo.host, &repo.owner, &repo.name)
+            let size = repo_ingest::ingest_info(&repo.owner, &repo.name)
                 .map(|i| format_size(i.size))
                 .unwrap_or_default();
             let short = shorten_path(&path.display().to_string());
@@ -162,16 +155,13 @@ fn generate_one(repo: &repo_manager::ManagedRepo, opts: &IngestOptions) {
                 repo.name
             );
             println!(
-                "  \x1b[90mspark ingest {} --budget 32k       fit to context window\x1b[0m",
-                repo.name
+                "  \x1b[90mtrs ingest --budget 32k            fit to context window (inside repo)\x1b[0m"
             );
             println!(
-                "  \x1b[90mspark ingest {} --changed          only uncommitted files\x1b[0m",
-                repo.name
+                "  \x1b[90mtrs ingest --changed               only uncommitted files (inside repo)\x1b[0m"
             );
             println!(
-                "  \x1b[90mspark ingest {} --deps             dependency graph only\x1b[0m",
-                repo.name
+                "  \x1b[90mtrs ingest --deps                  dependency graph only (inside repo)\x1b[0m"
             );
         }
         Err(e) => {
@@ -200,7 +190,7 @@ fn cmd_ingest_read(query: &str, config: &config::SparkConfig) {
         }
     };
 
-    let path = repo_ingest::ingest_path(&repo.host, &repo.owner, &repo.name);
+    let path = repo_ingest::ingest_path(&repo.owner, &repo.name);
     if !path.exists() {
         eprintln!(
             "  No digest for {}/{}. Run: spark ingest {}",
@@ -237,16 +227,10 @@ fn is_binary_line(line: &str) -> bool {
 fn cmd_ingest_list(config: &config::SparkConfig) {
     let repos = repo_manager::list_managed_repos(&config.repos_root);
     let ingests = repo_ingest::list_ingests();
-    let base = dirs::config_dir()
+    let base = dirs::home_dir()
         .unwrap_or_default()
-        .join("spark")
+        .join(".trs")
         .join("ingest");
-
-    let common_host = ingests
-        .first()
-        .map(|(h, _, _, _)| h.as_str())
-        .unwrap_or("github.com");
-    let all_same_host = ingests.iter().all(|(h, _, _, _)| h == common_host);
 
     let trs_status = if repo_ingest::is_trs_available() {
         "\x1b[32mtrs\x1b[0m"
@@ -254,29 +238,21 @@ fn cmd_ingest_list(config: &config::SparkConfig) {
         "\x1b[31mtrs not installed\x1b[0m"
     };
     println!(
-        "  \x1b[1mLLM Ingest\x1b[0m — {}/{} repos  \x1b[90m({})\x1b[0m",
+        "  \x1b[1mLLM Ingest\x1b[0m — {}/{} managed repos have digests  \x1b[90m({})\x1b[0m",
         ingests.len(),
         repos.len(),
         trs_status
     );
-
-    if all_same_host && !ingests.is_empty() {
-        println!(
-            "  \x1b[90m{}/{}\x1b[0m\n",
-            shorten_path(&base.display().to_string()),
-            common_host
-        );
-    } else {
-        println!(
-            "  \x1b[90m{}\x1b[0m\n",
-            shorten_path(&base.display().to_string())
-        );
-    }
+    println!(
+        "  \x1b[90m{} (shared with trs)\x1b[0m\n",
+        shorten_path(&base.display().to_string())
+    );
 
     if ingests.is_empty() {
         println!("  No digests yet.");
-        println!("  spark ingest <repo>       generate for a repo");
-        println!("  spark ingest --all        generate for all repos");
+        println!("  spark ingest <repo>       generate for a managed repo");
+        println!("  spark ingest --all        generate for all managed repos");
+        println!("  trs ingest                generate for current directory");
         if !repo_ingest::is_trs_available() {
             println!("\n  Install trs first:  npm install -g @dpeluche/trs");
         }
@@ -285,20 +261,20 @@ fn cmd_ingest_list(config: &config::SparkConfig) {
 
     let max_name = ingests
         .iter()
-        .map(|(_, o, n, _)| o.len() + 1 + n.len() + 3)
+        .map(|(o, n, _)| o.len() + 1 + n.len() + 3)
         .max()
         .unwrap_or(20)
         + 2;
 
     let cache = repo_manager::load_status_cache();
 
-    for (host, owner, name, info) in &ingests {
+    for (owner, name, info) in &ingests {
         let size = format_size(info.size);
         let age = info.age_display();
 
         let status = repos
             .iter()
-            .find(|r| r.host == *host && r.owner == *owner && r.name == *name)
+            .find(|r| r.owner == *owner && r.name == *name)
             .map(|r| {
                 let behind = matches!(
                     cache.get(&r.path.display().to_string()),
@@ -311,13 +287,9 @@ fn cmd_ingest_list(config: &config::SparkConfig) {
                     "\x1b[32mfresh\x1b[0m"
                 }
             })
-            .unwrap_or("\x1b[90m?\x1b[0m");
+            .unwrap_or("\x1b[90mexternal\x1b[0m");
 
-        let display_name = if all_same_host {
-            format!("{}/{}.md", owner, name)
-        } else {
-            format!("{}/{}/{}.md", host, owner, name)
-        };
+        let display_name = format!("{}/{}.md", owner, name);
         let padding = " ".repeat(max_name.saturating_sub(display_name.len()).max(2));
         println!(
             "  {}\x1b[90m.md\x1b[0m{}{}  {:>8}  {}",
@@ -334,7 +306,7 @@ fn cmd_ingest_list(config: &config::SparkConfig) {
         .filter(|r| {
             !ingests
                 .iter()
-                .any(|(h, o, n, _)| *h == r.host && *o == r.owner && *n == r.name)
+                .any(|(o, n, _)| *o == r.owner && *n == r.name)
         })
         .collect();
 
@@ -345,13 +317,16 @@ fn cmd_ingest_list(config: &config::SparkConfig) {
         }
     } else if !missing.is_empty() {
         println!(
-            "\n  \x1b[90m{} repos without digest — spark ingest --all\x1b[0m",
+            "\n  \x1b[90m{} managed repos without digest — spark ingest --all\x1b[0m",
             missing.len()
         );
     }
 
-    println!("\n  \x1b[90mspark ingest <repo>                 regenerate\x1b[0m");
-    println!("  \x1b[90mspark ingest <repo> --budget 32k    fit to context window\x1b[0m");
-    println!("  \x1b[90mspark ingest <repo> --changed       only uncommitted files\x1b[0m");
-    println!("  \x1b[90mspark ingest <repo> --deps          dependency graph only\x1b[0m");
+    println!("\n  \x1b[90mspark ingest <repo>          regenerate for a managed repo\x1b[0m");
+    println!(
+        "  \x1b[90mspark ingest --all           batch all managed repos (skip-if-fresh)\x1b[0m"
+    );
+    println!(
+        "  \x1b[90mtrs ingest --list            full TRS catalog (includes external repos)\x1b[0m"
+    );
 }

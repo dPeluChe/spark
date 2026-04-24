@@ -155,7 +155,7 @@ mod tests {
 
     #[test]
     fn test_tool_status_variants() {
-        let statuses = vec![
+        let statuses = [
             ToolStatus::Checking,
             ToolStatus::Installed,
             ToolStatus::Outdated,
