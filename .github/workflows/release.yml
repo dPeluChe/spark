@@ -9,8 +9,27 @@ permissions:
   contents: write
 
 jobs:
+  verify-versions:
+    name: Verify manifest versions match tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check manifests agree with each other
+        run: scripts/version.sh check
+      - name: Check manifests agree with tag
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          MANIFEST_VERSION="$(scripts/version.sh current)"
+          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} expects version ${TAG_VERSION}, but Cargo.toml is ${MANIFEST_VERSION}"
+            echo "::error::Run scripts/version.sh bump ${TAG_VERSION} and re-tag."
+            exit 1
+          fi
+          echo "Tag and manifests both at ${TAG_VERSION}"
+
   build:
     name: Build ${{ matrix.target }}
+    needs: verify-versions
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
