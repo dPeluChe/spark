@@ -16,8 +16,9 @@ pub fn cmd_report(fresh: bool, json_out: bool, config: &config::SparkConfig) {
     let repo_refs: Vec<&scanner::repo_manager::ManagedRepo> = repos.iter().collect();
 
     if !json_out {
-        eprintln!(
-            "  SPARK Fleet Report · {} repos · {}",
+        println!(
+            "  SPARK Fleet Report · v{} · {} repos · {}",
+            env!("CARGO_PKG_VERSION"),
             repos.len(),
             if fresh {
                 "fresh check"
@@ -56,6 +57,7 @@ pub fn cmd_report(fresh: bool, json_out: bool, config: &config::SparkConfig) {
     if json_out {
         json::print(&json::ReportJson {
             json_version: json::JSON_VERSION,
+            spark_version: env!("CARGO_PKG_VERSION").to_string(),
             generated_at: json::now_iso(),
             repos: repo_summary,
             disk: json::ReportDisk {

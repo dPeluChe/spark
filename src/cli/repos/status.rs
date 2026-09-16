@@ -234,23 +234,47 @@ fn print_summary(
         scanner::repo_manager::RepoStatus,
     )],
 ) {
+    use scanner::repo_manager::RepoStatus;
     let needs = statuses
         .iter()
-        .filter(|(_, s)| !matches!(s, scanner::repo_manager::RepoStatus::UpToDate))
+        .filter(|(_, s)| !matches!(s, RepoStatus::UpToDate))
         .count();
-    let updated = statuses
-        .iter()
-        .filter(|(_, s)| matches!(s, scanner::repo_manager::RepoStatus::UpToDate))
-        .count();
+    let updated = statuses.len() - needs;
     println!(
-        "\n  {} total — {} need pull, {} up to date",
+        "\n  {} total — {} need attention, {} up to date",
         statuses.len(),
         needs,
         updated
     );
-    if needs > 0 {
-        println!("  spark pull <name>          pull a specific repo");
-        println!("  spark pull all             pull all behind repos");
+    if needs == 0 {
+        return;
+    }
+
+    // Behind repos are the ones `spark pull` can actually fix — list the exact
+    // command per repo so it is copy-paste ready.
+    let behind: Vec<&scanner::repo_manager::ManagedRepo> = statuses
+        .iter()
+        .filter(|(_, s)| matches!(s, RepoStatus::Behind(_)))
+        .map(|(repo, _)| *repo)
+        .collect();
+    if !behind.is_empty() {
+        println!(
+            "  spark pull all             pull all {} behind repos",
+            behind.len()
+        );
         println!("  spark pull all --tag <t>   pull repos by tag");
+        println!();
+        for repo in &behind {
+            println!("    spark pull {}/{}", repo.owner, repo.name);
+        }
+    }
+
+    let manual = needs - behind.len();
+    if manual > 0 {
+        println!();
+        println!(
+            "  {} need manual action (dirty → commit first · diverged → merge/rebase)",
+            manual
+        );
     }
 }
