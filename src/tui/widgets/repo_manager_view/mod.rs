@@ -40,7 +40,7 @@ fn render_header(frame: &mut Frame, area: Rect, model: &RepoManagerModel) {
     let dirty_count = model
         .repos
         .iter()
-        .filter(|r| r.status == RepoStatus::Dirty)
+        .filter(|r| matches!(r.status, RepoStatus::Dirty { .. }))
         .count();
     let checking_count = model
         .repos
@@ -207,7 +207,7 @@ fn build_repo_row<'a>(
         RepoStatus::Behind(_) => Style::default().fg(YELLOW).bold(),
         RepoStatus::Ahead(_) => Style::default().fg(BLUE),
         RepoStatus::Diverged { .. } => Style::default().fg(RED).bold(),
-        RepoStatus::Dirty => Style::default().fg(YELLOW),
+        RepoStatus::Dirty { .. } => Style::default().fg(YELLOW),
         RepoStatus::Error(_) => Style::default().fg(RED),
         RepoStatus::Checking => Style::default().fg(GRAY),
     };
@@ -217,7 +217,7 @@ fn build_repo_row<'a>(
         RepoStatus::Behind(_) => "↓",
         RepoStatus::Ahead(_) => "↑",
         RepoStatus::Diverged { .. } => "↕",
-        RepoStatus::Dirty => "●",
+        RepoStatus::Dirty { .. } => "●",
         RepoStatus::Error(_) => "✘",
         RepoStatus::Checking => "⟳",
     };
@@ -284,13 +284,18 @@ pub fn render_action_modal(frame: &mut Frame, area: Rect, model: &RepoManagerMod
     };
 
     let status_icon = match &repo.status {
-        RepoStatus::UpToDate => "✓ Up to date",
-        RepoStatus::Behind(n) => &format!("↓ {} behind", n),
-        RepoStatus::Ahead(n) => &format!("↑ {} ahead", n),
-        RepoStatus::Diverged { ahead, behind } => &format!("↕ {} ahead, {} behind", ahead, behind),
-        RepoStatus::Dirty => "● Dirty (uncommitted changes)",
-        RepoStatus::Error(e) => e,
-        RepoStatus::Checking => "⟳ Checking...",
+        RepoStatus::UpToDate => "✓ Up to date".to_string(),
+        RepoStatus::Behind(n) => format!("↓ {} behind", n),
+        RepoStatus::Ahead(n) => format!("↑ {} ahead", n),
+        RepoStatus::Diverged { ahead, behind } => format!("↕ {} ahead, {} behind", ahead, behind),
+        RepoStatus::Dirty { ahead, behind } => match (ahead, behind) {
+            (0, 0) => "● Dirty (uncommitted changes)".to_string(),
+            (0, b) => format!("● Dirty, {} behind", b),
+            (a, 0) => format!("● Dirty, {} ahead", a),
+            (a, b) => format!("● Dirty, {} ahead, {} behind", a, b),
+        },
+        RepoStatus::Error(e) => e.clone(),
+        RepoStatus::Checking => "⟳ Checking...".to_string(),
     };
 
     let last_commit = repo.last_commit.as_deref().unwrap_or("unknown");
@@ -314,7 +319,7 @@ pub fn render_action_modal(frame: &mut Frame, area: Rect, model: &RepoManagerMod
                     RepoStatus::Behind(_) => YELLOW,
                     RepoStatus::Ahead(_) => BLUE,
                     RepoStatus::Diverged { .. } => RED,
-                    RepoStatus::Dirty => YELLOW,
+                    RepoStatus::Dirty { .. } => YELLOW,
                     _ => GRAY,
                 }),
             ),

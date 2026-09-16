@@ -20,7 +20,7 @@ pub struct Dependency {
     pub source_file: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DepVulnerability {
     pub id: String,
     pub summary: String,
@@ -32,7 +32,7 @@ pub struct DepVulnerability {
     pub source_file: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DepScanResult {
     pub deps_checked: usize,
     pub vulnerabilities: Vec<DepVulnerability>,

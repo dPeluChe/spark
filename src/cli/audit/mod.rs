@@ -8,6 +8,7 @@ mod secrets;
 
 pub use deps::cmd_audit_deps;
 
+use crate::cli::json;
 use crate::scanner;
 use std::fmt::Write as FmtWrite;
 use std::path::PathBuf;
@@ -17,6 +18,7 @@ pub fn cmd_audit(
     output_file: Option<PathBuf>,
     init_ignore: bool,
     skip_deps: bool,
+    json_out: bool,
 ) {
     let scan_path = path.unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
@@ -26,11 +28,13 @@ pub fn cmd_audit(
     }
 
     let phases = if skip_deps { 3 } else { 4 };
-    println!("  SPARK Security Audit");
-    if skip_deps {
-        println!("  Everything runs locally — nothing leaves your machine.\n");
-    } else {
-        println!("  Dependency check queries osv.dev (Google OSV, no auth required).\n");
+    if !json_out {
+        println!("  SPARK Security Audit");
+        if skip_deps {
+            println!("  Everything runs locally — nothing leaves your machine.\n");
+        } else {
+            println!("  Dependency check queries osv.dev (Google OSV, no auth required).\n");
+        }
     }
 
     // Phases 1-3 are independent local scans — run them in parallel. Phase 4
@@ -61,10 +65,10 @@ pub fn cmd_audit(
     });
 
     let secrets_total: usize = results.iter().map(|r| r.findings.len()).sum();
-    println!("    Secrets:       {} findings", secrets_total);
-    println!("    Git history:   {} findings", history.len());
-    println!("    Code (OWASP):  {} findings", patterns_found.len());
-    println!();
+    eprintln!("    Secrets:       {} findings", secrets_total);
+    eprintln!("    Git history:   {} findings", history.len());
+    eprintln!("    Code (OWASP):  {} findings", patterns_found.len());
+    eprintln!();
 
     let has_dep_findings = dep_result
         .as_ref()
@@ -75,32 +79,88 @@ pub fn cmd_audit(
         || !history.is_empty()
         || !patterns_found.is_empty()
         || has_dep_findings;
+
+    if json_out {
+        let payload = build_audit_json(
+            &scan_path,
+            &results,
+            &history,
+            &patterns_found,
+            dep_result.as_ref(),
+            npm_audit_json.is_some(),
+        );
+        if let Some(out) = &output_file {
+            let _ = std::fs::write(
+                out,
+                serde_json::to_string_pretty(&payload).unwrap_or_default(),
+            );
+        }
+        json::print(&payload);
+    }
+
     if !has_findings {
-        println!("  \x1b[32mNo security findings detected.\x1b[0m");
+        if !json_out {
+            println!("  \x1b[32mNo security findings detected.\x1b[0m");
+        }
         return;
     }
 
-    let mut report = String::new();
+    if !json_out {
+        let mut report = String::new();
 
-    secrets::render(&mut report, &results);
-    history::render(&mut report, &history);
-    patterns::render(&mut report, &patterns_found, &scan_path);
-    deps::render(&mut report, dep_result.as_ref());
-    if let Some(ref json) = npm_audit_json {
-        deps::render_npm(&mut report, json);
+        secrets::render(&mut report, &results);
+        history::render(&mut report, &history);
+        patterns::render(&mut report, &patterns_found, &scan_path);
+        deps::render(&mut report, dep_result.as_ref());
+        if let Some(ref json) = npm_audit_json {
+            deps::render_npm(&mut report, json);
+        }
+
+        render_summary(
+            &mut report,
+            &results,
+            &history,
+            &patterns_found,
+            dep_result.as_ref(),
+            npm_audit_json.is_some(),
+        );
+
+        render_ignore_tip(&scan_path, has_findings);
+        save_report_if_requested(output_file, &scan_path, &report);
     }
 
-    render_summary(
-        &mut report,
-        &results,
-        &history,
-        &patterns_found,
-        dep_result.as_ref(),
-        npm_audit_json.is_some(),
-    );
+    // CI gate: findings exit non-zero (see ROADMAP.md Phase 0)
+    std::process::exit(1);
+}
 
-    render_ignore_tip(&scan_path, has_findings);
-    save_report_if_requested(output_file, &scan_path, &report);
+/// Build the `--json` contract from the phase outputs (see ROADMAP.md).
+fn build_audit_json(
+    scan_path: &std::path::Path,
+    results: &[scanner::secret_scanner::AuditResult],
+    history: &[scanner::history_scanner::HistoryFinding],
+    patterns: &[scanner::code_patterns::PatternFinding],
+    dep_result: Option<&scanner::dep_scanner::DepScanResult>,
+    has_npm_audit: bool,
+) -> json::AuditJson {
+    let secrets_total: usize = results.iter().map(|r| r.findings.len()).sum();
+    let deps_total = dep_result.map(|r| r.vulnerabilities.len()).unwrap_or(0);
+    json::AuditJson {
+        json_version: json::JSON_VERSION,
+        path: scan_path.display().to_string(),
+        generated_at: json::now_iso(),
+        summary: json::AuditSummaryJson {
+            total: secrets_total + history.len() + patterns.len() + deps_total,
+            secrets: secrets_total,
+            history: history.len(),
+            patterns: patterns.len(),
+            deps: deps_total,
+            npm_audit: has_npm_audit,
+        },
+        secrets: results.to_vec(),
+        history: history.to_vec(),
+        patterns: patterns.to_vec(),
+        deps: dep_result.cloned(),
+    }
 }
 
 fn run_deps_phase(

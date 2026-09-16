@@ -75,7 +75,7 @@ pub fn status_to_string(status: &RepoStatus) -> String {
         RepoStatus::Behind(n) => format!("behind:{}", n),
         RepoStatus::Ahead(n) => format!("ahead:{}", n),
         RepoStatus::Diverged { ahead, behind } => format!("diverged:{}:{}", ahead, behind),
-        RepoStatus::Dirty => "dirty".into(),
+        RepoStatus::Dirty { ahead, behind } => format!("dirty:{}:{}", ahead, behind),
         RepoStatus::Error(e) => format!("error:{}", e),
         RepoStatus::Checking => "checking".into(),
     }
@@ -87,10 +87,23 @@ pub fn string_to_status(s: &str) -> RepoStatus {
         return RepoStatus::UpToDate;
     }
     if s == "dirty" {
-        return RepoStatus::Dirty;
+        // legacy entries before dirty carried counts
+        return RepoStatus::Dirty {
+            ahead: 0,
+            behind: 0,
+        };
     }
     if s == "checking" {
         return RepoStatus::Checking;
+    }
+    if let Some(rest) = s.strip_prefix("dirty:") {
+        let parts: Vec<&str> = rest.splitn(2, ':').collect();
+        if parts.len() == 2 {
+            return RepoStatus::Dirty {
+                ahead: parts[0].parse().unwrap_or(0),
+                behind: parts[1].parse().unwrap_or(0),
+            };
+        }
     }
     if let Some(n) = s.strip_prefix("behind:") {
         return RepoStatus::Behind(n.parse().unwrap_or(0));

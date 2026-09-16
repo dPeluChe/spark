@@ -13,10 +13,12 @@ mod patterns;
 pub use patterns::{API_KEY_PATTERNS, PRIVATE_KEY_CONTENT};
 
 use super::common;
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 
 /// Severity of a finding.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Severity {
     Critical,
     Warning,
@@ -33,7 +35,8 @@ impl std::fmt::Display for Severity {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum FindingCategory {
     ApiKey,
     Credential,
@@ -58,7 +61,8 @@ impl std::fmt::Display for FindingCategory {
 
 /// Where the finding was located. Used to adjust severity — findings in tests
 /// or docs are downgraded.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum FindingContext {
     SourceCode,
     Config,
@@ -79,7 +83,7 @@ impl std::fmt::Display for FindingContext {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 #[allow(dead_code)]
 pub struct SecretFinding {
     pub file_path: PathBuf,
@@ -93,7 +97,7 @@ pub struct SecretFinding {
     pub project_path: PathBuf,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct AuditResult {
     pub project_name: String,
     pub project_path: PathBuf,

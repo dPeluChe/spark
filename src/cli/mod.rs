@@ -3,6 +3,7 @@
 mod audit;
 mod certs;
 mod ingest;
+pub(crate) mod json;
 mod ports;
 mod repos;
 mod system;
@@ -56,6 +57,9 @@ pub enum Commands {
         #[arg(short = 'p', long = "full-path")]
         full_path: bool,
         query: Option<String>,
+        /// Machine-readable JSON output (json_version: 1)
+        #[arg(long = "json")]
+        json: bool,
     },
     /// Show repositories root path
     Root {
@@ -90,6 +94,12 @@ pub enum Commands {
         /// Filter by tag
         #[arg(long = "tag", short = 't')]
         tag: Option<String>,
+        /// Machine-readable JSON output (json_version: 1)
+        #[arg(long = "json")]
+        json: bool,
+        /// Exit 1 when any repo needs attention (for scripts/CI)
+        #[arg(long = "exit-code")]
+        exit_code: bool,
     },
     /// Pull repos that are behind remote (fast-forward only)
     Pull {
@@ -114,6 +124,9 @@ pub enum Commands {
         /// Only run dependency vulnerability check
         #[arg(long = "deps")]
         deps_only: bool,
+        /// Machine-readable JSON output (json_version: 1)
+        #[arg(long = "json")]
+        json: bool,
     },
     /// Scan SSL/TLS certificates (files + macOS Keychain)
     Certs {
@@ -178,6 +191,9 @@ pub enum Commands {
         /// Kill by port, PID, or name. Use with query for non-interactive: spark ps node --kill
         #[arg(long = "kill", short = 'k', num_args = 0..=1, default_missing_value = "")]
         kill: Option<String>,
+        /// Machine-readable JSON output (json_version: 1)
+        #[arg(long = "json")]
+        json: bool,
     },
     /// Validate installation and environment health
     Doctor,
@@ -221,7 +237,11 @@ pub enum TagAction {
 pub fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_eyre::Result<()> {
     match cmd {
         Commands::Clone { url, ssh, shallow } => repos::cmd_clone(&url, ssh, shallow, config),
-        Commands::List { full_path, query } => repos::cmd_list(full_path, query, config),
+        Commands::List {
+            full_path,
+            query,
+            json,
+        } => repos::cmd_list(full_path, query, json, config),
         Commands::Root { set } => system::cmd_root(set, config),
         Commands::Rm { query } => repos::cmd_rm(&query, config),
         Commands::Search { query, first } => repos::cmd_search(&query, first, config),
@@ -236,8 +256,13 @@ pub fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_
             Ok(())
         }
         Commands::Config { key, set } => system::cmd_config(key, set, config),
-        Commands::Status { query, tag } => {
-            repos::cmd_status(query, tag, config);
+        Commands::Status {
+            query,
+            tag,
+            json,
+            exit_code,
+        } => {
+            repos::cmd_status(query, tag, exit_code, json, config);
             Ok(())
         }
         Commands::Pull { query, tag } => {
@@ -250,11 +275,12 @@ pub fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_
             init_ignore,
             offline,
             deps_only,
+            json,
         } => {
             if deps_only {
                 audit::cmd_audit_deps(path);
             } else {
-                audit::cmd_audit(path, output, init_ignore, offline);
+                audit::cmd_audit(path, output, init_ignore, offline, json);
             }
             Ok(())
         }
@@ -288,8 +314,13 @@ pub fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_
             certs::cmd_certs(path, keychain_only, expired_only, summary_only);
             Ok(())
         }
-        Commands::Ps { all, query, kill } => {
-            ports::cmd_ports(all, query, kill);
+        Commands::Ps {
+            all,
+            query,
+            kill,
+            json,
+        } => {
+            ports::cmd_ports(all, query, kill, json);
             Ok(())
         }
         Commands::Doctor => {

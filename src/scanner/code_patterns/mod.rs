@@ -10,9 +10,11 @@ mod patterns;
 
 use super::common;
 use patterns::PATTERNS;
+use serde::Serialize;
 use std::path::Path;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum PatternSeverity {
     High,
     Medium,
@@ -30,7 +32,8 @@ impl std::fmt::Display for PatternSeverity {
 }
 
 /// OWASP Top 10:2025 category mapping. See https://owasp.org/Top10/
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum OwaspCategory {
     SqlInjection,            // A03:2025 Injection
     CommandInjection,        // A03:2025 Injection
@@ -57,7 +60,7 @@ impl std::fmt::Display for OwaspCategory {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct PatternFinding {
     pub file_path: std::path::PathBuf,
     pub line_number: usize,
