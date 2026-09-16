@@ -34,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CHANGELOG.md` (this file).
 
 ### Changed
+- `spark status` summary now lists the exact `spark pull owner/name` command
+  for every behind repo (copy-paste ready) and counts the repos that need
+  manual action (dirty → commit, diverged → merge/rebase).
+- `spark report` shows the running SPARK version in the header and as
+  `spark_version` in the `--json` payload.
 - **`spark.skill.md` v1.1.0**: agents start with `spark report --json` for
   fleet triage, prefer the JSON contracts over parsing prose, and use the
   `audit` / `status --exit-code` exit codes as gates.

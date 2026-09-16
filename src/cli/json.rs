@@ -206,6 +206,8 @@ pub struct ReportSecurity {
 #[derive(Serialize)]
 pub struct ReportJson {
     pub json_version: u8,
+    /// Running SPARK version (compile-time package version)
+    pub spark_version: String,
     pub generated_at: String,
     pub repos: StatusSummary,
     pub disk: ReportDisk,
@@ -288,6 +290,7 @@ mod tests {
     fn test_report_json_shape() {
         let value = ReportJson {
             json_version: JSON_VERSION,
+            spark_version: "0.5.1".into(),
             generated_at: "2026-09-16T00:00:00Z".into(),
             repos: StatusSummary {
                 total: 2,
@@ -317,6 +320,7 @@ mod tests {
         };
         let json: serde_json::Value = serde_json::to_value(&value).unwrap();
         assert_eq!(json["json_version"], 1);
+        assert_eq!(json["spark_version"], "0.5.1");
         assert_eq!(json["repos"]["behind"], 1);
         assert_eq!(json["disk"]["top_repos"][0]["repo"], "o/r");
         assert_eq!(json["tools"]["checked"], false);
