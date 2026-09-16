@@ -135,6 +135,12 @@ Context-aware severity: Source Code > Config > Test > Docs (findings in tests/do
 - Whitelist: `~/.config/spark/whitelist.txt`
 - Dry-run: `spark --dry-run`
 
+### Fleet Report (`spark report`)
+- Read-only triage: repos by state, recoverable disk, dev servers, outdated tools, last audit
+- Fast by default (status cache + local scans, warm ~1.5s on 145 repos); `--fresh` re-fetches statuses and tool versions (~29s)
+- `--json` contract (`json_version: 1`); `spark audit` persists `last_audit.json` to feed the security section
+- Every section prints the command that fixes it (`spark pull all`, `spark system`, …) — the report never mutates anything
+
 ### Repo Status Cache
 - Stored in `repo_status_cache.json`
 - Expires after 4 hours
@@ -145,7 +151,7 @@ Context-aware severity: Source Code > Config > Test > Docs (findings in tests/do
 
 ```bash
 cargo run                  # Dev mode
-cargo test                 # 131 tests
+cargo test                 # 138 tests
 cargo build --release      # Optimized build
 ```
 

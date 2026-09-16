@@ -198,6 +198,7 @@ spark ps                       # Dev servers (pid, process, runtime, project)
 spark ps --all                 # All ports: dev + macOS + services + apps
 spark ps <query>               # Search processes by name
 spark ps --kill <target>       # Kill by port, PID, or name
+spark ps --json                # Machine-readable ports / processes
 spark ps <query> --kill        # Non-interactive kill (exit 0/1 for scripts)
 
 # Security audit
@@ -206,6 +207,7 @@ spark audit --deps             # Dependency-only scan
 spark audit --offline          # No network
 spark audit --init             # Create .sparkauditignore
 spark audit -o report.txt      # Save report to file
+spark audit --json             # Machine-readable findings (exit 1 on findings)
 
 # Certificates
 spark certs                    # Keychain + home directory
@@ -284,6 +286,21 @@ max_scan_depth = 6
 
 ## For AI Agents
 
+Every triage command speaks JSON (`json_version: 1`, stable contract — see
+[docs/dev/ROADMAP.md](docs/dev/ROADMAP.md)):
+
+```bash
+spark report --json            # Fleet triage in one call: repos, disk, ports, tools, security
+spark status --json            # Per-repo kind/ahead/behind/dirty + summary counters
+spark status --exit-code       # Exit 1 when any repo needs attention (CI/agent gate)
+spark list --json              # Full repo inventory
+spark ps --json                # Dev servers (and processes in query mode)
+spark audit --json             # Redacted findings; exit 1 when findings exist (CI gate)
+```
+
+Typical agent loop: `spark report --json` to triage → act with `spark pull all`,
+`spark ps <name> --kill`, or point the user at `spark system` / `spark audit`.
+
 ```bash
 spark agent           # Integration tips
 spark ingest --all    # Batch LLM-ready digests for all managed repos (via trs)
@@ -298,6 +315,7 @@ Add to your `CLAUDE.md` or `.cursorrules`:
 
 ```
 Repos managed by spark (ghq-compatible).
+Run `spark report --json` to triage the fleet (repos, disk, ports, tools, security).
 Run `spark cd <name>` to find repo paths.
 Run `spark root` to get the repos root.
 Run `spark list` for a full repo tree.
@@ -322,7 +340,7 @@ spark-cd zed    # cd to the zed repo
 | HTTP | [reqwest](https://github.com/seanmonstar/reqwest) + rustls |
 | CLI | [clap 4](https://github.com/clap-rs/clap) |
 | Binary | ~4 MB (LTO + strip), no runtime deps |
-| Tests | 127 passing, 0 warnings |
+| Tests | 138 passing, 0 warnings |
 
 ---
 

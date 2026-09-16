@@ -175,8 +175,11 @@ spark clone <url>              # Clonar (compatible ghq, shorthand owner/repo)
 spark clone <url> -p           # Clonar via SSH
 spark list [-p] [query]        # Listar repos (árbol: branch + antigüedad + tags)
 spark search <query>           # Buscar repos
+spark report                   # Estado de flota: repos + disco + puertos + tools + seguridad
+spark report --fresh           # Igual, re-consultando estados y versiones
 spark status [query]           # Ver qué repos necesitan pull
 spark status --tag <tag>       # Estado filtrado por tag
+spark status --json            # Salida machine-readable (json_version: 1)
 spark pull <query|all>         # Pull repos (ff-only)
 spark pull all --tag <tag>     # Pull repos por tag
 spark cd <nombre>              # Imprimir ruta al repo
@@ -195,6 +198,7 @@ spark ps --all                 # Todos los puertos
 spark ps <query>               # Buscar procesos por nombre
 spark ps --kill <target>       # Matar por puerto, PID o nombre
 spark ps <query> --kill        # Matar no-interactivo (exit 0/1 para scripts)
+spark ps --json                # Puertos / procesos machine-readable
 
 # Auditoría de seguridad
 spark audit [ruta]             # Auditoría completa (secretos + OWASP + deps)
@@ -202,6 +206,7 @@ spark audit --deps             # Solo dependencias
 spark audit --offline          # Sin red
 spark audit --init             # Crear .sparkauditignore
 spark audit -o reporte.txt     # Guardar reporte en archivo
+spark audit --json             # Hallazgos machine-readable (exit 1 si hay hallazgos)
 
 # Certificados
 spark certs                    # Keychain + directorio home
@@ -280,6 +285,21 @@ max_scan_depth = 6
 
 ## Para Agentes IA
 
+Todos los comandos de triage hablan JSON (`json_version: 1`, contrato estable —
+ver [docs/dev/ROADMAP.md](docs/dev/ROADMAP.md)):
+
+```bash
+spark report --json            # Triage de flota en una llamada: repos, disco, puertos, tools, seguridad
+spark status --json            # Por repo: kind/ahead/behind/dirty + contadores resumen
+spark status --exit-code       # Exit 1 si algo necesita atención (gate para CI/agentes)
+spark list --json              # Inventario completo de repos
+spark ps --json                # Servidores dev (y procesos en modo query)
+spark audit --json             # Hallazgos redactados; exit 1 si hay hallazgos (gate de CI)
+```
+
+Loop típico del agente: `spark report --json` para triage → actuar con `spark pull all`,
+`spark ps <nombre> --kill`, o dirigir al usuario a `spark system` / `spark audit`.
+
 ```bash
 spark agent    # Tips de integración
 spark ingest   # Generar contexto comprimido para LLMs (via trs)
@@ -289,6 +309,7 @@ Agrega a tu `CLAUDE.md` o `.cursorrules`:
 
 ```
 Repos gestionados por spark (compatible con ghq).
+Usa `spark report --json` para triage de la flota (repos, disco, puertos, tools, seguridad).
 Usa `spark cd <nombre>` para encontrar rutas a repos.
 Usa `spark root` para obtener la raíz de repos.
 Usa `spark list` para ver el árbol completo de repos.
@@ -307,7 +328,7 @@ Usa `spark list` para ver el árbol completo de repos.
 | HTTP | [reqwest](https://github.com/seanmonstar/reqwest) + rustls |
 | CLI | [clap 4](https://github.com/clap-rs/clap) |
 | Binario | ~4 MB (LTO + strip), sin dependencias de runtime |
-| Tests | 127 pasando, 0 warnings |
+| Tests | 138 pasando, 0 warnings |
 
 ---
 

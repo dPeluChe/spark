@@ -9,9 +9,8 @@ Pending tasks and improvements for the SPARK DevOps platform.
 
 ## Current focus — Agent-First Toolkit (see ROADMAP.md)
 
-### Phase 2: agent loop closure `added: 2026-09-16`
-- `spark.skill.md`: prefer `--json`, `report` for triage, `audit` exit codes for gates
-- README/docs: document the agent workflow
+Phases 0-2 shipped 2026-09-16. Next milestone: first tagged release (v0.6.0)
+and `spark update` (self-update) — see backlog.
 
 ---
 

@@ -94,6 +94,8 @@ src/
 │       └── system_view/           # mod.rs + table.rs + risk.rs
 ├── cli/
 │   ├── mod.rs                     # CLI definitions (clap), dispatcher, shared helpers
+│   ├── json.rs                    # --json output contracts (json_version: 1)
+│   ├── report.rs                  # spark report — fleet status in one screen
 │   ├── system.rs                  # init, config, doctor, agent, completions, root
 │   ├── certs.rs                   # Certificate scanner CLI
 │   ├── tags.rs                    # Tag management (add, remove, list, delete, rename)
@@ -189,6 +191,9 @@ MVU (Model-View-Update) pattern:
 
 All `spark <subcommand>` implementations. Each file maps to one command group. Shared formatting helpers in `mod.rs`.
 
+- **json.rs**: every `--json` contract (`json_version: 1`) — status, list, ps, audit, report. Shapes are a stable API for agents/CI; breaking changes require a version bump (see [ROADMAP.md](ROADMAP.md)).
+- **report.rs**: `spark report` — read-only fleet triage (repos, disk, ports, tools, last audit). Reuses `repos::fetch_statuses`, `json::summarize_statuses`, the 8-worker artifact pool, and `last_audit.json` persisted by `spark audit`.
+
 ### 8. Utils (`utils/`)
 
 - **shell.rs**: Async `tokio::process::Command` wrapper with timeout, stderr capture, debug logging to `spark_debug.log`
@@ -259,7 +264,7 @@ SecretAudit → SecretAuditPathInput → SecretAudit
 ## Testing
 
 ```bash
-cargo test    # 131 tests
+cargo test    # 138 tests
 ```
 
 Tests cover: version parsing, health scoring, config serialization/deserialization, inventory validation, changelog URL mapping, artifact detection, port detection, git URL parsing, path utilities, and TUI model logic. Tests live next to the code they test (`#[cfg(test)]` at the bottom of each file).

@@ -1,6 +1,7 @@
 # 🔄 SPARK - User Workflows & Processes
 
-This document describes the Updater interaction flows in SPARK v0.5.1.
+This document describes the Updater interaction flows in the SPARK TUI.
+CLI flows (including `spark report` triage) live in the [README](../../README.md) and [ROADMAP.md](ROADMAP.md).
 
 ---
 
@@ -33,7 +34,7 @@ This document describes the Updater interaction flows in SPARK v0.5.1.
          ▼
 ┌─────────────────────────────────────┐
 │ Main Dashboard                      │
-│ - All 44+ tools displayed           │
+│ - All 55+ tools displayed           │
 │ - Grouped by category               │
 │ - Version checking in progress...   │
 └────────┬────────────────────────────┘

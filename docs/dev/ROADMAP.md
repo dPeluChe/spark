@@ -141,10 +141,15 @@ $ spark report
 
 ## Phase 2 — Agent loop closure
 
-- `spark.skill.md` (assets/) teaches agents: prefer `--json`, use `report` for
-  triage, `audit` exit codes for gates.
-- `spark audit` persists `last_audit.json` (summary only, no findings bodies).
-- README/docs mention the agent workflow.
+**Status**: shipped 2026-09-16.
+
+- `spark.skill.md` (assets/, v1.1.0) teaches agents: start with
+  `spark report --json` for triage, prefer `--json` over parsing prose, use
+  `audit` exit codes as gates.
+- `spark audit` persists `last_audit.json` (summary only, no findings bodies) —
+  shipped with Phase 1.
+- README / README.es document the agent workflow; ARCHITECTURE and CLAUDE.md
+  cover `report.rs` and the `json.rs` contracts.
 
 ---
 
