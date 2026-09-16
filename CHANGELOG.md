@@ -92,6 +92,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refactor.
 
 ### Fixed
+- Progress lines (`spark status`/`pull`/`report`/`ingest --all`) no longer
+  leave leftovers or interleave: each update is a single write ending with
+  erase-to-EOL, and progress is skipped entirely when stderr is not a
+  terminal (clean piped logs).
 - Status checks no longer report a stale "Up to date" when the fetch fails —
   a failed fetch with a clean 0/0 comparison now surfaces the error.
 - `is_cache_valid` no longer underflows on clock skew (`saturating_sub`).

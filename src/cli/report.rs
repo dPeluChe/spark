@@ -131,13 +131,13 @@ fn scan_artifacts_parallel(repos: &[&scanner::repo_manager::ManagedRepo]) -> (u6
                     .map(|a| a.size)
                     .sum();
                 let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-                eprint!("\r  [disk {}/{}] {}", n, total, repo.name);
+                crate::utils::shell::progress_line(n, total, &format!("disk · {}", repo.name));
                 let _ = tx.send((i, bytes));
             });
         }
     });
     drop(tx);
-    eprintln!("\r{}\r", " ".repeat(60));
+    crate::utils::shell::clear_progress_line();
 
     let mut per_repo = vec![0u64; total];
     for (i, bytes) in rx {

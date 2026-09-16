@@ -139,13 +139,17 @@ fn pull_all(filtered: &[&ManagedRepo]) -> PullSummary {
                     status => PullOutcome::Skipped(status),
                 };
                 let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-                eprint!("\r  [{}/{}] {}/{}", n, total, repo.owner, repo.name);
+                crate::utils::shell::progress_line(
+                    n,
+                    total,
+                    &format!("{}/{}", repo.owner, repo.name),
+                );
                 let _ = tx.send((i, outcome));
             });
         }
     });
     drop(tx);
-    eprintln!("\r{}\r", " ".repeat(60));
+    crate::utils::shell::clear_progress_line();
 
     let mut summary = PullSummary {
         pulled: 0,
