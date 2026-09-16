@@ -1,9 +1,10 @@
 //! `spark ps <query>` — search processes by name, cross-ref with ports.
 
 use super::ps_list::{ps_list, PsEntry};
+use crate::cli::json;
 use crate::scanner::port_scanner::{self, PortInfo};
 
-pub(super) fn cmd_search(query: &str) {
+pub(super) fn cmd_search(query: &str, json_out: bool) {
     let q = query.to_lowercase();
 
     let procs = ps_list();
@@ -21,6 +22,29 @@ pub(super) fn cmd_search(query: &str) {
         }
         m
     };
+
+    if json_out {
+        let processes: Vec<json::ProcessJson> = matched
+            .iter()
+            .map(|p| json::ProcessJson {
+                pid: p.pid,
+                cpu: p.cpu.clone(),
+                mem: p.mem.clone(),
+                name: p.name.clone(),
+                command: p.command.clone(),
+                ports: port_map
+                    .get(&p.pid)
+                    .map(|v| v.iter().map(|x| x.port).collect())
+                    .unwrap_or_default(),
+            })
+            .collect();
+        json::print(&json::PsProcessesJson {
+            json_version: json::JSON_VERSION,
+            query: query.to_string(),
+            processes,
+        });
+        return;
+    }
 
     if matched.is_empty() {
         println!("\n  No processes matching '{}'", query);

@@ -9,12 +9,6 @@ Pending tasks and improvements for the SPARK DevOps platform.
 
 ## Current focus — Agent-First Toolkit (see ROADMAP.md)
 
-### Phase 0: machine-readable outputs `added: 2026-09-16`
-- `--json` for `status`, `list`, `ps`, `audit` (schemas in ROADMAP.md, `json_version: 1`)
-- `audit` exit 1 on findings (CI gate); `status --exit-code` opt-in for agents/CI
-- `RepoStatus::Dirty` carries `ahead`/`behind` (today dirty masks behind/diverged)
-- Add `Serialize` derives to scanner finding structs
-
 ### Phase 1: `spark report` (fleet view) `added: 2026-09-16`
 - One command: repos summary + disk (artifacts/system) + ports + tools + last audit
 - Human output + `--json`; fast by default (caches), `--fresh` re-fetches

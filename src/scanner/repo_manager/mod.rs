@@ -18,8 +18,8 @@ pub enum RepoStatus {
     Ahead(usize),
     /// Both ahead and behind
     Diverged { ahead: usize, behind: usize },
-    /// Has uncommitted local changes
-    Dirty,
+    /// Has uncommitted local changes, with its ahead/behind counts
+    Dirty { ahead: usize, behind: usize },
     /// Failed to check status
     Error(String),
     /// Currently checking
@@ -35,7 +35,12 @@ impl std::fmt::Display for RepoStatus {
             RepoStatus::Diverged { ahead, behind } => {
                 write!(f, "{} ahead, {} behind", ahead, behind)
             }
-            RepoStatus::Dirty => write!(f, "Dirty"),
+            RepoStatus::Dirty { ahead, behind } => match (ahead, behind) {
+                (0, 0) => write!(f, "Dirty"),
+                (0, b) => write!(f, "Dirty, {} behind", b),
+                (a, 0) => write!(f, "Dirty, {} ahead", a),
+                (a, b) => write!(f, "Dirty, {} ahead, {} behind", a, b),
+            },
             RepoStatus::Error(e) => write!(f, "Error: {}", e),
             RepoStatus::Checking => write!(f, "Checking..."),
         }
@@ -179,7 +184,7 @@ pub fn check_repo_status(path: &Path) -> RepoStatus {
                 let behind: usize = parts[1].parse().unwrap_or(0);
 
                 if dirty {
-                    RepoStatus::Dirty
+                    RepoStatus::Dirty { ahead, behind }
                 } else if ahead > 0 && behind > 0 {
                     RepoStatus::Diverged { ahead, behind }
                 } else if behind > 0 {
@@ -190,7 +195,10 @@ pub fn check_repo_status(path: &Path) -> RepoStatus {
                     RepoStatus::UpToDate
                 }
             } else if dirty {
-                RepoStatus::Dirty
+                RepoStatus::Dirty {
+                    ahead: 0,
+                    behind: 0,
+                }
             } else {
                 RepoStatus::UpToDate
             };
@@ -206,7 +214,10 @@ pub fn check_repo_status(path: &Path) -> RepoStatus {
         Ok(o) => {
             let stderr = String::from_utf8_lossy(&o.stderr).trim().to_string();
             if dirty {
-                RepoStatus::Dirty
+                RepoStatus::Dirty {
+                    ahead: 0,
+                    behind: 0,
+                }
             } else if stderr.contains("no upstream") {
                 RepoStatus::UpToDate // No tracking branch
             } else {
@@ -346,111 +357,4 @@ pub use cache::*;
 use meta::{parse_git_url, repo_metadata};
 
 #[cfg(test)]
-mod tests {
-    use super::meta::relative_age;
-    use super::*;
-
-    #[test]
-    fn test_parse_ssh_url() {
-        let (host, owner, name) = parse_git_url("git@github.com:user/repo.git").unwrap();
-        assert_eq!(host, "github.com");
-        assert_eq!(owner, "user");
-        assert_eq!(name, "repo");
-    }
-
-    #[test]
-    fn test_parse_https_url() {
-        let (host, owner, name) = parse_git_url("https://github.com/user/repo.git").unwrap();
-        assert_eq!(host, "github.com");
-        assert_eq!(owner, "user");
-        assert_eq!(name, "repo");
-    }
-
-    #[test]
-    fn test_relative_age() {
-        let now = chrono::Utc::now().timestamp();
-        assert_eq!(relative_age(now - 90), "1m ago");
-        assert_eq!(relative_age(now - 7200), "2h ago");
-        assert_eq!(relative_age(now - 86400 * 5), "5d ago");
-        assert_eq!(relative_age(now - 86400 * 240), "8mo ago");
-        assert_eq!(relative_age(now - 86400 * 800), "2y ago");
-        assert_eq!(relative_age(now + 60), "1m ago"); // future timestamp clamps
-    }
-
-    #[test]
-    fn test_status_string_roundtrip() {
-        for s in [
-            RepoStatus::UpToDate,
-            RepoStatus::Behind(3),
-            RepoStatus::Ahead(2),
-            RepoStatus::Diverged {
-                ahead: 4,
-                behind: 9,
-            },
-            RepoStatus::Dirty,
-            RepoStatus::Error("boom".into()),
-            RepoStatus::Checking,
-        ] {
-            assert_eq!(string_to_status(&status_to_string(&s)), s);
-        }
-    }
-
-    /// Real git round-trip: clone a local bare origin, then drive it ahead and
-    /// confirm status flips Behind and merge_ff_only converges it.
-    #[test]
-    fn test_check_status_and_ff_merge() {
-        fn git(dir: &Path, args: &[&str]) {
-            let status = Command::new("git")
-                .args([
-                    "-c",
-                    "user.email=t@t",
-                    "-c",
-                    "user.name=t",
-                    "-c",
-                    "init.defaultBranch=main",
-                ])
-                .args(args)
-                .current_dir(dir)
-                .output()
-                .unwrap();
-            assert!(status.status.success(), "git {:?} failed", args);
-        }
-
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        let origin = root.join("origin.git");
-        let work = root.join("work");
-        let other = root.join("other");
-
-        git(root, &["init", "--bare", "origin.git"]);
-        git(root, &["clone", "origin.git", "work"]);
-        git(&work, &["commit", "--allow-empty", "-m", "one"]);
-        git(&work, &["push", "-u", "origin", "main"]);
-
-        assert_eq!(check_repo_status(&work), RepoStatus::UpToDate);
-
-        git(&work, &["commit", "--allow-empty", "-m", "two"]);
-        assert_eq!(check_repo_status(&work), RepoStatus::Ahead(1));
-
-        git(root, &["clone", "origin.git", "other"]);
-        git(&other, &["commit", "--allow-empty", "-m", "three"]);
-        git(&other, &["push", "origin", "main"]);
-        // work is now 1 ahead, 1 behind -> Diverged
-        assert_eq!(
-            check_repo_status(&work),
-            RepoStatus::Diverged {
-                ahead: 1,
-                behind: 1
-            }
-        );
-
-        // Reset work to a clean behind state and merge it
-        git(&work, &["reset", "--hard", "HEAD~1"]);
-        assert_eq!(check_repo_status(&work), RepoStatus::Behind(1));
-        merge_ff_only(&work).unwrap();
-        assert_eq!(check_repo_status(&work), RepoStatus::UpToDate);
-
-        let _ = origin; // keep tmp alive for the assertions above
-        let _ = other;
-    }
-}
+mod tests;

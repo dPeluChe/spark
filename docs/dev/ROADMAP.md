@@ -36,6 +36,7 @@ security — aggregated in one place.
 
 ## Phase 0 — Machine-readable outputs
 
+**Status**: shipped 2026-09-16.
 **Goal**: agents and CI can consume SPARK without parsing prose.
 
 ### Deliverables

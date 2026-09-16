@@ -1,37 +1,122 @@
 //! `spark status` — show which repos need pull, with optional tag filter.
 
 use super::select_repos;
+use crate::cli::json;
 use crate::config;
 use crate::scanner;
+use scanner::repo_manager::RepoStatus;
 
-pub fn cmd_status(query: Option<String>, tag: Option<String>, config: &config::SparkConfig) {
+pub fn cmd_status(
+    query: Option<String>,
+    tag: Option<String>,
+    exit_code: bool,
+    json_out: bool,
+    config: &config::SparkConfig,
+) {
     let repos = scanner::repo_manager::list_managed_repos_lite(&config.repos_root);
     let filtered = select_repos(&repos, query.as_deref(), tag.as_deref());
 
-    if let Some(t) = &tag {
-        if filtered.is_empty() {
-            println!("  No repos with tag '{}'", t);
-            return;
-        }
-        println!("  Tag: {}", t);
-    }
-
     if filtered.is_empty() {
-        println!("  No repos found");
+        if json_out {
+            json::print(&json::StatusJson {
+                json_version: json::JSON_VERSION,
+                generated_at: json::now_iso(),
+                summary: json::StatusSummary::default(),
+                repos: Vec::new(),
+            });
+        } else if let Some(t) = &tag {
+            println!("  No repos with tag '{}'", t);
+        } else {
+            println!("  No repos found");
+        }
         return;
     }
-    println!("  Checking {} repos...\n", filtered.len());
+
+    if let Some(t) = &tag {
+        if !json_out {
+            println!("  Tag: {}", t);
+        }
+    }
+    if !json_out {
+        println!("  Checking {} repos...\n", filtered.len());
+    }
 
     let statuses = fetch_statuses(&filtered);
-    print_status_table(&statuses);
-    print_summary(&statuses);
 
-    let all_tags = scanner::repo_tags::load_tags().all_tags();
-    if !all_tags.is_empty() {
-        println!("\n  \x1b[90mTags: {}\x1b[0m", all_tags.join(", "));
+    if json_out {
+        let tags = scanner::repo_tags::load_tags();
+        let repos_json: Vec<json::StatusRepo> = statuses
+            .iter()
+            .map(|(repo, status)| {
+                let key = scanner::repo_tags::repo_key(&repo.host, &repo.owner, &repo.name);
+                let (kind, ahead, behind, dirty) = json::status_kind(status);
+                json::StatusRepo {
+                    host: repo.host.clone(),
+                    owner: repo.owner.clone(),
+                    name: repo.name.clone(),
+                    path: repo.path.display().to_string(),
+                    branch: repo.branch.clone(),
+                    status: kind,
+                    ahead,
+                    behind,
+                    dirty,
+                    error: match status {
+                        RepoStatus::Error(e) => Some(e.clone()),
+                        _ => None,
+                    },
+                    last_commit: repo.last_commit.clone(),
+                    tags: tags.tags_for_repo(&key),
+                }
+            })
+            .collect();
+        json::print(&json::StatusJson {
+            json_version: json::JSON_VERSION,
+            generated_at: json::now_iso(),
+            summary: summarize(&statuses),
+            repos: repos_json,
+        });
+    } else {
+        print_status_table(&statuses);
+        print_summary(&statuses);
+
+        let all_tags = scanner::repo_tags::load_tags().all_tags();
+        if !all_tags.is_empty() {
+            println!("\n  \x1b[90mTags: {}\x1b[0m", all_tags.join(", "));
+        }
+        println!("  \x1b[90mspark tag add <repo> <tag>    add tag to a repo\x1b[0m");
+        println!("  \x1b[90mspark tag list               see all tags\x1b[0m");
     }
-    println!("  \x1b[90mspark tag add <repo> <tag>    add tag to a repo\x1b[0m");
-    println!("  \x1b[90mspark tag list               see all tags\x1b[0m");
+
+    // CI/agent gate: anything not up to date counts as needing attention
+    if exit_code {
+        let needs = statuses
+            .iter()
+            .filter(|(_, s)| !matches!(s, RepoStatus::UpToDate))
+            .count();
+        if needs > 0 {
+            std::process::exit(1);
+        }
+    }
+}
+
+/// Summary counters for `--json`, bucketed by status kind.
+fn summarize(
+    statuses: &[(&scanner::repo_manager::ManagedRepo, RepoStatus)],
+) -> json::StatusSummary {
+    let mut s = json::StatusSummary::default();
+    for (_, status) in statuses {
+        s.total += 1;
+        match status {
+            RepoStatus::UpToDate => s.up_to_date += 1,
+            RepoStatus::Behind(_) => s.behind += 1,
+            RepoStatus::Ahead(_) => s.ahead += 1,
+            RepoStatus::Diverged { .. } => s.diverged += 1,
+            RepoStatus::Dirty { .. } => s.dirty += 1,
+            RepoStatus::Error(_) => s.error += 1,
+            RepoStatus::Checking => s.checking += 1,
+        }
+    }
+    s
 }
 
 fn fetch_statuses<'a>(
@@ -132,7 +217,7 @@ fn print_status_row(
         scanner::repo_manager::RepoStatus::Behind(_) => "v",
         scanner::repo_manager::RepoStatus::Ahead(_) => "^",
         scanner::repo_manager::RepoStatus::Diverged { .. } => "~",
-        scanner::repo_manager::RepoStatus::Dirty => "*",
+        scanner::repo_manager::RepoStatus::Dirty { .. } => "*",
         scanner::repo_manager::RepoStatus::Error(_) => "x",
         scanner::repo_manager::RepoStatus::Checking => "?",
     };

@@ -78,10 +78,18 @@ pub fn cmd_clone(
 pub fn cmd_list(
     full_path: bool,
     query: Option<String>,
+    json_out: bool,
     config: &config::SparkConfig,
 ) -> color_eyre::Result<()> {
     let repos = scanner::repo_manager::list_managed_repos_lite(&config.repos_root);
     if repos.is_empty() {
+        if json_out {
+            crate::cli::json::print(&crate::cli::json::ListJson {
+                json_version: crate::cli::json::JSON_VERSION,
+                repos: Vec::new(),
+            });
+            return Ok(());
+        }
         println!("  No repos in {}", config.repos_root.display());
         println!("  Use: spark clone <url>");
         return Ok(());
@@ -94,6 +102,30 @@ pub fn cmd_list(
         }
         None => repos.iter().collect(),
     };
+
+    if json_out {
+        let tags = scanner::repo_tags::load_tags();
+        let repos_json: Vec<crate::cli::json::ListRepo> = filtered
+            .iter()
+            .map(|repo| {
+                let key = scanner::repo_tags::repo_key(&repo.host, &repo.owner, &repo.name);
+                crate::cli::json::ListRepo {
+                    host: repo.host.clone(),
+                    owner: repo.owner.clone(),
+                    name: repo.name.clone(),
+                    path: repo.path.display().to_string(),
+                    branch: repo.branch.clone(),
+                    last_commit: repo.last_commit.clone(),
+                    tags: tags.tags_for_repo(&key),
+                }
+            })
+            .collect();
+        crate::cli::json::print(&crate::cli::json::ListJson {
+            json_version: crate::cli::json::JSON_VERSION,
+            repos: repos_json,
+        });
+        return Ok(());
+    }
 
     if full_path {
         for repo in &filtered {

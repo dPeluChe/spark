@@ -4,6 +4,7 @@
 //! committed and later removed. Uses the same regex patterns as secret_scanner.
 
 use super::secret_scanner::{FindingCategory, FindingContext, SecretFinding, Severity};
+use serde::Serialize;
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -11,7 +12,7 @@ use std::path::Path;
 const MAX_COMMITS: usize = 500;
 
 /// A finding from git history includes commit metadata
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct HistoryFinding {
     pub finding: SecretFinding,
     pub commit_sha: String,

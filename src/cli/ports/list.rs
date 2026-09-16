@@ -1,12 +1,26 @@
 //! `spark ps` (no args) — list listening ports grouped into dev / macOS /
 //! services / apps.
 
+use crate::cli::json;
 use crate::scanner::port_scanner::{self, is_dev_server, PortInfo};
 
-pub(super) fn cmd_list_ports(show_all: bool) {
+pub(super) fn cmd_list_ports(show_all: bool, json_out: bool) {
     let all_ports = port_scanner::scan_ports();
     let dev: Vec<&PortInfo> = all_ports.iter().filter(|p| is_dev_server(p)).collect();
     let sys: Vec<&PortInfo> = all_ports.iter().filter(|p| !is_dev_server(p)).collect();
+
+    if json_out {
+        let ports_json: Vec<json::PortJson> = if show_all {
+            all_ports.iter().map(port_json).collect()
+        } else {
+            dev.iter().map(|p| port_json(p)).collect()
+        };
+        json::print(&json::PsPortsJson {
+            json_version: json::JSON_VERSION,
+            ports: ports_json,
+        });
+        return;
+    }
 
     if dev.is_empty() && (!show_all || sys.is_empty()) {
         println!("\n  No dev servers running.");
@@ -53,6 +67,27 @@ pub(super) fn cmd_list_ports(show_all: bool) {
         );
     }
     println!("  spark ps --kill <port|pid|name>  to stop a process");
+}
+
+/// JSON view of a port; `kind` mirrors the human sections (dev/system/service/app)
+fn port_json(p: &PortInfo) -> json::PortJson {
+    let kind = if is_dev_server(p) {
+        "dev"
+    } else if is_macos_system(p) {
+        "system"
+    } else if is_service(p) {
+        "service"
+    } else {
+        "app"
+    };
+    json::PortJson {
+        port: p.port,
+        pid: p.pid,
+        process: p.process_name.clone(),
+        runtime: format!("{}", p.runtime),
+        project: p.project_dir.clone(),
+        kind,
+    }
 }
 
 fn classify_system<'a>(

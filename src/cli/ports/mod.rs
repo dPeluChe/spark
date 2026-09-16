@@ -9,15 +9,15 @@ mod list;
 mod ps_list;
 mod search;
 
-pub fn cmd_ports(show_all: bool, query: Option<String>, kill_target: Option<String>) {
+pub fn cmd_ports(show_all: bool, query: Option<String>, kill_target: Option<String>, json: bool) {
     match (query, kill_target) {
         // spark ps <query> --kill  → non-interactive kill, exit 0/1
         (Some(q), Some(k)) if k.is_empty() => kill::cmd_kill_silent(&q),
         // spark ps --kill <target> → interactive kill
         (None, Some(target)) => kill::cmd_kill(&target),
         // spark ps <query>         → search processes
-        (Some(q), None) => search::cmd_search(&q),
+        (Some(q), None) => search::cmd_search(&q, json),
         // spark ps [--all]         → list ports
-        _ => list::cmd_list_ports(show_all),
+        _ => list::cmd_list_ports(show_all, json),
     }
 }

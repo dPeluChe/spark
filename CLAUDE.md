@@ -28,6 +28,11 @@ spark search <query>       # Search repos (shows status, commit age, path)
 spark list [-p] [query]    # List repos (tree view by host/owner)
 spark status [query]       # Check which repos need pull (fetch + compare)
 spark status --tag <tag>   # Check status of repos with a specific tag
+spark status --json        # Machine-readable output (json_version: 1)
+spark status --exit-code   # Exit 1 when any repo needs attention (CI/agents)
+spark list --json          # Machine-readable repo list (json_version: 1)
+spark ps --json            # Machine-readable ports / processes
+spark audit --json         # Machine-readable findings; audit exits 1 on findings
 spark pull <query|all>     # Pull repos behind remote (ff-only)
 spark pull all --tag <t>   # Pull all repos with a specific tag
 spark tag add <repo> <tag> # Tag a repo (repos can have multiple tags)
@@ -117,6 +122,7 @@ src/
 
 Context-aware severity: Source Code > Config > Test > Docs (findings in tests/docs downgraded to info)
 `.sparkauditignore`: gitignore-style file to suppress reviewed findings
+`--json`: stable output contract (`json_version: 1`, see docs/dev/ROADMAP.md); `audit` exits 1 when findings exist (CI gate)
 
 ### Safety (System Cleanup)
 - Path validation against protected system paths
