@@ -261,8 +261,17 @@ fn print_search_result(
 pub fn cmd_cd(query: &str, config: &config::SparkConfig) -> color_eyre::Result<()> {
     let repos = scanner::repo_manager::list_managed_repos_lite(&config.repos_root);
     let q = query.to_lowercase();
-    let exact = repos.iter().find(|r| r.name.to_lowercase() == q);
-    let found = exact.or_else(|| repos.iter().find(|r| r.name.to_lowercase().contains(&q)));
+    let full =
+        |r: &scanner::repo_manager::ManagedRepo| format!("{}/{}", r.owner, r.name).to_lowercase();
+    // Accept "name" or the unambiguous "owner/name"
+    let exact = repos
+        .iter()
+        .find(|r| r.name.to_lowercase() == q || full(r) == q);
+    let found = exact.or_else(|| {
+        repos
+            .iter()
+            .find(|r| r.name.to_lowercase().contains(&q) || full(r).contains(&q))
+    });
 
     match found {
         Some(repo) => println!("{}", repo.path.display()),
