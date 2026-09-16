@@ -4,8 +4,8 @@
 
 Adding a new tool requires modifying **only 1 file** in most cases:
 
-1. Open `src/core/inventory.rs`
-2. Add a new `Tool` struct to the vector
+1. Open `src/core/inventory/dev.rs` (system/AI/IDE/terminal tools) or `src/core/inventory/platform.rs` (productivity/infra/runtime/utility tools)
+2. Add a `mk(...)` entry to the `tools()` vector
 3. Rebuild: `cargo build --release`
 
 SPARK will automatically handle version detection for most standard CLI tools.
@@ -54,18 +54,13 @@ UpdateMethod::Manual    // Requires manual intervention
 
 ### 4. Add to Inventory
 
-Edit `src/core/inventory.rs`:
+Edit `src/core/inventory/dev.rs` or `platform.rs` (by category):
 
 ```rust
-Tool {
-    id: String::new(),           // Auto-assigned
-    name: "Prettier".into(),
-    binary: "prettier".into(),
-    package: "prettier".into(),
-    category: Category::Prod,
-    method: UpdateMethod::NpmPkg,
-},
+mk("Prettier", "prettier", "prettier", Category::Prod, UpdateMethod::NpmPkg),
 ```
+
+`mk(name, binary, package, category, method)` builds the `Tool` — `id` is auto-assigned.
 
 That's it! SPARK will auto-assign an ID (`S-XX`) and handle version detection.
 
@@ -127,5 +122,5 @@ Navigate to your tool's category and verify:
 
 ## Next Steps
 
-- See `docs/ARCHITECTURE.md` for code structure
-- See `docs/WORKFLOWS.md` for user interaction flows
+- See `docs/dev/ARCHITECTURE.md` for code structure
+- See `docs/dev/WORKFLOWS.md` for user interaction flows

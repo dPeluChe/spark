@@ -38,7 +38,10 @@ src/
 │   ├── space_analyzer.rs          # Artifact detection (20+ types)
 │   ├── health.rs                  # Health scoring (0-100, grades A-F)
 │   ├── cleaner.rs                 # Trash-based or permanent deletion
-│   ├── repo_manager.rs            # ghq-style clone/pull/status + 4h cache
+│   ├── repo_manager/              # ghq-style clone/pull/status + 4h cache
+│   │   ├── mod.rs                 # ManagedRepo, RepoStatus, parallel status pool
+│   │   ├── cache.rs               # repo_status_cache.json (4h TTL, batch writes)
+│   │   └── meta.rs                # git URL parse + git2 metadata + relative age
 │   ├── repo_tags.rs               # Persistent multi-tag system
 │   ├── repo_ingest.rs             # Thin wrapper over trs ingest (see TRS_INTEGRATION.md)
 │   ├── system_cleaner.rs          # Docker/caches/VMs/logs + safety guards
@@ -138,7 +141,7 @@ The central orchestrator:
 ### 3. Core Domain (`core/`)
 
 - **types.rs**: Enums for `UpdateMethod`, `Category`, `ToolStatus`, and structs `Tool`, `ToolState`
-- **inventory.rs**: Static catalog of 55+ tools with auto-assigned IDs (`S-01`, `S-02`, ...)
+- **inventory/**: Static catalog of 55+ tools with auto-assigned IDs (`S-01`, `S-02`, ...) — entries via `mk()` in `dev.rs` / `platform.rs`
 - **changelogs.rs**: Maps tool names to changelog URLs with heuristic fallbacks for brew/npm
 
 ### 4. Updater (`updater/`)
@@ -156,16 +159,16 @@ The data layer — all scanning, analysis, and mutation:
 - **health.rs**: Scores repos 0-100 based on commit recency, remote presence, dirty state, artifact size
 - **space_analyzer.rs**: Detects 20+ artifact types (node_modules, venvs, target/, .gradle, etc.)
 - **cleaner.rs**: Trash-based or permanent deletion of artifacts/repos
-- **repo_manager.rs**: ghq-style clone to `{root}/{host}/{owner}/{name}`, pull, status checks, 4h cache
+- **repo_manager/**: ghq-style clone to `{root}/{host}/{owner}/{name}`; status checks run `git fetch --prune` through a bounded parallel pool (8 threads) and pulls reuse the fetched refs via `merge --ff-only`; metadata (remote/branch/last-commit) via git2; statuses cached 4h in `cache.rs`
 - **repo_tags.rs**: Persistent tagging system — repos can have multiple tags, stored in config
 - **repo_ingest.rs**: Thin fleet-level wrapper over `trs ingest`. TRS owns generation + storage (`~/.trs/ingest/`, shared). SPARK adds batch mode (`--all` with `trs --fresh`) and fleet-aware listing. See [TRS_INTEGRATION.md](TRS_INTEGRATION.md).
-- **port_scanner.rs**: Batched `lsof`/`ps` on macOS, `/proc/net/tcp` on Linux; detects runtime (Node, Python, Go, Rust, etc.)
+- **port_scanner/**: Batched `lsof`/`ps` on macOS, `/proc/net/tcp` on Linux; detects runtime (Node, Python, Go, Rust, etc.)
 - **system_cleaner.rs**: Docker, dev caches, VMs, logs — with path blocklist, app-aware checks, operation log
 - **system_categories.rs**: Category definitions and risk levels for system cleanup items
-- **secret_scanner.rs**: Regex-based detection of API keys, credentials, sensitive files with context-aware severity and `.sparkauditignore` support
+- **secret_scanner/**: Regex-based detection of API keys, credentials, sensitive files with context-aware severity and `.sparkauditignore` support
 - **history_scanner.rs**: Walks git commit diffs via git2 to find secrets in past commits (reuses patterns from secret_scanner)
-- **code_patterns.rs**: OWASP Top 10:2025 patterns — SQL injection, command injection, XSS, insecure crypto, deserialization, config, path traversal
-- **dep_scanner.rs**: Parses package.json/lock, requirements.txt, Cargo.toml/lock; queries OSV.dev batch API for known vulnerabilities
+- **code_patterns/**: OWASP Top 10:2025 patterns — SQL injection, command injection, XSS, insecure crypto, deserialization, config, path traversal
+- **dep_scanner/**: Parses package.json/lock, requirements.txt, Cargo.toml/lock; queries OSV.dev batch API for known vulnerabilities
 - **cert_scanner.rs**: SSL/TLS certificate parsing with x509-parser (pure Rust, no openssl), macOS Keychain scan via `security find-certificate`, home directory key/cert file discovery
 
 ### 6. TUI (`tui/`)
@@ -256,7 +259,7 @@ SecretAudit → SecretAuditPathInput → SecretAudit
 ## Testing
 
 ```bash
-cargo test    # 127 tests
+cargo test    # 131 tests
 ```
 
 Tests cover: version parsing, health scoring, config serialization/deserialization, inventory validation, changelog URL mapping, artifact detection, port detection, git URL parsing, path utilities, and TUI model logic. Tests live next to the code they test (`#[cfg(test)]` at the bottom of each file).
