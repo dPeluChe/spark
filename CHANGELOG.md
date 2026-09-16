@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CHANGELOG.md` (this file).
 
 ### Changed
+- **`spark.skill.md` v1.1.0**: agents start with `spark report --json` for
+  fleet triage, prefer the JSON contracts over parsing prose, and use the
+  `audit` / `status --exit-code` exit codes as gates.
+- README / README.es: agent workflow section rewritten around `--json` and
+  `spark report`; CLI references completed. ARCHITECTURE, CLAUDE.md, and
+  WORKFLOWS refreshed for `report.rs` / `json.rs`.
 - **`spark status` / `spark pull` fetch repos in parallel** (bounded pool of
   8 workers). A 145-repo fleet checks fresh in ~21s and pulls in ~27s
   (previously sequential: minutes).
