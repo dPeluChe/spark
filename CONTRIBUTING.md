@@ -28,7 +28,7 @@ See [docs/dev/ARCHITECTURE.md](docs/dev/ARCHITECTURE.md) for the full codebase m
 
 ## Adding a new tool to the Updater
 
-See [docs/dev/ADDING_TOOLS.md](docs/dev/ADDING_TOOLS.md). The short version: add an entry to `src/core/inventory.rs` with the tool name, category, detection command, and update method. No other files need changing for most tools.
+See [docs/dev/ADDING_TOOLS.md](docs/dev/ADDING_TOOLS.md). The short version: add a `mk(...)` entry to `src/core/inventory/dev.rs` or `platform.rs` with the tool name, category, detection command, and update method. No other files need changing for most tools.
 
 ## Releasing a new version (maintainers)
 
