@@ -5,6 +5,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Status of a managed repository
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,7 +111,7 @@ pub fn clone_repo_shallow(url: &str, root: &Path) -> Result<PathBuf, String> {
 /// Pull (fast-forward) a repository
 pub fn pull_repo(path: &Path) -> Result<String, String> {
     let output = Command::new("git")
-        .args(["pull", "--ff-only"])
+        .args(["pull", "--ff-only", "--prune"])
         .current_dir(path)
         .output()
         .map_err(|e| format!("git pull failed: {}", e))?;
@@ -124,13 +125,36 @@ pub fn pull_repo(path: &Path) -> Result<String, String> {
     }
 }
 
+/// Merge HEAD to the already-fetched upstream (no second fetch).
+/// Call after `check_repo_status` reports `Behind`.
+pub fn merge_ff_only(path: &Path) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(["merge", "--ff-only", "@{upstream}"])
+        .current_dir(path)
+        .output()
+        .map_err(|e| format!("git merge failed: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if output.status.success() {
+        Ok(stdout)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("git merge failed: {}", stderr.trim()))
+    }
+}
+
 /// Fetch and check status of a repository against its remote
 pub fn check_repo_status(path: &Path) -> RepoStatus {
-    // Fetch first
-    let _ = Command::new("git")
-        .args(["fetch", "--quiet"])
+    // Fetch first; --prune drops stale remote-tracking refs that break updates
+    let fetch_err = match Command::new("git")
+        .args(["fetch", "--quiet", "--prune"])
         .current_dir(path)
-        .output();
+        .output()
+    {
+        Ok(o) if o.status.success() => None,
+        Ok(o) => Some(String::from_utf8_lossy(&o.stderr).trim().to_string()),
+        Err(e) => Some(e.to_string()),
+    };
 
     // Check for dirty working tree
     let dirty = Command::new("git")
@@ -150,7 +174,7 @@ pub fn check_repo_status(path: &Path) -> RepoStatus {
         Ok(o) if o.status.success() => {
             let text = String::from_utf8_lossy(&o.stdout).trim().to_string();
             let parts: Vec<&str> = text.split_whitespace().collect();
-            if parts.len() == 2 {
+            let status = if parts.len() == 2 {
                 let ahead: usize = parts[0].parse().unwrap_or(0);
                 let behind: usize = parts[1].parse().unwrap_or(0);
 
@@ -169,6 +193,14 @@ pub fn check_repo_status(path: &Path) -> RepoStatus {
                 RepoStatus::Dirty
             } else {
                 RepoStatus::UpToDate
+            };
+            match (status, fetch_err) {
+                // 0/0 against upstream is the only state that proves nothing when
+                // the fetch failed — report the fetch error instead of a lie.
+                (RepoStatus::UpToDate, Some(e)) => {
+                    RepoStatus::Error(format!("fetch failed: {}", e))
+                }
+                (s, _) => s,
             }
         }
         Ok(o) => {
@@ -183,6 +215,44 @@ pub fn check_repo_status(path: &Path) -> RepoStatus {
         }
         Err(e) => RepoStatus::Error(e.to_string()),
     }
+}
+
+/// Max concurrent git fetches when checking many repos.
+pub const STATUS_CONCURRENCY: usize = 8;
+
+/// Check statuses for many repos in parallel (bounded to `STATUS_CONCURRENCY`
+/// threads). Prints a `\r` progress counter to stderr.
+pub fn check_statuses_parallel(repos: &[&ManagedRepo]) -> Vec<RepoStatus> {
+    let total = repos.len();
+    let next = AtomicUsize::new(0);
+    let done = AtomicUsize::new(0);
+    let (tx, rx) = std::sync::mpsc::channel::<(usize, RepoStatus)>();
+
+    std::thread::scope(|s| {
+        let next = &next;
+        let done = &done;
+        for _ in 0..STATUS_CONCURRENCY.min(total) {
+            let tx = tx.clone();
+            s.spawn(move || loop {
+                let i = next.fetch_add(1, Ordering::Relaxed);
+                if i >= total {
+                    break;
+                }
+                let status = check_repo_status(&repos[i].path);
+                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                eprint!("\r  [{}/{}] {}/{}", n, total, repos[i].owner, repos[i].name);
+                let _ = tx.send((i, status));
+            });
+        }
+    });
+    drop(tx);
+    eprintln!("\r{}\r", " ".repeat(60));
+
+    let mut statuses = vec![RepoStatus::Checking; total];
+    for (i, status) in rx {
+        statuses[i] = status;
+    }
+    statuses
 }
 
 /// List all managed repositories under a root directory
@@ -228,9 +298,7 @@ pub fn list_managed_repos(root: &Path) -> Vec<ManagedRepo> {
                 }
 
                 let name = repo_entry.file_name().to_string_lossy().to_string();
-                let remote_url = get_remote_url(&repo_path);
-                let branch = get_current_branch(&repo_path);
-                let last_commit = get_last_commit_date(&repo_path);
+                let (remote_url, branch, last_commit) = repo_metadata(&repo_path);
                 let size = crate::utils::fs::dir_size(&repo_path.join(".git"));
 
                 repos.push(ManagedRepo {
@@ -257,192 +325,14 @@ pub fn list_managed_repos(root: &Path) -> Vec<ManagedRepo> {
     repos
 }
 
-/// Parse a git URL into (host, owner, repo_name)
-fn parse_git_url(url: &str) -> Result<(String, String, String), String> {
-    // Handle SSH: git@github.com:owner/repo.git
-    if let Some(rest) = url.strip_prefix("git@") {
-        let parts: Vec<&str> = rest.splitn(2, ':').collect();
-        if parts.len() == 2 {
-            let host = parts[0].to_string();
-            let path = parts[1].trim_end_matches(".git");
-            let segments: Vec<&str> = path.splitn(2, '/').collect();
-            if segments.len() == 2 {
-                return Ok((host, segments[0].to_string(), segments[1].to_string()));
-            }
-        }
-    }
-
-    // Handle HTTPS: https://github.com/owner/repo.git
-    if url.starts_with("https://") || url.starts_with("http://") {
-        let without_scheme = url.split("://").nth(1).unwrap_or("");
-        let parts: Vec<&str> = without_scheme.splitn(4, '/').collect();
-        if parts.len() >= 3 {
-            let host = parts[0].to_string();
-            let owner = parts[1].to_string();
-            let name = parts[2].trim_end_matches(".git").to_string();
-            return Ok((host, owner, name));
-        }
-    }
-
-    Err(format!("Cannot parse git URL: {}", url))
-}
-
-fn get_remote_url(path: &Path) -> String {
-    Command::new("git")
-        .args(["remote", "get-url", "origin"])
-        .current_dir(path)
-        .output()
-        .ok()
-        .and_then(|o| {
-            if o.status.success() {
-                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-            } else {
-                None
-            }
-        })
-        .unwrap_or_default()
-}
-
-fn get_current_branch(path: &Path) -> String {
-    Command::new("git")
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .current_dir(path)
-        .output()
-        .ok()
-        .and_then(|o| {
-            if o.status.success() {
-                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-            } else {
-                None
-            }
-        })
-        .unwrap_or_else(|| "unknown".into())
-}
-
-fn get_last_commit_date(path: &Path) -> Option<String> {
-    Command::new("git")
-        .args(["log", "-1", "--format=%cr"])
-        .current_dir(path)
-        .output()
-        .ok()
-        .and_then(|o| {
-            if o.status.success() {
-                let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                if s.is_empty() {
-                    None
-                } else {
-                    Some(s)
-                }
-            } else {
-                None
-            }
-        })
-}
-
-// --- Status cache ---
-
-const CACHE_EXPIRY_HOURS: u64 = 4;
-
-/// Cache file path
-fn cache_path() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join("spark")
-        .join("repo_status_cache.json")
-}
-
-/// Clear the status cache (forces fresh fetch on next check)
-pub fn clear_status_cache() {
-    let path = cache_path();
-    let _ = std::fs::remove_file(path);
-}
-
-/// Load cached statuses. Returns map of repo_path -> (status_string, timestamp)
-pub fn load_status_cache() -> std::collections::HashMap<String, (String, u64)> {
-    let path = cache_path();
-    if !path.exists() {
-        return std::collections::HashMap::new();
-    }
-    let content = match std::fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => return std::collections::HashMap::new(),
-    };
-    serde_json::from_str(&content).unwrap_or_default()
-}
-
-/// Save a single status entry to cache
-pub fn save_status_to_cache(repo_path: &str, status: &str) {
-    let mut cache = load_status_cache();
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    cache.insert(repo_path.to_string(), (status.to_string(), now));
-
-    let cache_file = cache_path();
-    let _ = std::fs::create_dir_all(cache_file.parent().unwrap_or(Path::new("/tmp")));
-    let _ = std::fs::write(
-        cache_file,
-        serde_json::to_string(&cache).unwrap_or_default(),
-    );
-}
-
-/// Check if a cached entry is still valid
-pub fn is_cache_valid(timestamp: u64) -> bool {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    now - timestamp < CACHE_EXPIRY_HOURS * 3600
-}
-
-/// Convert RepoStatus to a cacheable string
-pub fn status_to_string(status: &RepoStatus) -> String {
-    match status {
-        RepoStatus::UpToDate => "up_to_date".into(),
-        RepoStatus::Behind(n) => format!("behind:{}", n),
-        RepoStatus::Ahead(n) => format!("ahead:{}", n),
-        RepoStatus::Diverged { ahead, behind } => format!("diverged:{}:{}", ahead, behind),
-        RepoStatus::Dirty => "dirty".into(),
-        RepoStatus::Error(e) => format!("error:{}", e),
-        RepoStatus::Checking => "checking".into(),
-    }
-}
-
-/// Convert cached string back to RepoStatus
-pub fn string_to_status(s: &str) -> RepoStatus {
-    if s == "up_to_date" {
-        return RepoStatus::UpToDate;
-    }
-    if s == "dirty" {
-        return RepoStatus::Dirty;
-    }
-    if s == "checking" {
-        return RepoStatus::Checking;
-    }
-    if let Some(n) = s.strip_prefix("behind:") {
-        return RepoStatus::Behind(n.parse().unwrap_or(0));
-    }
-    if let Some(n) = s.strip_prefix("ahead:") {
-        return RepoStatus::Ahead(n.parse().unwrap_or(0));
-    }
-    if let Some(rest) = s.strip_prefix("diverged:") {
-        let parts: Vec<&str> = rest.splitn(2, ':').collect();
-        if parts.len() == 2 {
-            return RepoStatus::Diverged {
-                ahead: parts[0].parse().unwrap_or(0),
-                behind: parts[1].parse().unwrap_or(0),
-            };
-        }
-    }
-    if let Some(e) = s.strip_prefix("error:") {
-        return RepoStatus::Error(e.to_string());
-    }
-    RepoStatus::Checking
-}
+mod cache;
+mod meta;
+pub use cache::*;
+use meta::{parse_git_url, repo_metadata};
 
 #[cfg(test)]
 mod tests {
+    use super::meta::relative_age;
     use super::*;
 
     #[test]
@@ -459,5 +349,93 @@ mod tests {
         assert_eq!(host, "github.com");
         assert_eq!(owner, "user");
         assert_eq!(name, "repo");
+    }
+
+    #[test]
+    fn test_relative_age() {
+        let now = chrono::Utc::now().timestamp();
+        assert_eq!(relative_age(now - 90), "1m ago");
+        assert_eq!(relative_age(now - 7200), "2h ago");
+        assert_eq!(relative_age(now - 86400 * 5), "5d ago");
+        assert_eq!(relative_age(now - 86400 * 240), "8mo ago");
+        assert_eq!(relative_age(now - 86400 * 800), "2y ago");
+        assert_eq!(relative_age(now + 60), "1m ago"); // future timestamp clamps
+    }
+
+    #[test]
+    fn test_status_string_roundtrip() {
+        for s in [
+            RepoStatus::UpToDate,
+            RepoStatus::Behind(3),
+            RepoStatus::Ahead(2),
+            RepoStatus::Diverged {
+                ahead: 4,
+                behind: 9,
+            },
+            RepoStatus::Dirty,
+            RepoStatus::Error("boom".into()),
+            RepoStatus::Checking,
+        ] {
+            assert_eq!(string_to_status(&status_to_string(&s)), s);
+        }
+    }
+
+    /// Real git round-trip: clone a local bare origin, then drive it ahead and
+    /// confirm status flips Behind and merge_ff_only converges it.
+    #[test]
+    fn test_check_status_and_ff_merge() {
+        fn git(dir: &Path, args: &[&str]) {
+            let status = Command::new("git")
+                .args([
+                    "-c",
+                    "user.email=t@t",
+                    "-c",
+                    "user.name=t",
+                    "-c",
+                    "init.defaultBranch=main",
+                ])
+                .args(args)
+                .current_dir(dir)
+                .output()
+                .unwrap();
+            assert!(status.status.success(), "git {:?} failed", args);
+        }
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let origin = root.join("origin.git");
+        let work = root.join("work");
+        let other = root.join("other");
+
+        git(root, &["init", "--bare", "origin.git"]);
+        git(root, &["clone", "origin.git", "work"]);
+        git(&work, &["commit", "--allow-empty", "-m", "one"]);
+        git(&work, &["push", "-u", "origin", "main"]);
+
+        assert_eq!(check_repo_status(&work), RepoStatus::UpToDate);
+
+        git(&work, &["commit", "--allow-empty", "-m", "two"]);
+        assert_eq!(check_repo_status(&work), RepoStatus::Ahead(1));
+
+        git(root, &["clone", "origin.git", "other"]);
+        git(&other, &["commit", "--allow-empty", "-m", "three"]);
+        git(&other, &["push", "origin", "main"]);
+        // work is now 1 ahead, 1 behind -> Diverged
+        assert_eq!(
+            check_repo_status(&work),
+            RepoStatus::Diverged {
+                ahead: 1,
+                behind: 1
+            }
+        );
+
+        // Reset work to a clean behind state and merge it
+        git(&work, &["reset", "--hard", "HEAD~1"]);
+        assert_eq!(check_repo_status(&work), RepoStatus::Behind(1));
+        merge_ff_only(&work).unwrap();
+        assert_eq!(check_repo_status(&work), RepoStatus::UpToDate);
+
+        let _ = origin; // keep tmp alive for the assertions above
+        let _ = other;
     }
 }

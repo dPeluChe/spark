@@ -13,9 +13,36 @@ pub use status::cmd_status;
 use super::{expand_url, filter_repo, shorten_path};
 use crate::config;
 use crate::scanner;
+use scanner::repo_manager::ManagedRepo;
 use std::collections::BTreeMap;
 use std::io;
 use std::path::PathBuf;
+
+/// Filter managed repos by tag and/or lowercase query (shared by status/pull)
+pub(super) fn select_repos<'a>(
+    repos: &'a [ManagedRepo],
+    query: Option<&str>,
+    tag: Option<&str>,
+) -> Vec<&'a ManagedRepo> {
+    if let Some(tag_name) = tag {
+        let tags = scanner::repo_tags::load_tags();
+        let tag_repos = tags.repos_for_tag(tag_name);
+        return repos
+            .iter()
+            .filter(|r| {
+                let key = scanner::repo_tags::repo_key(&r.host, &r.owner, &r.name);
+                tag_repos.contains(&key)
+            })
+            .collect();
+    }
+    match query {
+        Some(q) => {
+            let q = q.to_lowercase();
+            repos.iter().filter(|r| filter_repo(r, &q)).collect()
+        }
+        None => repos.iter().collect(),
+    }
+}
 
 pub fn cmd_clone(
     url: &str,

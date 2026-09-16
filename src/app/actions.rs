@@ -201,22 +201,39 @@ fn start_check_repo_statuses(app: &mut App, tx: mpsc::UnboundedSender<AppMessage
         return;
     }
 
-    tokio::spawn(async move {
-        for (i, path) in uncached {
-            let p = path.clone();
-            let status =
-                tokio::task::spawn_blocking(move || scanner::repo_manager::check_repo_status(&p))
-                    .await
-                    .unwrap_or(scanner::repo_manager::RepoStatus::Error(
-                        "Task failed".into(),
-                    ));
-            scanner::repo_manager::save_status_to_cache(
-                &path.display().to_string(),
-                &scanner::repo_manager::status_to_string(&status),
-            );
-            let _ = tx.send(AppMessage::RepoStatusResult { index: i, status });
-        }
-    });
+    // Bounded pool: STATUS_CONCURRENCY workers each run spawn_blocking in a
+    // loop, so at most N git fetches run at once and rows update as they land.
+    let uncached = std::sync::Arc::new(uncached);
+    let next = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    for _ in 0..scanner::repo_manager::STATUS_CONCURRENCY.min(uncached.len()) {
+        let uncached = std::sync::Arc::clone(&uncached);
+        let next = std::sync::Arc::clone(&next);
+        let tx = tx.clone();
+        tokio::spawn(async move {
+            loop {
+                let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let Some((index, path)) = uncached.get(i) else {
+                    break;
+                };
+                let p = path.clone();
+                let status = tokio::task::spawn_blocking(move || {
+                    scanner::repo_manager::check_repo_status(&p)
+                })
+                .await
+                .unwrap_or(scanner::repo_manager::RepoStatus::Error(
+                    "Task failed".into(),
+                ));
+                scanner::repo_manager::save_status_to_cache(
+                    &path.display().to_string(),
+                    &scanner::repo_manager::status_to_string(&status),
+                );
+                let _ = tx.send(AppMessage::RepoStatusResult {
+                    index: *index,
+                    status,
+                });
+            }
+        });
+    }
 }
 
 fn start_pull_repos(app: &App, indices: Vec<usize>, tx: mpsc::UnboundedSender<AppMessage>) {
