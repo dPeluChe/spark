@@ -30,10 +30,6 @@ Pending tasks and improvements for the SPARK DevOps platform.
 - History scanner detects test fixtures from scanner's own test code in commit diffs
 - Could parse surrounding diff context to detect test blocks
 
-### Audit: parallel scan phases `added: 2026-04-20`
-- Phases 1-3 (secrets, history, patterns) run sequentially
-- Could parallelize since they don't share state
-
 ---
 
 ## Low Priority

@@ -327,7 +327,7 @@ pub fn cmd_doctor(config: &config::SparkConfig) {
         check("repos root writable", root_writable, "check permissions");
         println!(
             "    repos:   {}",
-            scanner::repo_manager::list_managed_repos(&config.repos_root).len()
+            scanner::repo_manager::list_managed_repos_lite(&config.repos_root).len()
         );
     }
 

@@ -5,7 +5,7 @@ use crate::config;
 use crate::scanner;
 
 pub fn cmd_status(query: Option<String>, tag: Option<String>, config: &config::SparkConfig) {
-    let repos = scanner::repo_manager::list_managed_repos(&config.repos_root);
+    let repos = scanner::repo_manager::list_managed_repos_lite(&config.repos_root);
     let filtered = select_repos(&repos, query.as_deref(), tag.as_deref());
 
     if let Some(t) = &tag {

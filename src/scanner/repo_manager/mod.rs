@@ -255,8 +255,19 @@ pub fn check_statuses_parallel(repos: &[&ManagedRepo]) -> Vec<RepoStatus> {
     statuses
 }
 
-/// List all managed repositories under a root directory
+/// List all managed repositories under a root directory, including each
+/// repo's `.git` size (walks the object store — use only when displayed).
 pub fn list_managed_repos(root: &Path) -> Vec<ManagedRepo> {
+    list_repos(root, true)
+}
+
+/// Same as `list_managed_repos` but skips the `.git` size walk (`size = 0`).
+/// For callers that never display it (cd/search/list/status/pull).
+pub fn list_managed_repos_lite(root: &Path) -> Vec<ManagedRepo> {
+    list_repos(root, false)
+}
+
+fn list_repos(root: &Path, with_size: bool) -> Vec<ManagedRepo> {
     let mut repos = Vec::new();
 
     if !root.exists() {
@@ -299,7 +310,11 @@ pub fn list_managed_repos(root: &Path) -> Vec<ManagedRepo> {
 
                 let name = repo_entry.file_name().to_string_lossy().to_string();
                 let (remote_url, branch, last_commit) = repo_metadata(&repo_path);
-                let size = crate::utils::fs::dir_size(&repo_path.join(".git"));
+                let size = if with_size {
+                    crate::utils::fs::dir_size(&repo_path.join(".git"))
+                } else {
+                    0
+                };
 
                 repos.push(ManagedRepo {
                     path: repo_path,

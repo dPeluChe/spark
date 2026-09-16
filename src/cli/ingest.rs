@@ -49,7 +49,7 @@ pub fn cmd_ingest(
         deps,
         fresh,
     };
-    let repos = repo_manager::list_managed_repos(&config.repos_root);
+    let repos = repo_manager::list_managed_repos_lite(&config.repos_root);
 
     if let Some(q) = query {
         let q_lower = q.to_lowercase();
@@ -173,7 +173,7 @@ fn generate_one(repo: &repo_manager::ManagedRepo, opts: &IngestOptions) {
 }
 
 fn cmd_ingest_read(query: &str, config: &config::SparkConfig) {
-    let repos = repo_manager::list_managed_repos(&config.repos_root);
+    let repos = repo_manager::list_managed_repos_lite(&config.repos_root);
     let q = query.to_lowercase();
 
     let repo = repos.iter().find(|r| {
@@ -225,7 +225,7 @@ fn is_binary_line(line: &str) -> bool {
 }
 
 fn cmd_ingest_list(config: &config::SparkConfig) {
-    let repos = repo_manager::list_managed_repos(&config.repos_root);
+    let repos = repo_manager::list_managed_repos_lite(&config.repos_root);
     let ingests = repo_ingest::list_ingests();
     let base = dirs::home_dir()
         .unwrap_or_default()
