@@ -3,19 +3,37 @@
 Pending tasks and improvements for the SPARK DevOps platform.
 
 > Completed tasks archived in [TASK_COMPLETED/](./TASK_COMPLETED/) by month.
+> Strategy and phase specs: [ROADMAP.md](./ROADMAP.md) — agent-first local DevOps.
 
 ---
 
-## High Priority
+## Current focus — Agent-First Toolkit (see ROADMAP.md)
+
+### Phase 0: machine-readable outputs `added: 2026-09-16`
+- `--json` for `status`, `list`, `ps`, `audit` (schemas in ROADMAP.md, `json_version: 1`)
+- `audit` exit 1 on findings (CI gate); `status --exit-code` opt-in for agents/CI
+- `RepoStatus::Dirty` carries `ahead`/`behind` (today dirty masks behind/diverged)
+- Add `Serialize` derives to scanner finding structs
+
+### Phase 1: `spark report` (fleet view) `added: 2026-09-16`
+- One command: repos summary + disk (artifacts/system) + ports + tools + last audit
+- Human output + `--json`; fast by default (caches), `--fresh` re-fetches
+- Parallelize per-repo artifact scan with the 8-worker pool
+- Acceptance: cold < 60s / warm < 5s on a 145-repo fleet
+
+### Phase 2: agent loop closure `added: 2026-09-16`
+- `spark.skill.md`: prefer `--json`, `report` for triage, `audit` exit codes for gates
+- `spark audit` persists `last_audit.json` summary (feeds `spark report`)
+- README/docs: document the agent workflow
+
+---
+
+## Backlog — features
 
 ### Updater: runtime version manager sub-panel `added: 2026-04-20`
 - Show installed versions per runtime (nvm ls, pyenv versions, rvm list, rustup toolchain list)
 - Accessible via Enter on a runtime tool in the updater table
 - Display as detail panel similar to repo detail in Scanner
-
----
-
-## Medium Priority
 
 ### Workspace sub-project listing `added: 2026-04-20`
 - Inside repo detail, show workspace sub-projects (npm workspaces, cargo workspace members)
@@ -30,19 +48,6 @@ Pending tasks and improvements for the SPARK DevOps platform.
 - History scanner detects test fixtures from scanner's own test code in commit diffs
 - Could parse surrounding diff context to detect test blocks
 
----
-
-## Low Priority
-
-### Docker image testing `added: 2026-04-20`
-- Create Dockerfile for testing spark on clean Linux (Ubuntu, Alpine)
-- Validate install.sh works in containerized environments
-- Test cargo install path on fresh Linux
-
-### TUI repo detail for non-containers `added: 2026-04-20`
-- Pressing Enter on a non-container repo in ScanResults goes to RepoDetail
-- Could show richer info: recent commits, branch list, disk usage breakdown
-
 ### Audit: AST-based parsing for code patterns `added: 2026-04-15`
 - Today `scanner/code_patterns/` uses pure regex for OWASP Top 10 detection
 - Replace with layered strategy: AST parsing first (tree-sitter), regex fallback for unsupported langs
@@ -54,3 +59,24 @@ Pending tasks and improvements for the SPARK DevOps platform.
 ### Audit: more ecosystems `added: 2026-04-20`
 - Support `go.sum` (Go modules), `Gemfile.lock` (Ruby), `composer.lock` (PHP)
 - Support `pnpm-lock.yaml`, `yarn.lock` for npm alternatives
+
+### TUI repo detail for non-containers `added: 2026-04-20`
+- Pressing Enter on a non-container repo in ScanResults goes to RepoDetail
+- Could show richer info: recent commits, branch list, disk usage breakdown
+
+### Docker image testing `added: 2026-04-20`
+- Create Dockerfile for testing spark on clean Linux (Ubuntu, Alpine)
+- Validate install.sh works in containerized environments
+- Test cargo install path on fresh Linux
+
+---
+
+## Parked (revisit criteria in ROADMAP.md)
+
+### MCP server `parked: 2026-09-16`
+- CLI + skill already covers in-house agents with fewer moving parts
+- Revisit on third-party distribution or external adoption signal
+
+### Cross-platform: linux-arm64, Windows `parked: 2026-09-16`
+- Port scanner and cert scanner are macOS/Linux; fleet is macOS today
+- Revisit on external adoption signal

@@ -4,6 +4,7 @@
 
 | File | Purpose |
 |------|---------|
+| [dev/ROADMAP.md](dev/ROADMAP.md) | Focus, phases, JSON contracts — agent-first local DevOps |
 | [dev/ARCHITECTURE.md](dev/ARCHITECTURE.md) | Full codebase map — modules, layers, state machines |
 | [dev/DEV_GUIDELINES.md](dev/DEV_GUIDELINES.md) | Code standards, patterns, and conventions |
 | [dev/WORKFLOWS.md](dev/WORKFLOWS.md) | TUI state machines and user interaction flows |
