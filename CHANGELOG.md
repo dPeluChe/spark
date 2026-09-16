@@ -34,6 +34,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CHANGELOG.md` (this file).
 
 ### Changed
+- `spark pull` prints a **"To resolve:" block with exact remediation commands**
+  for everything it could not touch: `spark rm` for dead remotes,
+  `spark cd owner/name` + commit/stash for dirty repos, merge/rebase for
+  diverged, `git remote prune origin` for stale refs, and the reftable
+  migration for casing conflicts. Fetch failures inside the skipped list are
+  now condensed to one line with their hint instead of multi-line stderr.
+- `spark cd` accepts the unambiguous `owner/name` form (not just the short
+  name), matching the commands `status`/`pull` suggest.
 - `spark status` summary now lists the exact `spark pull owner/name` command
   for every behind repo (copy-paste ready) and counts the repos that need
   manual action (dirty → commit, diverged → merge/rebase).

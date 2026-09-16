@@ -61,21 +61,92 @@ pub fn cmd_pull(query: &str, tag: Option<String>, config: &config::SparkConfig) 
         println!("  {} repos already up to date", summary.up_to_date);
     }
     for (name, status) in &summary.skipped {
-        println!("  - {} ({})", name, status);
-    }
-    for (name, err) in &summary.errors {
-        let line = err
-            .lines()
-            .find(|l| l.starts_with("fatal:") || l.starts_with("error:"))
-            .or_else(|| err.lines().next())
-            .unwrap_or(err);
-        match error_hint(err) {
-            Some(hint) => eprintln!("  x {}: {} [{}]", name, line, hint),
-            None => eprintln!("  x {}: {}", name, line),
+        match status {
+            // Fetch/check failures arrive as statuses too — condense them like
+            // merge failures instead of dumping multi-line stderr
+            RepoStatus::Error(e) => match error_hint(e) {
+                Some(hint) => eprintln!("  x {}: {} [{}]", name, err_line(e), hint),
+                None => eprintln!("  x {}: {}", name, err_line(e)),
+            },
+            s => println!("  - {} ({})", name, s),
         }
     }
+    for (name, err) in &summary.errors {
+        match error_hint(err) {
+            Some(hint) => eprintln!("  x {}: {} [{}]", name, err_line(err), hint),
+            None => eprintln!("  x {}: {}", name, err_line(err)),
+        }
+    }
+
+    render_resolve(&summary);
+
     if summary.pulled == 0 && summary.skipped.is_empty() && summary.errors.is_empty() {
         println!("  All repos up to date");
+    }
+}
+
+/// First `fatal:`/`error:` line of a git failure (falls back to the first line)
+fn err_line(err: &str) -> &str {
+    err.lines()
+        .find(|l| l.starts_with("fatal:") || l.starts_with("error:"))
+        .or_else(|| err.lines().next())
+        .unwrap_or(err)
+}
+
+/// Exact commands to fix what pull could not touch, one per repo.
+fn render_resolve(summary: &PullSummary) {
+    let mut lines: Vec<String> = Vec::new();
+    for (name, status) in &summary.skipped {
+        if let Some(l) = resolve_hint(name, status) {
+            lines.push(l);
+        }
+    }
+    for (name, err) in &summary.errors {
+        if let Some(l) = error_resolve(name, err) {
+            lines.push(l);
+        }
+    }
+    if lines.is_empty() {
+        return;
+    }
+    println!("\n  To resolve:");
+    for l in lines {
+        println!("    {}", l);
+    }
+}
+
+/// Remediation command for a skipped repo, by status kind.
+fn resolve_hint(name: &str, status: &RepoStatus) -> Option<String> {
+    match status {
+        RepoStatus::Dirty { .. } => Some(format!(
+            "spark cd {name}    # commit or stash, then: spark pull {name}"
+        )),
+        RepoStatus::Diverged { .. } => Some(format!(
+            "spark cd {name}    # diverged: merge or rebase onto upstream"
+        )),
+        RepoStatus::Ahead(_) => Some(format!(
+            "spark cd {name}    # unpushed commits — push when ready"
+        )),
+        RepoStatus::Error(e) => error_resolve(name, e),
+        _ => None,
+    }
+}
+
+/// Remediation command for an error, when the hint points at one.
+fn error_resolve(name: &str, err: &str) -> Option<String> {
+    let hint = error_hint(err)?;
+    if hint.contains("remote gone") {
+        Some(format!(
+            "spark rm {name}    # remote gone — remove the local clone"
+        ))
+    } else if hint.contains("reftable") {
+        Some(format!(
+            "git -C \"$(spark cd {name})\" refs migrate --ref-format=reftable"
+        ))
+    } else if hint.contains("prune") {
+        Some(format!("git -C \"$(spark cd {name})\" remote prune origin"))
+    } else {
+        None
     }
 }
 
@@ -88,7 +159,10 @@ fn error_hint(err: &str) -> Option<&'static str> {
         Some("remote gone — remove with: spark rm <name>")
     } else if e.contains("case-insensitive") || e.contains("reftable") {
         Some("ref casing conflict — fix: git refs migrate --ref-format=reftable")
-    } else if e.contains("could not be updated") {
+    } else if e.contains("could not be updated")
+        || e.contains("incorrect old value")
+        || e.contains("refname conflict")
+    {
         Some("stale refs — fix: git remote prune origin")
     } else if e.contains("not possible to fast-forward") || e.contains("diverging branches") {
         Some("diverged — manual merge or rebase needed")
@@ -185,7 +259,59 @@ fn pull_all(filtered: &[&ManagedRepo]) -> PullSummary {
 
 #[cfg(test)]
 mod tests {
-    use super::error_hint;
+    use super::{error_hint, error_resolve, resolve_hint};
+    use crate::scanner::repo_manager::RepoStatus;
+
+    #[test]
+    fn test_resolve_hint() {
+        let dirty = resolve_hint(
+            "o/r",
+            &RepoStatus::Dirty {
+                ahead: 0,
+                behind: 3,
+            },
+        )
+        .unwrap();
+        assert!(dirty.starts_with("spark cd o/r"));
+        assert!(dirty.contains("spark pull o/r"));
+
+        let diverged = resolve_hint(
+            "o/r",
+            &RepoStatus::Diverged {
+                ahead: 1,
+                behind: 2,
+            },
+        )
+        .unwrap();
+        assert!(diverged.contains("merge or rebase"));
+
+        let ahead = resolve_hint("o/r", &RepoStatus::Ahead(2)).unwrap();
+        assert!(ahead.contains("unpushed"));
+
+        assert!(resolve_hint("o/r", &RepoStatus::UpToDate).is_none());
+    }
+
+    #[test]
+    fn test_error_resolve() {
+        let gone = error_resolve("o/r", "fatal: repository 'x' not found").unwrap();
+        assert!(gone.starts_with("spark rm o/r"));
+
+        let case_conflict = error_resolve(
+            "o/r",
+            "error: You're on a case-insensitive filesystem, and the remote...",
+        )
+        .unwrap();
+        assert!(case_conflict.contains("refs migrate"));
+
+        let stale = error_resolve(
+            "o/r",
+            "fetch failed: error: fetching ref refs/remotes/origin/b failed: incorrect old value provided",
+        )
+        .unwrap();
+        assert!(stale.contains("remote prune origin"));
+
+        assert!(error_resolve("o/r", "ssh: connect timed out").is_none());
+    }
 
     #[test]
     fn test_error_hint() {
