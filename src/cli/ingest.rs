@@ -88,12 +88,10 @@ pub fn cmd_ingest(
         let (mut ok, mut errors) = (0u32, 0u32);
 
         for (i, repo) in repos.iter().enumerate() {
-            eprint!(
-                "\r  [{}/{}] {}/{}          ",
+            crate::utils::shell::progress_line(
                 i + 1,
                 repos.len(),
-                repo.owner,
-                repo.name
+                &format!("{}/{}", repo.owner, repo.name),
             );
 
             match repo_ingest::generate_ingest(&repo.path, &repo.owner, &repo.name, &batch_opts) {
@@ -101,7 +99,7 @@ pub fn cmd_ingest(
                 Err(_) => errors += 1,
             }
         }
-        eprintln!("\r{}\r", " ".repeat(60));
+        crate::utils::shell::clear_progress_line();
         println!(
             "  {} processed (trs --fresh skipped unchanged), {} errors",
             ok, errors

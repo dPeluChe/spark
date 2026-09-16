@@ -251,13 +251,17 @@ pub fn check_statuses_parallel(repos: &[&ManagedRepo]) -> Vec<RepoStatus> {
                 }
                 let status = check_repo_status(&repos[i].path);
                 let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-                eprint!("\r  [{}/{}] {}/{}", n, total, repos[i].owner, repos[i].name);
+                crate::utils::shell::progress_line(
+                    n,
+                    total,
+                    &format!("{}/{}", repos[i].owner, repos[i].name),
+                );
                 let _ = tx.send((i, status));
             });
         }
     });
     drop(tx);
-    eprintln!("\r{}\r", " ".repeat(60));
+    crate::utils::shell::clear_progress_line();
 
     let mut statuses = vec![RepoStatus::Checking; total];
     for (i, status) in rx {
