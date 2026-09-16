@@ -97,6 +97,7 @@ reuses the scanner finding structs (add `Serialize` derives).
 
 ## Phase 1 — `spark report` (the fleet view)
 
+**Status**: shipped 2026-09-16.
 **Goal**: one command that answers "what needs attention?" for humans and agents.
 
 ```

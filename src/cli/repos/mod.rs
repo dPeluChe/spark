@@ -9,6 +9,7 @@ mod status;
 
 pub use pull::cmd_pull;
 pub use status::cmd_status;
+pub(crate) use status::fetch_statuses;
 
 use super::{expand_url, filter_repo, shorten_path};
 use crate::config;

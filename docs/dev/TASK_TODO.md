@@ -9,15 +9,8 @@ Pending tasks and improvements for the SPARK DevOps platform.
 
 ## Current focus — Agent-First Toolkit (see ROADMAP.md)
 
-### Phase 1: `spark report` (fleet view) `added: 2026-09-16`
-- One command: repos summary + disk (artifacts/system) + ports + tools + last audit
-- Human output + `--json`; fast by default (caches), `--fresh` re-fetches
-- Parallelize per-repo artifact scan with the 8-worker pool
-- Acceptance: cold < 60s / warm < 5s on a 145-repo fleet
-
 ### Phase 2: agent loop closure `added: 2026-09-16`
 - `spark.skill.md`: prefer `--json`, `report` for triage, `audit` exit codes for gates
-- `spark audit` persists `last_audit.json` summary (feeds `spark report`)
 - README/docs: document the agent workflow
 
 ---

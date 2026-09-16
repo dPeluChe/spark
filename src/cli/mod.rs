@@ -5,6 +5,7 @@ mod certs;
 mod ingest;
 pub(crate) mod json;
 mod ports;
+mod report;
 mod repos;
 mod system;
 mod tags;
@@ -195,6 +196,16 @@ pub enum Commands {
         #[arg(long = "json")]
         json: bool,
     },
+    /// Fleet status in one screen: repos, disk, ports, tools, security
+    #[command(alias = "overview")]
+    Report {
+        /// Re-fetch repo statuses and check tool versions (network)
+        #[arg(long = "fresh")]
+        fresh: bool,
+        /// Machine-readable JSON output (json_version: 1)
+        #[arg(long = "json")]
+        json: bool,
+    },
     /// Validate installation and environment health
     Doctor,
 }
@@ -321,6 +332,10 @@ pub fn handle_command(cmd: Commands, config: &mut config::SparkConfig) -> color_
             json,
         } => {
             ports::cmd_ports(all, query, kill, json);
+            Ok(())
+        }
+        Commands::Report { fresh, json } => {
+            report::cmd_report(fresh, json, config);
             Ok(())
         }
         Commands::Doctor => {
