@@ -7,7 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `--json` machine-readable output (`json_version: 1`) for `spark status`,
+  `spark list`, `spark ps`, and `spark audit` — stable contracts for agents
+  and CI, shapes documented in
+  [`docs/dev/ROADMAP.md`](docs/dev/ROADMAP.md).
+- `spark status --exit-code` — exits 1 when any repo needs attention.
+- `spark audit` exits 1 when findings exist (CI gate).
+- [`docs/dev/ROADMAP.md`](docs/dev/ROADMAP.md) — agent-first focus, phases,
+  and the `--json` schema reference.
+- `RepoStatus::Dirty` now carries `ahead`/`behind` — dirty repos report
+  their real drift ("Dirty, 304 behind") instead of masking it.
+- [`docs/dev/TRS_INTEGRATION.md`](docs/dev/TRS_INTEGRATION.md) — division of
+  responsibilities between SPARK (fleet layer) and TRS (digest generator + storage)
+  with lessons learned from the overlap.
+- `scripts/version.sh` — atomic bump + consistency check across the 5
+  version fields (Cargo.toml + 4 npm manifests). Invoked by release CI.
+- CI gate (`verify-versions` job) that blocks the release if the git tag
+  disagrees with Cargo.toml or if any manifest drifts.
+- `CHANGELOG.md` (this file).
+
 ### Changed
+- **`spark status` / `spark pull` fetch repos in parallel** (bounded pool of
+  8 workers). A 145-repo fleet checks fresh in ~21s and pulls in ~27s
+  (previously sequential: minutes).
+- `spark pull` merges via `merge --ff-only @{upstream}` on the refs the
+  status check already fetched — no second network fetch per repo.
+- `spark pull` output is bucketed: pulled / up to date / skipped (dirty,
+  ahead, diverged) / errors, each error condensed to one line with a
+  remediation hint (`spark rm` for dead remotes, `reftable` for casing
+  conflicts).
+- Status checks use `git fetch --prune`, self-healing stale
+  remote-tracking refs (fixes "some local refs could not be updated").
+- Repo metadata (remote URL, branch, last commit) read via git2 instead of
+  3 subprocesses per repo; `list_managed_repos_lite()` skips the `.git`
+  size walk for commands that never display it.
+- Audit phases 1-3 (secrets, git history, code patterns) run in parallel;
+  the deps phase overlaps on the main thread.
+- Config paths with a leading `~` expand on load (`scan_directories`,
+  `repos_root`); partial config files merge with defaults
+  (`#[serde(default)]`) instead of being discarded.
+- `scanner/repo_manager.rs` split into a directory module
+  (`mod`/`cache`/`meta`/`tests`) to stay under the 500-LOC convention.
 - **`spark ingest` now delegates storage to TRS.** Digests live at
   `~/.trs/ingest/<owner>/<name>.md` (shared with `trs`), not
   `~/.config/spark/ingest/<host>/<owner>/<name>.md`. Run `trs ingest` or
@@ -26,16 +67,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tui/widgets/repo_manager_view`, `tui/widgets/audit_view`,
   `tui/widgets/system_view`.
 
-### Added
-- [`docs/dev/TRS_INTEGRATION.md`](docs/dev/TRS_INTEGRATION.md) — division of
-  responsibilities between SPARK (fleet layer) and TRS (digest generator + storage)
-  with lessons learned from the overlap.
-- `scripts/version.sh` — atomic bump + consistency check across the 5
-  version fields (Cargo.toml + 4 npm manifests). Invoked by release CI.
-- CI gate (`verify-versions` job) that blocks the release if the git tag
-  disagrees with Cargo.toml or if any manifest drifts.
-- `CHANGELOG.md` (this file).
-
 ### Removed
 - Unused dependencies: `bytesize`; `chrono`'s `serde` feature;
   `x509-parser`'s `verify` feature. `cargo machete` now reports zero unused
@@ -44,6 +75,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refactor.
 
 ### Fixed
+- Status checks no longer report a stale "Up to date" when the fetch fails —
+  a failed fetch with a clean 0/0 comparison now surfaces the error.
+- `is_cache_valid` no longer underflows on clock skew (`saturating_sub`).
+- `expand_tilde` handles a bare `~`; `config.example.toml`
+  `max_scan_depth` now matches the real default (6).
+- Docs pointed at `src/core/inventory.rs` (now a directory module) in
+  CONTRIBUTING and ADDING_TOOLS; module paths and test counts refreshed.
 - `docs/dev/INSTALLATION.md` no longer links to a nonexistent
   `config.example.toml`.
 - `docs/dev/ARCHITECTURE.md` source tree matches the actual module layout

@@ -24,6 +24,12 @@ Pending tasks and improvements for the SPARK DevOps platform.
 
 ## Backlog — features
 
+### Self-update: `spark update` `added: 2026-09-16`
+- Detect the install channel (npm global, cargo, source) and run the right upgrade
+- Check latest GitHub release / npm version; print exact instructions when auto-update is unsafe
+- Fallback: include SPARK itself in the Updater catalog (TUI) once releases are cut
+- Prerequisite: the first tagged release (v0.6.0) must exist
+
 ### Updater: runtime version manager sub-panel `added: 2026-04-20`
 - Show installed versions per runtime (nvm ls, pyenv versions, rvm list, rustup toolchain list)
 - Accessible via Enter on a runtime tool in the updater table
