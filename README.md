@@ -176,8 +176,11 @@ spark clone <url>              # Clone (ghq-compatible, owner/repo shorthand)
 spark clone <url> -p           # Clone via SSH
 spark list [-p] [query]        # List repos (tree: branch + age + tags)
 spark search <query>           # Search repos
+spark report                   # Fleet status: repos + disk + ports + tools + security
+spark report --fresh           # Same, re-fetching statuses and tool versions
 spark status [query]           # Check which repos need pull
 spark status --tag <tag>       # Status filtered by tag
+spark status --json            # Machine-readable output (json_version: 1)
 spark pull <query|all>         # Pull repos (ff-only)
 spark pull all --tag <tag>     # Pull repos by tag
 spark cd <name>                # Print path to repo

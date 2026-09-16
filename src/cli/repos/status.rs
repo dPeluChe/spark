@@ -41,7 +41,7 @@ pub fn cmd_status(
         println!("  Checking {} repos...\n", filtered.len());
     }
 
-    let statuses = fetch_statuses(&filtered);
+    let statuses = fetch_statuses(&filtered, true);
 
     if json_out {
         let tags = scanner::repo_tags::load_tags();
@@ -72,7 +72,7 @@ pub fn cmd_status(
         json::print(&json::StatusJson {
             json_version: json::JSON_VERSION,
             generated_at: json::now_iso(),
-            summary: summarize(&statuses),
+            summary: json::summarize_statuses(&statuses),
             repos: repos_json,
         });
     } else {
@@ -99,33 +99,20 @@ pub fn cmd_status(
     }
 }
 
-/// Summary counters for `--json`, bucketed by status kind.
-fn summarize(
-    statuses: &[(&scanner::repo_manager::ManagedRepo, RepoStatus)],
-) -> json::StatusSummary {
-    let mut s = json::StatusSummary::default();
-    for (_, status) in statuses {
-        s.total += 1;
-        match status {
-            RepoStatus::UpToDate => s.up_to_date += 1,
-            RepoStatus::Behind(_) => s.behind += 1,
-            RepoStatus::Ahead(_) => s.ahead += 1,
-            RepoStatus::Diverged { .. } => s.diverged += 1,
-            RepoStatus::Dirty { .. } => s.dirty += 1,
-            RepoStatus::Error(_) => s.error += 1,
-            RepoStatus::Checking => s.checking += 1,
-        }
-    }
-    s
-}
-
-fn fetch_statuses<'a>(
+/// Statuses for a repo list: cache hits when `use_cache`, parallel checks
+/// otherwise. Fresh results are always written back to the cache.
+pub(crate) fn fetch_statuses<'a>(
     filtered: &[&'a scanner::repo_manager::ManagedRepo],
+    use_cache: bool,
 ) -> Vec<(
     &'a scanner::repo_manager::ManagedRepo,
     scanner::repo_manager::RepoStatus,
 )> {
-    let cache = scanner::repo_manager::load_status_cache();
+    let cache = if use_cache {
+        scanner::repo_manager::load_status_cache()
+    } else {
+        Default::default()
+    };
     let mut statuses = Vec::with_capacity(filtered.len());
     let mut to_check = Vec::new();
 

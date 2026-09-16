@@ -26,6 +26,9 @@ spark clone <url>          # Clone (ghq-compatible)
 spark cd <name>            # Find repo path
 spark search <query>       # Search repos (shows status, commit age, path)
 spark list [-p] [query]    # List repos (tree view by host/owner)
+spark report               # Fleet status in one screen (repos, disk, ports, tools, security)
+spark report --fresh       # Same, re-fetching repo statuses and tool versions
+spark report --json        # Machine-readable fleet report (json_version: 1)
 spark status [query]       # Check which repos need pull (fetch + compare)
 spark status --tag <tag>   # Check status of repos with a specific tag
 spark status --json        # Machine-readable output (json_version: 1)

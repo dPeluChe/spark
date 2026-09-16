@@ -80,6 +80,11 @@ pub fn cmd_audit(
         || !patterns_found.is_empty()
         || has_dep_findings;
 
+    persist_last_audit(
+        &scan_path,
+        secrets_total + history.len() + patterns_found.len(),
+    );
+
     if json_out {
         let payload = build_audit_json(
             &scan_path,
@@ -131,6 +136,23 @@ pub fn cmd_audit(
 
     // CI gate: findings exit non-zero (see ROADMAP.md Phase 0)
     std::process::exit(1);
+}
+
+/// Persist a summary so `spark report` can show the last audit at a glance.
+fn persist_last_audit(scan_path: &std::path::Path, total: usize) {
+    let Some(dir) = dirs::config_dir().map(|d| d.join("spark")) else {
+        return;
+    };
+    let _ = std::fs::create_dir_all(&dir);
+    let payload = json::ReportSecurity {
+        generated_at: json::now_iso(),
+        path: scan_path.display().to_string(),
+        total,
+    };
+    let _ = std::fs::write(
+        dir.join("last_audit.json"),
+        serde_json::to_string(&payload).unwrap_or_default(),
+    );
 }
 
 /// Build the `--json` contract from the phase outputs (see ROADMAP.md).

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`spark report`** (alias `spark overview`) — fleet status in one screen:
+  repos by state, recoverable disk (repo artifacts + system cleanables), dev
+  servers, outdated tools, and the last audit summary. Fast by default
+  (warm ~1.5s on a 145-repo fleet); `--fresh` re-fetches statuses and tool
+  versions; `--json` mirrors every section (`json_version: 1`). `spark audit`
+  now persists a summary to `last_audit.json` to feed it.
 - `--json` machine-readable output (`json_version: 1`) for `spark status`,
   `spark list`, `spark ps`, and `spark audit` — stable contracts for agents
   and CI, shapes documented in

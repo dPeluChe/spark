@@ -3,8 +3,8 @@
 //! These shapes are the stable API for agents and CI — see docs/dev/ROADMAP.md.
 //! Breaking changes require a `JSON_VERSION` bump.
 
-use crate::scanner::repo_manager::RepoStatus;
-use serde::Serialize;
+use crate::scanner::repo_manager::{ManagedRepo, RepoStatus};
+use serde::{Deserialize, Serialize};
 
 pub const JSON_VERSION: u8 = 1;
 
@@ -72,6 +72,24 @@ pub struct StatusJson {
     pub generated_at: String,
     pub summary: StatusSummary,
     pub repos: Vec<StatusRepo>,
+}
+
+/// Summary counters for status-style output, bucketed by status kind.
+pub fn summarize_statuses(statuses: &[(&ManagedRepo, RepoStatus)]) -> StatusSummary {
+    let mut s = StatusSummary::default();
+    for (_, status) in statuses {
+        s.total += 1;
+        match status {
+            RepoStatus::UpToDate => s.up_to_date += 1,
+            RepoStatus::Behind(_) => s.behind += 1,
+            RepoStatus::Ahead(_) => s.ahead += 1,
+            RepoStatus::Diverged { .. } => s.diverged += 1,
+            RepoStatus::Dirty { .. } => s.dirty += 1,
+            RepoStatus::Error(_) => s.error += 1,
+            RepoStatus::Checking => s.checking += 1,
+        }
+    }
+    s
 }
 
 // ─── list ───
@@ -153,6 +171,49 @@ pub struct AuditJson {
     pub deps: Option<crate::scanner::dep_scanner::DepScanResult>,
 }
 
+// ─── report ───
+
+#[derive(Serialize)]
+pub struct ReportDiskRepo {
+    pub repo: String,
+    pub bytes: u64,
+}
+
+#[derive(Serialize)]
+pub struct ReportDisk {
+    pub artifacts_bytes: u64,
+    pub artifact_repos: usize,
+    pub top_repos: Vec<ReportDiskRepo>,
+    pub system_bytes: u64,
+    pub system_items: usize,
+}
+
+#[derive(Serialize)]
+pub struct ReportTools {
+    /// true when `--fresh` ran the version checks; false = not checked
+    pub checked: bool,
+    pub outdated: usize,
+}
+
+/// Summary persisted by `spark audit` (feeds `spark report`).
+#[derive(Serialize, Deserialize)]
+pub struct ReportSecurity {
+    pub generated_at: String,
+    pub path: String,
+    pub total: usize,
+}
+
+#[derive(Serialize)]
+pub struct ReportJson {
+    pub json_version: u8,
+    pub generated_at: String,
+    pub repos: StatusSummary,
+    pub disk: ReportDisk,
+    pub ports: Vec<PortJson>,
+    pub tools: ReportTools,
+    pub security: Option<ReportSecurity>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,6 +248,82 @@ mod tests {
             status_kind(&RepoStatus::Checking),
             ("checking", 0, 0, false)
         );
+    }
+
+    #[test]
+    fn test_summarize_statuses() {
+        let r = |host: &str| ManagedRepo {
+            path: std::path::PathBuf::from(format!("/tmp/{host}")),
+            name: "r".into(),
+            remote_url: String::new(),
+            branch: "main".into(),
+            status: RepoStatus::Checking,
+            host: host.into(),
+            owner: "o".into(),
+            last_commit: None,
+            size: 0,
+        };
+        let a = r("a");
+        let b = r("b");
+        let c = r("c");
+        let statuses = vec![
+            (&a, RepoStatus::UpToDate),
+            (&b, RepoStatus::Behind(3)),
+            (
+                &c,
+                RepoStatus::Dirty {
+                    ahead: 1,
+                    behind: 2,
+                },
+            ),
+        ];
+        let s = summarize_statuses(&statuses);
+        assert_eq!(s.total, 3);
+        assert_eq!(s.up_to_date, 1);
+        assert_eq!(s.behind, 1);
+        assert_eq!(s.dirty, 1);
+    }
+
+    #[test]
+    fn test_report_json_shape() {
+        let value = ReportJson {
+            json_version: JSON_VERSION,
+            generated_at: "2026-09-16T00:00:00Z".into(),
+            repos: StatusSummary {
+                total: 2,
+                behind: 1,
+                ..Default::default()
+            },
+            disk: ReportDisk {
+                artifacts_bytes: 1024,
+                artifact_repos: 1,
+                top_repos: vec![ReportDiskRepo {
+                    repo: "o/r".into(),
+                    bytes: 1024,
+                }],
+                system_bytes: 2048,
+                system_items: 3,
+            },
+            ports: vec![],
+            tools: ReportTools {
+                checked: false,
+                outdated: 0,
+            },
+            security: Some(ReportSecurity {
+                generated_at: "2026-09-15T00:00:00Z".into(),
+                path: "/tmp".into(),
+                total: 2,
+            }),
+        };
+        let json: serde_json::Value = serde_json::to_value(&value).unwrap();
+        assert_eq!(json["json_version"], 1);
+        assert_eq!(json["repos"]["behind"], 1);
+        assert_eq!(json["disk"]["top_repos"][0]["repo"], "o/r");
+        assert_eq!(json["tools"]["checked"], false);
+        assert_eq!(json["security"]["total"], 2);
+        // round-trip the persisted audit summary
+        let back: ReportSecurity = serde_json::from_value(json["security"].clone()).unwrap();
+        assert_eq!(back.path, "/tmp");
     }
 
     #[test]
