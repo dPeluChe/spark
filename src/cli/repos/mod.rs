@@ -80,7 +80,7 @@ pub fn cmd_list(
     query: Option<String>,
     config: &config::SparkConfig,
 ) -> color_eyre::Result<()> {
-    let repos = scanner::repo_manager::list_managed_repos(&config.repos_root);
+    let repos = scanner::repo_manager::list_managed_repos_lite(&config.repos_root);
     if repos.is_empty() {
         println!("  No repos in {}", config.repos_root.display());
         println!("  Use: spark clone <url>");
@@ -113,7 +113,7 @@ pub fn cmd_list(
 }
 
 pub fn cmd_rm(query: &str, config: &config::SparkConfig) -> color_eyre::Result<()> {
-    let repos = scanner::repo_manager::list_managed_repos(&config.repos_root);
+    let repos = scanner::repo_manager::list_managed_repos_lite(&config.repos_root);
     let q = query.to_lowercase();
     let matches: Vec<_> = repos
         .iter()
@@ -169,7 +169,7 @@ pub fn cmd_search(
     first: bool,
     config: &config::SparkConfig,
 ) -> color_eyre::Result<()> {
-    let repos = scanner::repo_manager::list_managed_repos(&config.repos_root);
+    let repos = scanner::repo_manager::list_managed_repos_lite(&config.repos_root);
     let q = query.to_lowercase();
     let matches: Vec<_> = repos.iter().filter(|r| filter_repo(r, &q)).collect();
 
@@ -226,7 +226,7 @@ fn print_search_result(
 }
 
 pub fn cmd_cd(query: &str, config: &config::SparkConfig) -> color_eyre::Result<()> {
-    let repos = scanner::repo_manager::list_managed_repos(&config.repos_root);
+    let repos = scanner::repo_manager::list_managed_repos_lite(&config.repos_root);
     let q = query.to_lowercase();
     let exact = repos.iter().find(|r| r.name.to_lowercase() == q);
     let found = exact.or_else(|| repos.iter().find(|r| r.name.to_lowercase().contains(&q)));

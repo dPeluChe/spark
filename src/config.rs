@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SparkConfig {
     /// Directories to scan for git repos
     pub scan_directories: Vec<PathBuf>,
@@ -89,13 +90,22 @@ impl SparkConfig {
 
         if config_path.exists() {
             if let Ok(contents) = std::fs::read_to_string(&config_path) {
-                if let Ok(config) = toml::from_str(&contents) {
+                if let Ok(mut config) = toml::from_str::<SparkConfig>(&contents) {
+                    config.expand_paths();
                     return config;
                 }
             }
         }
 
         Self::default()
+    }
+
+    /// Expand a leading `~` in configured paths (config files are hand-written)
+    fn expand_paths(&mut self) {
+        self.repos_root = crate::utils::fs::expand_tilde(&self.repos_root.to_string_lossy());
+        for dir in &mut self.scan_directories {
+            *dir = crate::utils::fs::expand_tilde(&dir.to_string_lossy());
+        }
     }
 
     /// Save config to disk
@@ -138,6 +148,30 @@ mod tests {
     fn test_load_returns_defaults_when_no_file() {
         let config = SparkConfig::load();
         assert_eq!(config.stale_threshold_days, 90);
+    }
+
+    #[test]
+    fn test_config_partial_uses_defaults() {
+        let toml_str = r#"stale_threshold_days = 45"#;
+        let config: SparkConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.stale_threshold_days, 45);
+        assert_eq!(config.max_scan_depth, 6);
+        assert!(!config.scan_directories.is_empty());
+        assert!(config.use_trash);
+    }
+
+    #[test]
+    fn test_config_expands_tilde() {
+        let mut config = SparkConfig {
+            repos_root: PathBuf::from("~/repos-test"),
+            scan_directories: vec![PathBuf::from("~/Projects"), PathBuf::from("/tmp/abs")],
+            ..Default::default()
+        };
+        config.expand_paths();
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(config.repos_root, home.join("repos-test"));
+        assert_eq!(config.scan_directories[0], home.join("Projects"));
+        assert_eq!(config.scan_directories[1], PathBuf::from("/tmp/abs"));
     }
 
     #[test]

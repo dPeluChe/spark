@@ -6,7 +6,7 @@ use crate::scanner::{repo_manager, repo_tags};
 
 pub fn cmd_tag(action: TagAction, config: &config::SparkConfig) {
     let mut tags = repo_tags::load_tags();
-    let repos = repo_manager::list_managed_repos(&config.repos_root);
+    let repos = repo_manager::list_managed_repos_lite(&config.repos_root);
 
     match action {
         TagAction::Add { repo, tag } => {

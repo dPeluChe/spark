@@ -33,10 +33,37 @@ pub fn cmd_audit(
         println!("  Dependency check queries osv.dev (Google OSV, no auth required).\n");
     }
 
-    let results = run_secrets_phase(&scan_path, phases);
-    let history = run_history_phase(&scan_path, phases);
-    let patterns_found = run_patterns_phase(&scan_path, phases);
-    let (dep_result, npm_audit_json) = run_deps_phase(&scan_path, phases, skip_deps);
+    // Phases 1-3 are independent local scans — run them in parallel. Phase 4
+    // (network + npm audit) runs on the main thread, which holds the tokio
+    // context that its block_in_place needs.
+    let (results, history, patterns_found, dep_result, npm_audit_json) = std::thread::scope(|s| {
+        eprintln!(
+            "  [1-3/{}] Secrets + git history + code patterns (parallel)",
+            phases
+        );
+        let secrets_h = s.spawn(|| scanner::secret_scanner::scan_directory(&scan_path));
+        let history_h = s.spawn(|| {
+            if scan_path.join(".git").exists() {
+                scanner::history_scanner::scan_history(&scan_path)
+            } else {
+                Vec::new()
+            }
+        });
+        let patterns_h = s.spawn(|| scanner::code_patterns::scan_code_patterns(&scan_path));
+        let (dep_result, npm_audit_json) = run_deps_phase(&scan_path, phases, skip_deps);
+        (
+            secrets_h.join().unwrap_or_default(),
+            history_h.join().unwrap_or_default(),
+            patterns_h.join().unwrap_or_default(),
+            dep_result,
+            npm_audit_json,
+        )
+    });
+
+    let secrets_total: usize = results.iter().map(|r| r.findings.len()).sum();
+    println!("    Secrets:       {} findings", secrets_total);
+    println!("    Git history:   {} findings", history.len());
+    println!("    Code (OWASP):  {} findings", patterns_found.len());
     println!();
 
     let has_dep_findings = dep_result
@@ -74,47 +101,6 @@ pub fn cmd_audit(
 
     render_ignore_tip(&scan_path, has_findings);
     save_report_if_requested(output_file, &scan_path, &report);
-}
-
-fn run_secrets_phase(
-    scan_path: &std::path::Path,
-    phases: u8,
-) -> Vec<scanner::secret_scanner::AuditResult> {
-    eprint!("  [1/{}] Secrets scan", phases);
-    let results = scanner::secret_scanner::scan_directory_with_progress(
-        scan_path,
-        Some(&|count| {
-            if count % 50 == 0 {
-                eprint!(".");
-            }
-        }),
-    );
-    eprintln!(" done");
-    results
-}
-
-fn run_history_phase(
-    scan_path: &std::path::Path,
-    phases: u8,
-) -> Vec<scanner::history_scanner::HistoryFinding> {
-    eprint!("  [2/{}] Git history scan", phases);
-    if !scan_path.join(".git").exists() {
-        eprintln!(".. skipped (no .git)");
-        return Vec::new();
-    }
-    let h = scanner::history_scanner::scan_history(scan_path);
-    eprintln!(".. {} findings", h.len());
-    h
-}
-
-fn run_patterns_phase(
-    scan_path: &std::path::Path,
-    phases: u8,
-) -> Vec<scanner::code_patterns::PatternFinding> {
-    eprint!("  [3/{}] Code patterns scan", phases);
-    let patterns = scanner::code_patterns::scan_code_patterns(scan_path);
-    eprintln!(".. {} findings", patterns.len());
-    patterns
 }
 
 fn run_deps_phase(

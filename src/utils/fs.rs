@@ -1,13 +1,12 @@
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-/// Expand a leading `~` to the user's home directory.
+/// Expand a leading `~` or `~/` to the user's home directory.
 pub fn expand_tilde(input: &str) -> PathBuf {
-    if input.starts_with('~') {
-        let home = dirs::home_dir().unwrap_or_default();
-        home.join(input.strip_prefix("~/").unwrap_or(input))
-    } else {
-        PathBuf::from(input)
+    match input.strip_prefix("~/") {
+        Some(rest) => dirs::home_dir().unwrap_or_default().join(rest),
+        None if input == "~" => dirs::home_dir().unwrap_or_default(),
+        None => PathBuf::from(input),
     }
 }
 
@@ -60,6 +59,15 @@ mod tests {
     #[test]
     fn test_format_size_gb() {
         assert_eq!(format_size(1_073_741_824), "1.0 GB");
+    }
+
+    #[test]
+    fn test_expand_tilde() {
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(expand_tilde("~/x"), home.join("x"));
+        assert_eq!(expand_tilde("~"), home);
+        assert_eq!(expand_tilde("/abs/path"), PathBuf::from("/abs/path"));
+        assert_eq!(expand_tilde("rel/path"), PathBuf::from("rel/path"));
     }
 
     #[test]

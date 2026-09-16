@@ -24,7 +24,7 @@ large_artifact_threshold = 104857600
 use_trash = true
 
 # Max directory recursion depth when scanning
-max_scan_depth = 4
+max_scan_depth = 6
 
 # Root directory for managed repos (ghq-style: root/host/owner/name)
 # Repos cloned via Repo Manager [G] → [c] will be stored here

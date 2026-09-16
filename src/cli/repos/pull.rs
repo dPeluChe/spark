@@ -7,7 +7,7 @@ use scanner::repo_manager::{ManagedRepo, RepoStatus};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub fn cmd_pull(query: &str, tag: Option<String>, config: &config::SparkConfig) {
-    let repos = scanner::repo_manager::list_managed_repos(&config.repos_root);
+    let repos = scanner::repo_manager::list_managed_repos_lite(&config.repos_root);
 
     let filtered: Vec<_> = if let Some(ref tag_name) = tag {
         let by_tag = select_repos(&repos, None, Some(tag_name));
