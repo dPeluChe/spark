@@ -43,11 +43,6 @@ Pending tasks and improvements for the SPARK DevOps platform.
 - Validate install.sh works in containerized environments
 - Test cargo install path on fresh Linux
 
-### Parallel status fetching `added: 2026-04-20`
-- `spark status` fetches repos sequentially (slow for 50+ repos)
-- Consider parallel fetch with concurrency limit (e.g., 5 at a time)
-- Show progress bar instead of repo-by-repo counter
-
 ### TUI repo detail for non-containers `added: 2026-04-20`
 - Pressing Enter on a non-container repo in ScanResults goes to RepoDetail
 - Could show richer info: recent commits, branch list, disk usage breakdown

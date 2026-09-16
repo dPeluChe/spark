@@ -1,33 +1,12 @@
 //! `spark status` — show which repos need pull, with optional tag filter.
 
-use super::super::filter_repo;
+use super::select_repos;
 use crate::config;
 use crate::scanner;
 
 pub fn cmd_status(query: Option<String>, tag: Option<String>, config: &config::SparkConfig) {
     let repos = scanner::repo_manager::list_managed_repos(&config.repos_root);
-    let tag_filter = tag.as_ref().map(|t| {
-        let tags = scanner::repo_tags::load_tags();
-        tags.repos_for_tag(t)
-    });
-
-    let filtered: Vec<_> = if let Some(ref tag_repos) = tag_filter {
-        repos
-            .iter()
-            .filter(|r| {
-                let key = scanner::repo_tags::repo_key(&r.host, &r.owner, &r.name);
-                tag_repos.contains(&key)
-            })
-            .collect()
-    } else {
-        match &query {
-            Some(q) => {
-                let q = q.to_lowercase();
-                repos.iter().filter(|r| filter_repo(r, &q)).collect()
-            }
-            None => repos.iter().collect(),
-        }
-    };
+    let filtered = select_repos(&repos, query.as_deref(), tag.as_deref());
 
     if let Some(t) = &tag {
         if filtered.is_empty() {
@@ -63,31 +42,29 @@ fn fetch_statuses<'a>(
 )> {
     let cache = scanner::repo_manager::load_status_cache();
     let mut statuses = Vec::with_capacity(filtered.len());
+    let mut to_check = Vec::new();
 
-    for (i, repo) in filtered.iter().enumerate() {
-        eprint!(
-            "\r  [{}/{}] {}/{}",
-            i + 1,
-            filtered.len(),
-            repo.owner,
-            repo.name
-        );
+    for repo in filtered {
         let key = repo.path.display().to_string();
-        let status = cache
+        match cache
             .get(&key)
             .filter(|(_, ts)| scanner::repo_manager::is_cache_valid(*ts))
-            .map(|(s, _)| scanner::repo_manager::string_to_status(s))
-            .unwrap_or_else(|| {
-                let s = scanner::repo_manager::check_repo_status(&repo.path);
-                scanner::repo_manager::save_status_to_cache(
-                    &key,
-                    &scanner::repo_manager::status_to_string(&s),
-                );
-                s
-            });
-        statuses.push((*repo, status));
+        {
+            Some((s, _)) => statuses.push((*repo, scanner::repo_manager::string_to_status(s))),
+            None => to_check.push(*repo),
+        }
     }
-    eprintln!("\r{}\r", " ".repeat(60));
+
+    if !to_check.is_empty() {
+        let fresh = scanner::repo_manager::check_statuses_parallel(&to_check);
+        scanner::repo_manager::save_statuses_to_cache(to_check.iter().zip(&fresh).map(|(r, s)| {
+            (
+                r.path.display().to_string(),
+                scanner::repo_manager::status_to_string(s),
+            )
+        }));
+        statuses.extend(to_check.into_iter().zip(fresh));
+    }
 
     // Up-to-date alphabetic first, then outdated alphabetic
     statuses.sort_by(|a, b| {
