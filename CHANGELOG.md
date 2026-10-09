@@ -100,7 +100,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refactor.
 
 ### Fixed
-- Progress lines (`spark status`/`pull`/`report`/`ingest --all`) no longer
+- `spark pull`/`status`/`report` and the TUI pull/clean no longer saturate the
+  machine: concurrency is bounded to 4 (TUI pull and system clean were
+  unbounded), bulk git calls skip auto-gc, fsmonitor and index locks, and
+  never prompt for credentials. The three thread pools share `utils::pool::par_map`.- Progress lines (`spark status`/`pull`/`report`/`ingest --all`) no longer
   leave leftovers or interleave: each update is a single write ending with
   erase-to-EOL, and progress is skipped entirely when stderr is not a
   terminal (clean piped logs).

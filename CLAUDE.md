@@ -144,14 +144,14 @@ Context-aware severity: Source Code > Config > Test > Docs (findings in tests/do
 ### Repo Status Cache
 - Stored in `repo_status_cache.json`
 - Expires after 4 hours
-- Parallel fetch via bounded pool (`STATUS_CONCURRENCY = 8`); `git fetch --prune` self-heals stale remote refs
+- Parallel fetch via bounded pool (`STATUS_CONCURRENCY = 4`); `git fetch --prune` self-heals stale remote refs
 - `r` in Repos clears cache and re-fetches
 
 ## Development
 
 ```bash
 cargo run                  # Dev mode
-cargo test                 # 138 tests
+cargo test                 # 140 tests
 cargo build --release      # Optimized build
 ```
 

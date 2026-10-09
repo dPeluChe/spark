@@ -5,7 +5,6 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Status of a managed repository
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,11 +112,29 @@ pub fn clone_repo_shallow(url: &str, root: &Path) -> Result<PathBuf, String> {
     }
 }
 
+/// `git` for bulk ops: no auto-gc/maintenance, no fsmonitor daemon per repo,
+/// no index lock, no credential prompts. Keeps fan-out from spawning extra
+/// background processes (gc, fsmonitor--daemon) on every repo.
+fn git_bulk(path: &Path) -> Command {
+    let mut c = Command::new("git");
+    c.args([
+        "-c",
+        "gc.auto=0",
+        "-c",
+        "maintenance.auto=false",
+        "-c",
+        "core.fsmonitor=false",
+        "--no-optional-locks",
+    ])
+    .current_dir(path)
+    .env("GIT_TERMINAL_PROMPT", "0");
+    c
+}
+
 /// Pull (fast-forward) a repository
 pub fn pull_repo(path: &Path) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = git_bulk(path)
         .args(["pull", "--ff-only", "--prune"])
-        .current_dir(path)
         .output()
         .map_err(|e| format!("git pull failed: {}", e))?;
 
@@ -133,9 +150,8 @@ pub fn pull_repo(path: &Path) -> Result<String, String> {
 /// Merge HEAD to the already-fetched upstream (no second fetch).
 /// Call after `check_repo_status` reports `Behind`.
 pub fn merge_ff_only(path: &Path) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = git_bulk(path)
         .args(["merge", "--ff-only", "@{upstream}"])
-        .current_dir(path)
         .output()
         .map_err(|e| format!("git merge failed: {}", e))?;
 
@@ -151,9 +167,8 @@ pub fn merge_ff_only(path: &Path) -> Result<String, String> {
 /// Fetch and check status of a repository against its remote
 pub fn check_repo_status(path: &Path) -> RepoStatus {
     // Fetch first; --prune drops stale remote-tracking refs that break updates
-    let fetch_err = match Command::new("git")
+    let fetch_err = match git_bulk(path)
         .args(["fetch", "--quiet", "--prune"])
-        .current_dir(path)
         .output()
     {
         Ok(o) if o.status.success() => None,
@@ -162,17 +177,15 @@ pub fn check_repo_status(path: &Path) -> RepoStatus {
     };
 
     // Check for dirty working tree
-    let dirty = Command::new("git")
+    let dirty = git_bulk(path)
         .args(["status", "--porcelain"])
-        .current_dir(path)
         .output()
         .map(|o| !o.stdout.is_empty())
         .unwrap_or(false);
 
     // Get ahead/behind counts
-    let output = Command::new("git")
+    let output = git_bulk(path)
         .args(["rev-list", "--left-right", "--count", "HEAD...@{upstream}"])
-        .current_dir(path)
         .output();
 
     match output {
@@ -229,45 +242,16 @@ pub fn check_repo_status(path: &Path) -> RepoStatus {
 }
 
 /// Max concurrent git fetches when checking many repos.
-pub const STATUS_CONCURRENCY: usize = 8;
+pub const STATUS_CONCURRENCY: usize = 4;
 
-/// Check statuses for many repos in parallel (bounded to `STATUS_CONCURRENCY`
-/// threads). Prints a `\r` progress counter to stderr.
+/// Check statuses for many repos in parallel (bounded to `STATUS_CONCURRENCY`).
 pub fn check_statuses_parallel(repos: &[&ManagedRepo]) -> Vec<RepoStatus> {
-    let total = repos.len();
-    let next = AtomicUsize::new(0);
-    let done = AtomicUsize::new(0);
-    let (tx, rx) = std::sync::mpsc::channel::<(usize, RepoStatus)>();
-
-    std::thread::scope(|s| {
-        let next = &next;
-        let done = &done;
-        for _ in 0..STATUS_CONCURRENCY.min(total) {
-            let tx = tx.clone();
-            s.spawn(move || loop {
-                let i = next.fetch_add(1, Ordering::Relaxed);
-                if i >= total {
-                    break;
-                }
-                let status = check_repo_status(&repos[i].path);
-                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-                crate::utils::shell::progress_line(
-                    n,
-                    total,
-                    &format!("{}/{}", repos[i].owner, repos[i].name),
-                );
-                let _ = tx.send((i, status));
-            });
-        }
-    });
-    drop(tx);
-    crate::utils::shell::clear_progress_line();
-
-    let mut statuses = vec![RepoStatus::Checking; total];
-    for (i, status) in rx {
-        statuses[i] = status;
-    }
-    statuses
+    crate::utils::pool::par_map(
+        repos,
+        STATUS_CONCURRENCY,
+        |r| format!("{}/{}", r.owner, r.name),
+        |r| check_repo_status(&r.path),
+    )
 }
 
 /// List all managed repositories under a root directory, including each

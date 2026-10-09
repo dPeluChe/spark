@@ -237,26 +237,46 @@ fn start_check_repo_statuses(app: &mut App, tx: mpsc::UnboundedSender<AppMessage
 }
 
 fn start_pull_repos(app: &App, indices: Vec<usize>, tx: mpsc::UnboundedSender<AppMessage>) {
-    for idx in indices {
-        if let Some(repo) = app.repo_manager.repos.get(idx) {
-            let tx_clone = tx.clone();
-            let path = repo.path.clone();
-            tokio::spawn(async move {
+    let jobs: Vec<(usize, std::path::PathBuf)> = indices
+        .into_iter()
+        .filter_map(|idx| {
+            app.repo_manager
+                .repos
+                .get(idx)
+                .map(|r| (idx, r.path.clone()))
+        })
+        .collect();
+    if jobs.is_empty() {
+        return;
+    }
+    // Same bounded pool as status checks: never one git process per repo at once.
+    let jobs = std::sync::Arc::new(jobs);
+    let next = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    for _ in 0..scanner::repo_manager::STATUS_CONCURRENCY.min(jobs.len()) {
+        let jobs = std::sync::Arc::clone(&jobs);
+        let next = std::sync::Arc::clone(&next);
+        let tx = tx.clone();
+        tokio::spawn(async move {
+            loop {
+                let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let Some((idx, path)) = jobs.get(i) else {
+                    break;
+                };
+                let p = path.clone();
                 let result =
-                    tokio::task::spawn_blocking(move || scanner::repo_manager::pull_repo(&path))
-                        .await;
+                    tokio::task::spawn_blocking(move || scanner::repo_manager::pull_repo(&p)).await;
                 let (success, message) = match result {
                     Ok(Ok(msg)) => (true, msg),
                     Ok(Err(e)) => (false, e),
                     Err(e) => (false, e.to_string()),
                 };
-                let _ = tx_clone.send(AppMessage::RepoPullResult {
-                    index: idx,
+                let _ = tx.send(AppMessage::RepoPullResult {
+                    index: *idx,
                     success,
                     message,
                 });
-            });
-        }
+            }
+        });
     }
 }
 
@@ -319,10 +339,23 @@ fn start_clean_system_item(app: &App, index: usize, tx: mpsc::UnboundedSender<Ap
 
 fn start_clean_system_items(app: &App, indices: Vec<usize>, tx: mpsc::UnboundedSender<AppMessage>) {
     let is_dry_run = app.dry_run;
-    for index in indices {
-        if let Some(item) = app.system_cleaner.items.get(index).cloned() {
-            let tx_clone = tx.clone();
-            tokio::spawn(async move {
+    let jobs: Vec<_> = indices
+        .into_iter()
+        .filter_map(|i| app.system_cleaner.items.get(i).cloned().map(|it| (i, it)))
+        .collect();
+    let jobs = std::sync::Arc::new(jobs);
+    let next = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    for _ in 0..scanner::repo_manager::STATUS_CONCURRENCY.min(jobs.len()) {
+        let jobs = std::sync::Arc::clone(&jobs);
+        let next = std::sync::Arc::clone(&next);
+        let tx = tx.clone();
+        tokio::spawn(async move {
+            loop {
+                let n = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let Some((index, item)) = jobs.get(n) else {
+                    break;
+                };
+                let item = item.clone();
                 let result = tokio::task::spawn_blocking(move || {
                     scanner::system_cleaner::execute_clean(&item, is_dry_run)
                 })
@@ -332,14 +365,14 @@ fn start_clean_system_items(app: &App, indices: Vec<usize>, tx: mpsc::UnboundedS
                     Ok(r) => (true, r, None),
                     Err(e) => (false, 0, Some(e)),
                 };
-                let _ = tx_clone.send(AppMessage::SystemCleanItemResult {
-                    index,
+                let _ = tx.send(AppMessage::SystemCleanItemResult {
+                    index: *index,
                     recovered,
                     success,
                     error,
                 });
-            });
-        }
+            }
+        });
     }
 }
 
