@@ -9,7 +9,6 @@ use crate::config;
 use crate::scanner;
 use crate::scanner::port_scanner::{self, PortInfo};
 use crate::utils::fs::format_size;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub fn cmd_report(fresh: bool, json_out: bool, config: &config::SparkConfig) {
     let repos = scanner::repo_manager::list_managed_repos_lite(&config.repos_root);
@@ -110,39 +109,17 @@ type ArtifactRepos = Vec<(String, u64)>;
 
 /// Artifact bytes across repos, parallelized with the shared bounded pool.
 fn scan_artifacts_parallel(repos: &[&scanner::repo_manager::ManagedRepo]) -> (u64, ArtifactRepos) {
-    let total = repos.len();
-    let next = AtomicUsize::new(0);
-    let done = AtomicUsize::new(0);
-    let (tx, rx) = std::sync::mpsc::channel::<(usize, u64)>();
-
-    std::thread::scope(|s| {
-        let next = &next;
-        let done = &done;
-        for _ in 0..scanner::repo_manager::STATUS_CONCURRENCY.min(total) {
-            let tx = tx.clone();
-            s.spawn(move || loop {
-                let i = next.fetch_add(1, Ordering::Relaxed);
-                if i >= total {
-                    break;
-                }
-                let repo = repos[i];
-                let bytes: u64 = scanner::space_analyzer::find_artifacts(&repo.path)
-                    .iter()
-                    .map(|a| a.size)
-                    .sum();
-                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-                crate::utils::shell::progress_line(n, total, &format!("disk · {}", repo.name));
-                let _ = tx.send((i, bytes));
-            });
-        }
-    });
-    drop(tx);
-    crate::utils::shell::clear_progress_line();
-
-    let mut per_repo = vec![0u64; total];
-    for (i, bytes) in rx {
-        per_repo[i] = bytes;
-    }
+    let per_repo = crate::utils::pool::par_map(
+        repos,
+        scanner::repo_manager::STATUS_CONCURRENCY,
+        |r| format!("disk · {}", r.name),
+        |r| {
+            scanner::space_analyzer::find_artifacts(&r.path)
+                .iter()
+                .map(|a| a.size)
+                .sum::<u64>()
+        },
+    );
     let mut ranked: ArtifactRepos = repos
         .iter()
         .zip(per_repo)

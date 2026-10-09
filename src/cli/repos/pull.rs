@@ -4,7 +4,6 @@ use super::select_repos;
 use crate::config;
 use crate::scanner;
 use scanner::repo_manager::{ManagedRepo, RepoStatus};
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub fn cmd_pull(query: &str, tag: Option<String>, config: &config::SparkConfig) {
     let repos = scanner::repo_manager::list_managed_repos_lite(&config.repos_root);
@@ -185,45 +184,22 @@ struct PullSummary {
 }
 
 fn pull_all(filtered: &[&ManagedRepo]) -> PullSummary {
-    let total = filtered.len();
-    let next = AtomicUsize::new(0);
-    let done = AtomicUsize::new(0);
-    let (tx, rx) = std::sync::mpsc::channel::<(usize, PullOutcome)>();
-
-    std::thread::scope(|s| {
-        let next = &next;
-        let done = &done;
-        for _ in 0..scanner::repo_manager::STATUS_CONCURRENCY.min(total) {
-            let tx = tx.clone();
-            s.spawn(move || loop {
-                let i = next.fetch_add(1, Ordering::Relaxed);
-                if i >= total {
-                    break;
-                }
-                let repo = filtered[i];
-                // check_repo_status already fetched (with --prune); merge only
-                // when strictly behind so we never fetch twice.
-                let outcome = match scanner::repo_manager::check_repo_status(&repo.path) {
-                    RepoStatus::Behind(_) => {
-                        match scanner::repo_manager::merge_ff_only(&repo.path) {
-                            Ok(_) => PullOutcome::Pulled,
-                            Err(e) => PullOutcome::Failed(e),
-                        }
-                    }
-                    status => PullOutcome::Skipped(status),
-                };
-                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-                crate::utils::shell::progress_line(
-                    n,
-                    total,
-                    &format!("{}/{}", repo.owner, repo.name),
-                );
-                let _ = tx.send((i, outcome));
-            });
-        }
-    });
-    drop(tx);
-    crate::utils::shell::clear_progress_line();
+    let outcomes = crate::utils::pool::par_map(
+        filtered,
+        scanner::repo_manager::STATUS_CONCURRENCY,
+        |r| format!("{}/{}", r.owner, r.name),
+        |repo| {
+            // check_repo_status already fetched (with --prune); merge only
+            // when strictly behind so we never fetch twice.
+            match scanner::repo_manager::check_repo_status(&repo.path) {
+                RepoStatus::Behind(_) => match scanner::repo_manager::merge_ff_only(&repo.path) {
+                    Ok(_) => PullOutcome::Pulled,
+                    Err(e) => PullOutcome::Failed(e),
+                },
+                status => PullOutcome::Skipped(status),
+            }
+        },
+    );
 
     let mut summary = PullSummary {
         pulled: 0,
@@ -233,8 +209,7 @@ fn pull_all(filtered: &[&ManagedRepo]) -> PullSummary {
     };
     let mut cache_updates = Vec::new();
 
-    for (i, outcome) in rx {
-        let repo = filtered[i];
+    for (repo, outcome) in filtered.iter().zip(outcomes) {
         let key = repo.path.display().to_string();
         let name = format!("{}/{}", repo.owner, repo.name);
         match outcome {
