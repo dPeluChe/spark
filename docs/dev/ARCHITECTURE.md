@@ -161,7 +161,7 @@ The data layer — all scanning, analysis, and mutation:
 - **health.rs**: Scores repos 0-100 based on commit recency, remote presence, dirty state, artifact size
 - **space_analyzer.rs**: Detects 20+ artifact types (node_modules, venvs, target/, .gradle, etc.)
 - **cleaner.rs**: Trash-based or permanent deletion of artifacts/repos
-- **repo_manager/**: ghq-style clone to `{root}/{host}/{owner}/{name}`; status checks run `git fetch --prune` through a bounded parallel pool (8 threads) and pulls reuse the fetched refs via `merge --ff-only`; metadata (remote/branch/last-commit) via git2; statuses cached 4h in `cache.rs`
+- **repo_manager/**: ghq-style clone to `{root}/{host}/{owner}/{name}`; status checks run `git fetch --prune` through a bounded parallel pool (4 threads, shared `utils::pool::par_map`) and pulls reuse the fetched refs via `merge --ff-only`; metadata (remote/branch/last-commit) via git2; statuses cached 4h in `cache.rs`
 - **repo_tags.rs**: Persistent tagging system — repos can have multiple tags, stored in config
 - **repo_ingest.rs**: Thin fleet-level wrapper over `trs ingest`. TRS owns generation + storage (`~/.trs/ingest/`, shared). SPARK adds batch mode (`--all` with `trs --fresh`) and fleet-aware listing. See [TRS_INTEGRATION.md](TRS_INTEGRATION.md).
 - **port_scanner/**: Batched `lsof`/`ps` on macOS, `/proc/net/tcp` on Linux; detects runtime (Node, Python, Go, Rust, etc.)
@@ -264,7 +264,7 @@ SecretAudit → SecretAuditPathInput → SecretAudit
 ## Testing
 
 ```bash
-cargo test    # 138 tests
+cargo test    # 140 tests
 ```
 
 Tests cover: version parsing, health scoring, config serialization/deserialization, inventory validation, changelog URL mapping, artifact detection, port detection, git URL parsing, path utilities, and TUI model logic. Tests live next to the code they test (`#[cfg(test)]` at the bottom of each file).

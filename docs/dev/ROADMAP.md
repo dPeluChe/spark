@@ -125,7 +125,7 @@ $ spark report
 | Section | Source |
 |---------|--------|
 | Repos | `repo_manager` status cache + parallel pool |
-| Disk artifacts | `space_analyzer::find_artifacts` per repo, parallelized with the 8-worker pool |
+| Disk artifacts | `space_analyzer::find_artifacts` per repo, parallelized with the 4-worker pool |
 | Disk system | `system_cleaner::scan_system()` (docker/caches/vms/logs) |
 | Ports | `port_scanner::scan_ports()` |
 | Tools | updater detector (cached; network only with `--fresh`) |
